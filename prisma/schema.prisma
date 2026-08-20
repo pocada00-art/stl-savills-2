@@ -404,6 +404,7 @@ model Inspection {
   notifications Notification[]
   risks Risk[]
   stateHistory InspectionStateHistory[]
+  inspectionSchedule InspectionSchedule?
   @@index([centerId, nextDate])
 }
 
