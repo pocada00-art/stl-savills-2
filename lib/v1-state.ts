@@ -34,8 +34,12 @@ export type CenterOverride = {
   logoUrl?: string;
 };
 
+export type V1Country = "España" | "Portugal";
+
 export type V1State = {
   role: V1Role;
+  country?: V1Country;
+  centerId?: string;
   centers: Record<string, CenterOverride>;
   activeItems: Record<string, Record<string, boolean>>;
   reviews: Record<string, ReviewState>;
@@ -54,12 +58,12 @@ export function reviewKey(centerId: string, year: number, period: Period) {
 }
 
 export function loadState(): V1State {
-  if (typeof window === "undefined") return { role: "ADMIN", centers: {}, activeItems: {}, reviews: {} };
+  if (typeof window === "undefined") return { role: "ADMIN", country: undefined, centerId: undefined, centers: {}, activeItems: {}, reviews: {} };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { role: "ADMIN", centers: {}, activeItems: {}, reviews: {} };
+  return { role: "ADMIN", country: undefined, centerId: undefined, centers: {}, activeItems: {}, reviews: {} };
 }
 
 export function saveState(state: V1State) {
