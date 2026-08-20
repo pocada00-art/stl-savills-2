@@ -48,9 +48,18 @@ function updateCenter(field:keyof typeof overrides,value:string){
   });
 } 
  function setActive(itemId:string,active:boolean){
-   const next={...state,activeItems:{...state.activeItems,[center.id]:{...activeMap,[itemId]:active}}};
-   updateState(next);
- }
+  const next={
+    ...state,
+    activeItems:{
+      ...state.activeItems,
+      [currentCenter.id]:{
+        ...activeMap,
+        [itemId]:active
+      }
+    }
+  };
+  updateState(next);
+}
  function getItem(itemId:string){return review.items[itemId]||blankItem()}
  function updateItem(itemId:string,patch:Partial<ReturnType<typeof blankItem>>){
    const current=getItem(itemId);
