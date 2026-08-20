@@ -22,7 +22,7 @@ export default function CenterDetail(){
  useEffect(()=>{const h=()=>setState(loadState()); window.addEventListener("stl-role-change",h); return()=>window.removeEventListener("stl-role-change",h)},[]);
 
  if(!center) return <Card className="p-8"><h2 className="text-xl font-bold">Centro no encontrado</h2><Link href="/centers" className="mt-4 inline-block text-sm underline">Volver</Link></Card>;
-
+ const currentCenter = center;
  const catalog = center.country==="España" ? demo.esCatalog : demo.ptCatalog;
  const overrides=state.centers[center.id]||{};
  const activeMap=state.activeItems[center.id]||{};
@@ -35,7 +35,18 @@ export default function CenterDetail(){
  const visible=activeItems.filter((x:any)=>(category==="Todas"||x.category===category)&&`${x.code} ${x.installation} ${x.action} ${x.category}`.toLowerCase().includes(q.toLowerCase()));
 
  function updateState(next:V1State){setState(next);saveState(next);setSaved(true);setTimeout(()=>setSaved(false),1500)}
- function updateCenter(field:keyof typeof overrides,value:string){updateState({...state,centers:{...state.centers,[center.id]:{...overrides,[field]:value}}})}
+function updateCenter(field:keyof typeof overrides,value:string){
+  updateState({
+    ...state,
+    centers:{
+      ...state.centers,
+      [currentCenter.id]:{
+        ...overrides,
+        [field]:value
+      }
+    }
+  });
+} 
  function setActive(itemId:string,active:boolean){
    const next={...state,activeItems:{...state.activeItems,[center.id]:{...activeMap,[itemId]:active}}};
    updateState(next);
