@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --savills-blue: #002A54; --savills-yellow: #FFCC00; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; background: #f5f7fa; color: #0f172a; font-family: Arial, Helvetica, sans-serif; }
+button, input, select { font: inherit; }
+.card { @apply rounded-2xl border border-slate-200 bg-white shadow-soft; }
+.kpi { @apply card p-5; }
+.badge { @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold; }
+.table-wrap { @apply overflow-hidden rounded-2xl border border-slate-200 bg-white; }
+.table { @apply w-full text-sm; }
+.table th { @apply bg-slate-50 px-3 py-2 text-left font-semibold text-slate-500; }
+.table td { @apply border-t border-slate-100 px-3 py-2; }
+
+@media print { .no-print { display:none !important; } body { background:#fff; } .print\:shadow-none { box-shadow:none !important; } }

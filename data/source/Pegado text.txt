@@ -1,0 +1,1861 @@
+PROMPT MAESTRO DEFINITIVO
+STL SAVILLS
+GESTOR WEB DE INSPECCIONES LEGALES PARA CENTROS COMERCIALES
+
+1. OBJETIVO DEL PROYECTO
+
+Desarrollar una aplicación WEB profesional denominada STL SAVILLS para la gestión, seguimiento y control de inspecciones legales, instalaciones reglamentarias, documentación técnico-legal, vencimientos, riesgos normativos e informes corporativos de centros comerciales.
+
+La aplicación estará orientada a equipos de Property Management, Responsables Técnicos, Gerentes de Centro, Administradores, Propiedad y empresas colaboradoras.
+
+La herramienta no debe concebirse como un GMAO completo de mantenimiento correctivo o preventivo, sino como una plataforma especializada en cumplimiento técnico-legal, control de STL, trazabilidad documental, seguimiento de vencimientos, gestión de riesgos normativos e informes corporativos.
+
+La aplicación deberá ejecutarse exclusivamente mediante navegador web.
+
+No debe desarrollarse como aplicación Android ni iOS.
+
+Debe desplegarse en Vercel a partir de un repositorio alojado en GitHub.
+
+El resultado final deberá ser un repositorio completo, profesional, ordenado, documentado y preparado para producción, listo para desplegar desde GitHub hacia Vercel sin configuraciones complejas adicionales.
+
+Nombre de la aplicación:
+
+STL SAVILLS
+
+Objetivo principal:
+
+Centralizar la información técnico-legal de los centros comerciales, controlar vencimientos, documentar revisiones, asignar marcos normativos por país, gestionar STL diferenciados para España y Portugal, disponer de trazabilidad completa y facilitar una visión corporativa del estado de cumplimiento.
+
+
+2. STACK TECNOLÓGICO OBLIGATORIO
+
+Frontend:
+
+- Next.js 15 con App Router
+- TypeScript
+- Tailwind CSS
+- ShadCN UI
+- React Hook Form
+- Zod
+- Recharts para gráficos
+- Lucide React o equivalente para iconografía
+- TanStack Table o equivalente para tablas avanzadas
+
+Backend:
+
+- Next.js Server Actions
+- API Routes
+- Validaciones server-side
+- Servicios modulares por dominio funcional
+
+Base de datos:
+
+- PostgreSQL en Supabase
+
+ORM:
+
+- Prisma ORM
+
+Autenticación:
+
+- NextAuth
+
+Almacenamiento documental:
+
+- Supabase Storage
+
+Correos y notificaciones:
+
+- Resend
+
+Informes:
+
+- Generación PDF server-side
+- Exportación Excel
+- Exportación CSV
+
+Despliegue:
+
+- GitHub
+- Vercel
+
+Monitorización:
+
+- Sentry
+
+Seguridad:
+
+- Row Level Security en Supabase
+- Control de acceso por rol
+- Rutas protegidas
+- Storage privado
+- URLs firmadas con caducidad temporal
+
+
+3. PRINCIPIOS DE DISEÑO
+
+La aplicación debe ser:
+
+- Profesional
+- Moderna
+- Minimalista
+- Rápida
+- Escalable
+- Responsive
+- Clara
+- Visual
+- Corporativa
+- Fácil de utilizar por perfiles técnicos y no técnicos
+
+Enfoque de uso:
+
+- Desktop First
+- Optimizada para ordenador
+- Compatible con tablet
+- Adaptación básica para navegador móvil
+- Sin aplicación nativa Android o iOS
+
+La experiencia debe ser similar a una plataforma corporativa de gestión, no a una colección de pantallas independientes.
+
+La navegación deberá permitir acceder a cualquier módulo principal en un máximo de dos clics desde la pantalla principal.
+
+Colores corporativos recomendados:
+
+- Azul corporativo Savills: #002A54
+- Amarillo corporativo: #FFCC00
+- Blanco
+- Grises neutros
+- Verde para cumplimiento
+- Ámbar para próximos vencimientos o condicionados
+- Rojo para vencidos, desfavorables o críticos
+
+
+4. ARQUITECTURA DE NAVEGACIÓN
+
+Toda funcionalidad principal deberá pertenecer a un módulo claramente identificable.
+
+Todos los módulos principales deberán ser accesibles desde:
+
+- Pantalla principal
+- Menú lateral permanente
+- Buscador global
+- Accesos rápidos mediante iconos
+
+La aplicación deberá incluir:
+
+- Menú lateral fijo o colapsable
+- Cabecera superior con buscador
+- Breadcrumbs de navegación
+- Selector de centro activo
+- Selector de país
+- Selector de marco normativo
+- Perfil de usuario
+- Acceso a configuración
+- Acceso a notificaciones
+- Acceso a documentación de ayuda
+
+La pantalla principal actuará como centro de operaciones.
+
+Los módulos deberán mostrarse como tarjetas o iconos tipo portal corporativo.
+
+Cada tarjeta de módulo deberá incluir:
+
+- Icono representativo
+- Nombre del módulo
+- Descripción breve
+- Indicador resumen si aplica
+- Estado visual
+- Botón o enlace directo al módulo
+
+Módulos accesibles desde la pantalla principal:
+
+1. Dashboard General
+2. Gestión de Centros Comerciales
+3. Instalaciones Reguladas
+4. Plan de Inspecciones Legales
+5. Gestión de Responsables
+6. Gestión Documental del Centro
+7. Dashboard Corporativo
+8. Dashboard de Riesgo
+9. Panel de Vencimientos
+10. Incidencias de Cumplimiento
+11. Informes y Exportaciones
+12. Importación STL Corporativo
+13. Importación y Actualización Masiva Excel
+14. Gestión Multipaís España / Portugal
+15. Sistema de Alertas y Notificaciones
+16. Copias de Seguridad
+17. Administración y Roles
+18. Auditoría
+19. Configuración
+
+Regla fundamental de navegación:
+
+El sistema debe comportarse como una plataforma corporativa unificada. Cualquier módulo principal debe ser accesible desde la pantalla principal, desde el menú lateral y desde el buscador global.
+
+
+5. REGLA FUNDAMENTAL DE FUNCIONAMIENTO STL
+
+Todo centro comercial debe estar vinculado obligatoriamente a:
+
+- Un país
+- Un STL
+- Un marco normativo
+- Un responsable técnico
+
+No podrá existir ningún centro sin STL asignado.
+
+Toda instalación y actuación deberá heredar automáticamente el STL del centro, salvo que un administrador autorice una excepción específica.
+
+El STL será el elemento que gobierne:
+
+- Instalaciones obligatorias
+- Actuaciones obligatorias
+- Frecuencias
+- Estados
+- Puntuación
+- Alertas
+- Informes
+- Dashboard corporativo
+- Cumplimiento global
+- Documentos requeridos
+- Reglas de vencimiento
+- Criterios de riesgo
+
+La aplicación deberá utilizar una estructura de STL diferenciada por país.
+
+Países inicialmente soportados:
+
+- España
+- Portugal
+
+Cada centro comercial deberá estar asociado obligatoriamente a un país durante su creación.
+
+La asignación de país determinará automáticamente qué STL, catálogo, frecuencias y criterios normativos se aplican.
+
+
+6. REGLAS EXACTAS DE ASIGNACIÓN STL SEGÚN PAÍS
+
+REGLA 1. Creación de centro en España
+
+Si el usuario crea un centro y selecciona País = España, el sistema deberá:
+
+- Aplicar automáticamente STL España
+- Cargar automáticamente el catálogo de instalaciones España
+- Cargar automáticamente las actuaciones obligatorias España
+- Aplicar periodicidades España
+- Aplicar documentos requeridos España
+- Aplicar criterios de cumplimiento España
+- Aplicar reglas de vencimiento España
+- Aplicar reglas de ponderación España
+- Asignar el marco normativo España
+- Generar el calendario inicial de cumplimiento según STL España
+
+REGLA 2. Creación de centro en Portugal
+
+Si el usuario crea un centro y selecciona País = Portugal, el sistema deberá:
+
+- Aplicar automáticamente STL Portugal
+- Cargar automáticamente el catálogo de instalaciones Portugal
+- Cargar automáticamente las actuaciones obligatorias Portugal
+- Aplicar periodicidades Portugal
+- Aplicar documentos requeridos Portugal
+- Aplicar criterios de cumplimiento Portugal
+- Aplicar reglas de vencimiento Portugal
+- Aplicar reglas de ponderación Portugal
+- Asignar el marco normativo Portugal
+- Generar el calendario inicial de cumplimiento según STL Portugal
+
+REGLA 3. Centro con marco común España / Portugal
+
+Si una actuación aplica a ambos países, podrá estar marcada como:
+
+- España
+- Portugal
+- Ambos
+
+En ese caso, el sistema deberá permitir que la actuación exista en ambos catálogos, pero con periodicidades, documentos y criterios diferenciados si procede.
+
+REGLA 4. No asumir equivalencias
+
+El sistema nunca deberá asumir que España y Portugal tienen los mismos requisitos.
+
+Aunque una instalación tenga el mismo nombre en ambos países, deberá poder tener:
+
+- Periodicidad diferente
+- Documento requerido diferente
+- Criterio de cumplimiento diferente
+- Referencia normativa diferente
+- Regla de vencimiento diferente
+- Ponderación diferente
+
+REGLA 5. STL obligatorio
+
+No se podrá guardar un centro si no tiene asignado:
+
+- País
+- STL
+- Marco normativo
+- Responsable técnico
+
+REGLA 6. Herencia automática
+
+Al crear una instalación dentro de un centro:
+
+- Deberá heredar automáticamente el país del centro
+- Deberá heredar automáticamente el STL del centro
+- Deberá heredar automáticamente el marco normativo del centro
+
+Al crear una actuación dentro de una instalación:
+
+- Deberá heredar automáticamente el país de la instalación
+- Deberá heredar automáticamente el STL de la instalación
+- Deberá heredar automáticamente el marco normativo de la instalación
+
+REGLA 7. Excepciones controladas
+
+Solo usuarios con rol SUPER_ADMIN o ADMIN podrán crear excepciones al STL.
+
+Cada excepción deberá registrar:
+
+- Usuario
+- Fecha
+- Centro
+- Instalación
+- Actuación
+- Motivo
+- Valor anterior
+- Valor nuevo
+- Comentario obligatorio
+
+REGLA 8. Actualización de STL
+
+Los administradores podrán:
+
+- Crear nueva versión de STL
+- Actualizar STL existente
+- Aplicar STL actualizado a centros existentes
+- Mantener histórico
+- Comparar diferencias entre versiones
+
+No se eliminarán actuaciones históricas al actualizar un STL.
+
+Las nuevas versiones deberán coexistir con las anteriores.
+
+REGLA 9. Aplicación de nueva versión STL
+
+Al aplicar una nueva versión STL a un centro existente, el sistema deberá:
+
+- Comparar STL anterior y STL nuevo
+- Detectar nuevas actuaciones
+- Detectar actuaciones eliminadas
+- Detectar cambios de frecuencia
+- Detectar cambios de documentación requerida
+- Detectar cambios de ponderación
+- Mostrar vista previa
+- Solicitar confirmación antes de aplicar
+- Registrar auditoría completa
+
+REGLA 10. Trazabilidad STL
+
+Cualquier cambio relacionado con STL deberá quedar registrado en auditoría:
+
+- Cambio de STL asignado
+- Cambio de versión
+- Cambio de periodicidad
+- Cambio de actuación obligatoria
+- Cambio de documento requerido
+- Cambio de criterio de cumplimiento
+- Cambio de ponderación
+
+
+7. ENTIDAD STL_TEMPLATE
+
+El sistema deberá disponer de una entidad independiente denominada STL_TEMPLATE.
+
+Cada STL_TEMPLATE contendrá:
+
+- ID
+- Nombre STL
+- Código STL
+- País
+- Versión
+- Fecha de vigencia
+- Estado
+- Descripción
+- Instalaciones incluidas
+- Actuaciones incluidas
+- Periodicidades
+- Documentos obligatorios
+- Criterios de puntuación
+- Reglas de cálculo
+- Reglas de vencimiento
+- Reglas de alertas
+- Referencias normativas
+- Observaciones internas
+
+Ejemplos:
+
+- STL_ES_2026_V1
+- STL_PT_2026_V1
+- STL_ES_2027_V1
+- STL_PT_2027_V1
+
+Estados posibles de STL_TEMPLATE:
+
+- Borrador
+- Activo
+- Sustituido
+- Archivado
+
+Cada centro tendrá asociado un STL_TEMPLATE activo.
+
+No se deberán borrar STL_TEMPLATE históricos si existen centros o actuaciones asociados a ellos.
+
+
+8. MATRIZ NORMATIVA
+
+La aplicación deberá permitir mantener una matriz normativa editable.
+
+Cada actuación deberá poder disponer de:
+
+- País aplicable
+- Base normativa
+- Referencia legal
+- Artículo o apartado si aplica
+- Periodicidad legal
+- Documento requerido
+- Observaciones normativas internas
+- Criterio de cumplimiento
+- Criterio de riesgo
+
+Ejemplos de referencias para España:
+
+- RITE
+- REBT
+- RIPCI
+- RD 487/2022
+- RD 614/2001
+- RD 513/2017
+- RD 1027/2007
+- UNE aplicables
+- Normativa autonómica si aplica
+
+Ejemplos de referencias para Portugal:
+
+- Decreto-Lei aplicable
+- Portaria aplicable
+- SCIE
+- Regulamentos Técnicos
+- Normas NP aplicables
+- Regulamentos de Segurança
+- Requisitos específicos de entidades portuguesas si aplica
+
+La aplicación deberá permitir editar esta matriz normativa sin modificar código.
+
+La matriz normativa deberá servir como base para:
+
+- Crear STL
+- Validar actuaciones
+- Calcular vencimientos
+- Generar informes
+- Justificar cumplimiento
+- Diferenciar España y Portugal
+
+
+9. MÓDULO: DASHBOARD GENERAL Y PANTALLA PRINCIPAL
+
+La pantalla principal será la HOME de STL SAVILLS y actuará como centro de operaciones.
+
+Debe mostrar en la parte superior los principales indicadores de cumplimiento.
+
+KPI principales:
+
+- Número de centros gestionados
+- Número total de instalaciones
+- Inspecciones vigentes
+- Inspecciones próximas a vencimiento
+- Inspecciones vencidas
+- Certificados pendientes
+- Incidencias críticas abiertas
+- Cumplimiento legal global
+- Riesgos críticos
+- Riesgos altos
+- Documentos pendientes de revisión
+- Centros sin STL asignado, si existiera algún error
+- Centros con STL desactualizado
+- STL activos por país
+
+Cada KPI deberá mostrar:
+
+- Título
+- Valor numérico
+- Porcentaje si aplica
+- Color de estado
+- Tendencia respecto al periodo anterior si existe información disponible
+- Enlace directo al detalle filtrado
+
+Colores de estado:
+
+- Verde: situación correcta
+- Ámbar: próximo vencimiento, condicionado o revisión pendiente
+- Rojo: vencido, desfavorable o crítico
+- Gris: sin información
+
+Además de los KPI, la pantalla principal deberá incluir accesos directos mediante iconos visuales a todos los módulos principales del sistema.
+
+Tarjetas de módulos en la pantalla principal:
+
+- Dashboard Corporativo
+- Gestión de Centros Comerciales
+- Instalaciones Reguladas
+- Plan de Inspecciones
+- Gestión de Responsables
+- Gestión Documental
+- Dashboard de Riesgo
+- Panel de Vencimientos
+- Incidencias de Cumplimiento
+- Informes
+- Importación STL
+- Importación Excel
+- Gestión Multipaís
+- Sistema de Alertas
+- Copias de Seguridad
+- Administración
+- Auditoría
+- Configuración
+
+Cada tarjeta deberá disponer de:
+
+- Icono
+- Título
+- Descripción breve
+- Indicador resumen
+- Estado visual
+- Acceso directo al módulo
+
+La pantalla principal deberá incluir gráficos de resumen:
+
+- Estado de cumplimiento por centro
+- Evolución mensual de inspecciones
+- Distribución por tipo de instalación
+- Próximos vencimientos
+- Distribución de estados
+- Riesgo por centro
+- Riesgo por instalación
+- Cumplimiento España vs Portugal
+- Centros por STL
+- Vencimientos por país
+
+
+10. MÓDULO: GESTIÓN DE CENTROS COMERCIALES
+
+Este módulo permitirá crear, consultar, editar y administrar los centros comerciales incluidos en la plataforma.
+
+Cada centro deberá disponer de los siguientes datos generales:
+
+- Nombre
+- Código de centro
+- Dirección
+- Ciudad
+- Provincia
+- País
+- Propiedad
+- Portfolio
+- Gerente
+- Responsable técnico
+- Responsable secundario
+- Fecha de alta
+- Estado operativo
+- Imagen del centro
+- Coordenadas geográficas
+- Observaciones generales
+- STL asignado
+- Versión STL asignada
+- Marco normativo asignado
+
+Clasificación:
+
+- España
+- Portugal
+
+Estado global del centro:
+
+- Porcentaje de cumplimiento
+- Número de actuaciones vigentes
+- Número de actuaciones próximas a vencer
+- Número de actuaciones vencidas
+- Número de incumplimientos
+- Número de riesgos críticos
+- Número de documentos pendientes
+- Estado STL
+- Fecha última actualización STL
+
+Funciones del módulo:
+
+- Alta de centro
+- Edición de centro
+- Archivo de centro
+- Asignación de usuarios
+- Asignación de responsables
+- Asignación automática de STL por país
+- Asignación de marco normativo
+- Visualización de resumen técnico-legal
+- Acceso a instalaciones del centro
+- Acceso a documentación del centro
+- Acceso al informe individual del centro
+- Comparación entre STL asignado y STL vigente
+
+Al eliminar un centro, no deberá borrarse definitivamente la información.
+
+El sistema deberá moverlo a un estado archivado para conservar la trazabilidad.
+
+
+11. MÓDULO: INSTALACIONES REGULADAS
+
+Este módulo permitirá gestionar el catálogo de instalaciones reglamentarias por centro.
+
+Cada centro deberá permitir registrar instalaciones técnico-legales.
+
+La aplicación debe incorporar inicialmente el catálogo completo definido en la plantilla STL corporativa:
+
+STL. XX_STL_SAV_26 S1_ESP v4 para los centros de España
+STL. XX_STL_SAV_26 S1_POR v4 para los centros de Portugal
+
+El catálogo deberá ser administrable desde configuración.
+
+Cada instalación deberá disponer de:
+
+- Nombre
+- Código
+- Tipo de instalación
+- País aplicable
+- STL aplicable
+- Marco normativo aplicable
+- Centro asociado
+- Estado
+- Responsable
+- Empresa mantenedora
+- Observaciones
+- Documentación asociada
+
+Catálogo inicial de instalaciones y actuaciones:
+
+LAs indicadas para cada caso en los archivos de importación:
+
+STL. XX_STL_SAV_26 S1_ESP v4 para los centros de España
+STL. XX_STL_SAV_26 S1_POR v4 para los centros de Portugal
+
+El sistema deberá permitir añadir, editar, activar o desactivar instalaciones y actuaciones para cada centro sin modificar código.
+
+Cada instalación deberá poder existir en:
+
+- STL España
+- STL Portugal
+- Ambos STL
+
+
+12. MÓDULO: PLAN DE INSPECCIONES LEGALES
+
+Este módulo permitirá gestionar el plan de inspecciones legales de cada centro.
+
+Cada actuación deberá almacenar:
+
+- Centro
+- País
+- STL
+- Versión STL
+- Marco normativo
+- Instalación
+- Tipo de actuación
+- Frecuencia
+- Fecha última actuación
+- Fecha próxima actuación
+- Fecha límite de cumplimiento
+- Estado
+- Resultado
+- Responsable
+- Empresa mantenedora
+- OCA si aplica
+- Documentos asociados
+- Observaciones técnicas
+- Comentarios internos
+- Comentarios visibles para propiedad
+- Recomendaciones
+- Riesgo asociado
+- Referencia normativa
+
+Frecuencias soportadas:
+
+- Diario
+- Semanal
+- Mensual
+- Trimestral
+- Semestral
+- Anual
+- Bienal
+- Trienal
+- Cuatrienal
+- Quinquenal
+- Decenal
+- Quince años
+- Personalizada
+
+Las fechas futuras deberán calcularse automáticamente según periodicidad.
+
+El sistema deberá permitir definir si la periodicidad se calcula desde:
+
+- Fecha de última actuación
+- Fecha de vencimiento anterior
+- Fecha fija de calendario
+- Criterio manual
+
+Estados de cumplimiento:
+
+- Favorable
+- Condicionado
+- Desfavorable
+- Pendiente
+- Sin información
+
+Colores:
+
+- Favorable: verde
+- Condicionado: amarillo
+- Desfavorable: rojo
+- Pendiente: gris
+- Sin información: gris claro
+
+Reglas:
+
+- Favorable: actualiza fecha última actuación y calcula próxima fecha.
+- Condicionado: permite indicar plazo condicionado y genera seguimiento.
+- Desfavorable: no debe actualizar automáticamente la próxima fecha como favorable.
+- Pendiente: mantiene la actuación abierta.
+- Sin información: no computa igual que favorable y deberá identificarse claramente.
+
+La puntuación obtenida deberá generar automáticamente un índice global de cumplimiento por centro similar al utilizado actualmente en el resumen STL.
+
+El sistema deberá permitir definir ponderaciones:
+
+- Favorable: 100 %
+- Condicionado: configurable
+- Desfavorable: 0 %
+- Pendiente: configurable
+- Sin información: configurable
+
+Las ponderaciones deberán ser administrables por STL y por país.
+
+
+13. MÓDULO: GESTIÓN DE RESPONSABLES
+
+Este módulo permitirá administrar responsables asociados a centros, instalaciones y actuaciones.
+
+Cada actuación deberá permitir asignar:
+
+- Responsable principal
+- Responsable secundario
+- Gerente del centro
+- Responsable técnico
+- Empresa mantenedora
+- Técnico o contacto externo
+- Organismo de Control Autorizado
+- Correo electrónico
+- Teléfono
+- Observaciones
+
+El sistema deberá permitir filtrar por:
+
+- Responsable técnico
+- Gerente
+- Empresa mantenedora
+- OCA
+- Propiedad
+- País
+- Centro
+- Tipo de instalación
+- Estado de cumplimiento
+- STL
+
+Funciones del módulo:
+
+- Alta de responsables
+- Edición de responsables
+- Asignación a centros
+- Asignación a instalaciones
+- Asignación a actuaciones
+- Consulta de cargas por responsable
+- Consulta de vencimientos por responsable
+- Exportación de responsabilidades
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+14. MÓDULO: GESTIÓN DOCUMENTAL DEL CENTRO
+
+Este módulo deberá funcionar como biblioteca documental general del centro.
+
+Además de la documentación asociada a cada actuación, la aplicación deberá permitir almacenar documentación corporativa y técnica no vinculada necesariamente a una inspección concreta.
+
+Tipos documentales:
+
+- Informes OCA
+- Certificados
+- Actas
+- Informes técnicos
+- Analíticas
+- Fotografías
+- Contratos
+- Planos
+- Manuales técnicos
+- Licencias administrativas
+- Pólizas
+- Documentación de propiedad
+- Informes corporativos
+- Otros
+
+Cada documento deberá disponer de:
+
+- Nombre
+- Tipo
+- Categoría
+- Centro asociado
+- País
+- STL asociado si aplica
+- Instalación asociada si aplica
+- Actuación asociada si aplica
+- Fecha de carga
+- Fecha del documento
+- Fecha de caducidad si aplica
+- Versión
+- Usuario responsable
+- Estado documental
+- Observaciones
+- URL privada en Supabase Storage
+- Historial de versiones
+
+Funciones:
+
+- Subir documentos
+- Descargar documentos
+- Versionar documentos
+- Consultar historial
+- Asociar documentos a centros
+- Asociar documentos a instalaciones
+- Asociar documentos a actuaciones
+- Filtrar documentos
+- Buscar documentos
+- Controlar caducidades documentales
+- Generar alertas por documentos vencidos
+
+Los documentos deberán almacenarse en Supabase Storage en modo privado.
+
+El acceso se realizará mediante URLs firmadas con expiración temporal.
+
+
+15. MÓDULO: DASHBOARD CORPORATIVO
+
+Este será uno de los módulos principales de la aplicación.
+
+Debe replicar visualmente el concepto mostrado en el documento Resumen estado TL 2026.
+
+El objetivo es ofrecer una visión ejecutiva y corporativa del estado técnico-legal de todos los centros.
+
+Tabla matriz principal:
+
+Filas:
+
+- Instalaciones
+- Actuaciones
+
+Columnas:
+
+- Centros
+
+Cada celda deberá mostrar el estado:
+
+- Favorable
+- Condicionado
+- Desfavorable
+- Pendiente
+- Sin información
+
+La representación se realizará mediante colores.
+
+Resumen ejecutivo:
+
+- Porcentaje de cumplimiento por centro
+- Ranking de cumplimiento
+- Evolución respecto al semestre anterior
+- Actuaciones vencidas
+- Próximas actuaciones
+- Centros con mayor riesgo
+- Instalaciones más críticas
+- Documentos pendientes
+- Incidencias abiertas
+- Comparativa España / Portugal
+- Cumplimiento por STL
+- Centros con STL desactualizado
+
+Filtros avanzados:
+
+Ubicación:
+
+- España
+- Portugal
+- Provincia
+- Ciudad
+
+Centro:
+
+- Todos
+- Uno o varios centros
+- Portfolio
+- Propiedad
+
+STL:
+
+- STL España
+- STL Portugal
+- Versión STL
+- STL activo
+- STL histórico
+
+Instalación:
+
+- Todas
+- Selección múltiple
+
+Tipo de actuación:
+
+- OCA
+- Revisión
+- Informe
+- Certificado
+- Acta
+- Analítica
+- Simulacro
+- Renovación
+
+Estado:
+
+- Favorable
+- Condicionado
+- Desfavorable
+- Pendiente
+- Sin información
+
+Vencimiento:
+
+- En fecha
+- Próximos 90 días
+- Próximos 60 días
+- Próximos 30 días
+- Vencidos
+
+Responsable:
+
+- Responsable técnico
+- Gerente
+- Empresa mantenedora
+- OCA
+- Propiedad
+
+El dashboard corporativo deberá permitir exportar la vista filtrada a:
+
+- Excel
+- PDF
+- CSV
+
+
+16. MÓDULO: DASHBOARD NORMATIVO
+
+Este módulo deberá permitir visualizar el cumplimiento normativo por país, marco normativo y STL.
+
+Indicadores:
+
+- Cumplimiento España
+- Cumplimiento Portugal
+- Comparativa España vs Portugal
+- Actuaciones vencidas por país
+- Riesgos por país
+- Centros con mayor incumplimiento por país
+- Instalaciones con más incumplimientos por país
+- STL activos por país
+- STL utilizados por centro
+- Centros con STL no actualizado
+- Actuaciones sin referencia normativa
+
+Filtros:
+
+- País
+- STL
+- Versión STL
+- Marco normativo
+- Centro
+- Instalación
+- Actuación
+- Estado
+- Riesgo
+
+Este módulo deberá permitir auditar que cada centro está correctamente vinculado al STL que le corresponde según país.
+
+
+17. MÓDULO: DASHBOARD DE RIESGO
+
+Este módulo permitirá analizar el riesgo técnico-legal más allá del simple cumplimiento.
+
+Indicadores de riesgo:
+
+- Riesgos críticos
+- Riesgos altos
+- Riesgos medios
+- Riesgos bajos
+- Centros en situación crítica
+- Instalaciones críticas
+- Actuaciones desfavorables
+- Actuaciones condicionadas
+- Actuaciones vencidas
+- Documentación crítica pendiente
+
+Cada riesgo deberá poder clasificarse por:
+
+- Centro
+- País
+- STL
+- Instalación
+- Actuación
+- Responsable
+- Gravedad
+- Estado
+- Fecha objetivo
+- Impacto potencial
+
+Niveles de gravedad:
+
+- Baja
+- Media
+- Alta
+- Crítica
+
+El dashboard deberá incluir:
+
+- Gráfico de riesgos por centro
+- Gráfico de riesgos por instalación
+- Evolución temporal
+- Tabla de riesgos abiertos
+- Filtros por estado y gravedad
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+18. MÓDULO: PANEL DE VENCIMIENTOS
+
+Vista específica para la gestión diaria de vencimientos.
+
+Columnas principales:
+
+- Centro
+- País
+- STL
+- Instalación
+- Actuación
+- Fecha última revisión
+- Fecha vencimiento
+- Días restantes
+- Estado
+- Responsable
+- Empresa mantenedora
+- Riesgo
+- Documentación asociada
+
+Filtros rápidos:
+
+- Vencidas
+- Próximos 30 días
+- Próximos 60 días
+- Próximos 90 días
+- Condicionadas
+- Desfavorables
+- Sin documentación
+- Por responsable
+- Por país
+- Por STL
+- Por centro
+
+Acciones disponibles:
+
+- Actualizar estado
+- Subir documento
+- Añadir observación
+- Crear incidencia de cumplimiento
+- Enviar aviso
+- Exportar listado
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+19. MÓDULO: INCIDENCIAS DE CUMPLIMIENTO
+
+Este módulo permitirá registrar desviaciones detectadas durante inspecciones o revisiones documentales.
+
+Campos:
+
+- Centro
+- País
+- STL
+- Instalación
+- Actuación asociada
+- Fecha de detección
+- Descripción
+- Gravedad
+- Responsable
+- Empresa mantenedora si aplica
+- Fecha objetivo
+- Estado
+- Evidencia de cierre
+- Documentación asociada
+- Comentarios internos
+- Comentarios visibles para propiedad
+
+Gravedad:
+
+- Baja
+- Media
+- Alta
+- Crítica
+
+Estados:
+
+- Abierta
+- En curso
+- Pendiente de tercero
+- Cerrada
+- Cancelada
+
+Funciones:
+
+- Alta de incidencia
+- Seguimiento
+- Cambio de estado
+- Adjuntar evidencias
+- Asignar responsable
+- Generar alertas
+- Exportar informe de incidencias
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+20. MÓDULO: INFORMES Y EXPORTACIONES
+
+Este módulo permitirá generar informes técnicos y ejecutivos.
+
+Tipos de informe:
+
+Informe ejecutivo por centro:
+
+- Estado de cumplimiento
+- STL asignado
+- Marco normativo asignado
+- Instalaciones
+- Inspecciones vencidas
+- Riesgos abiertos
+- Próximos vencimientos
+- Documentación pendiente
+- Incidencias
+- Recomendaciones
+
+Informe corporativo:
+
+- Todos los centros
+- Solo España
+- Solo Portugal
+- Selección personalizada
+- Agrupación por país
+- Agrupación por STL
+- Agrupación por portfolio
+- Agrupación por gestor
+- Agrupación por propiedad
+
+Informe normativo:
+
+- Cumplimiento España
+- Cumplimiento Portugal
+- Comparativa España / Portugal
+- Diferencias por STL
+- Centros con STL desactualizado
+- Actuaciones sin documentación requerida
+
+Exportaciones:
+
+- Excel
+- PDF
+- CSV
+
+La exportación Excel deberá poder replicar la estructura de la matriz STL.
+
+El usuario deberá poder exportar informes aplicando filtros.
+
+Cada informe generado deberá quedar registrado en auditoría.
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+21. MÓDULO: IMPORTACIÓN STL CORPORATIVO
+
+La aplicación deberá permitir importar directamente los archivos STL corporativos existentes.
+
+Este módulo será clave para reducir la carga manual inicial.
+
+Durante la importación deberá:
+
+- Leer el archivo STL Excel
+- Detectar país
+- Detectar versión STL
+- Crear plantilla STL correspondiente
+- Identificar centros
+- Crear centros si no existen
+- Crear instalaciones
+- Crear actuaciones
+- Crear estados
+- Crear fechas de inspección
+- Crear fechas de vencimiento
+- Crear responsables
+- Crear observaciones
+- Crear histórico
+- Vincular documentación si existe información asociada
+- Detectar duplicados
+- Validar errores
+- Mostrar vista previa antes de importar
+
+El proceso de importación deberá incluir:
+
+- Carga del archivo
+- Selección de país si no se puede detectar automáticamente
+- Selección o creación de versión STL
+- Validación de estructura
+- Resumen de datos detectados
+- Listado de errores
+- Confirmación manual
+- Importación definitiva
+- Informe final de importación
+
+Si el centro ya existe:
+
+- Actualizar registros existentes
+- No duplicar información
+- Registrar diferencias detectadas
+- Solicitar confirmación antes de aplicar cambios
+
+El sistema deberá permitir actualizar datos existentes desde un nuevo STL sin duplicar registros.
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+22. MÓDULO: IMPORTACIÓN Y ACTUALIZACIÓN MASIVA EXCEL
+
+La aplicación deberá permitir importaciones masivas desde Excel.
+
+Funciones:
+
+- Alta masiva de centros
+- Alta masiva de instalaciones
+- Alta masiva de actuaciones
+- Alta masiva de responsables
+- Actualización masiva de estados
+- Actualización masiva de fechas
+- Actualización masiva de documentación
+- Actualización masiva desde plantillas corporativas
+
+El sistema deberá proporcionar:
+
+- Plantilla descargable
+- Validación previa
+- Informe de errores
+- Confirmación antes de importar
+- Vista previa de los cambios
+- Registro de auditoría
+
+Reglas:
+
+- No sobrescribir datos críticos sin confirmación
+- Detectar duplicados
+- Mantener histórico
+- Registrar usuario importador
+- Registrar fecha de importación
+- Respetar siempre el STL asignado por país
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+23. MÓDULO: GESTIÓN MULTIPAÍS ESPAÑA / PORTUGAL
+
+La aplicación deberá permitir gestionar marcos normativos diferenciados para España y Portugal.
+
+Cada centro deberá tener asignado un país:
+
+- España
+- Portugal
+
+Cada instalación y actuación deberá poder estar vinculada a:
+
+- España
+- Portugal
+- Ambos países
+
+El sistema deberá permitir seleccionar el marco normativo aplicable.
+
+Selector de marco normativo:
+
+- Marco España
+- Marco Portugal
+- Marco común España / Portugal
+- Marco personalizado
+
+El selector deberá estar disponible en:
+
+- Alta de centro
+- Alta de instalación
+- Alta de actuación
+- Dashboard corporativo
+- Dashboard normativo
+- Informes
+- Importaciones
+- Configuración
+
+Cada marco normativo deberá permitir definir:
+
+- Instalaciones aplicables
+- Actuaciones obligatorias
+- Periodicidades
+- Tipos de documento requeridos
+- Criterios de cumplimiento
+- Reglas de vencimiento
+- Reglas de ponderación
+- Observaciones normativas internas
+
+La aplicación deberá permitir mantener catálogos distintos por país:
+
+Catálogo España:
+
+- Instalaciones
+- Actuaciones
+- Frecuencias
+- Documentos requeridos
+- Estados
+- Criterios de cumplimiento
+- Referencias normativas
+- Ponderaciones
+
+Catálogo Portugal:
+
+- Instalaciones
+- Actuaciones
+- Frecuencias
+- Documentos requeridos
+- Estados
+- Criterios de cumplimiento
+- Referencias normativas
+- Ponderaciones
+
+No se deberá asumir que España y Portugal tienen los mismos requisitos.
+
+El sistema deberá permitir que un administrador configure las diferencias sin modificar código.
+
+Los informes deberán poder generarse por:
+
+- España
+- Portugal
+- Ambos países
+- Comparativa España / Portugal
+
+Los dashboards deberán permitir filtrar y comparar:
+
+- Cumplimiento España
+- Cumplimiento Portugal
+- Centros por país
+- Riesgos por país
+- Vencimientos por país
+- STL por país
+
+Este módulo deberá estar accesible desde la pantalla principal.
+
+
+24. MÓDULO: SISTEMA DE ALERTAS Y NOTIFICACIONES
+
+La aplicación deberá generar alertas automáticas por vencimientos, incumplimientos y documentación pendiente.
+
+Tipos de alerta:
+
+- 90 días antes
+- 60 días antes
+- 30 días antes
+- Vencimiento
+- Post-vencimiento
+- Incumplimiento
+- Documento pendiente
+- Riesgo crítico
+- Incidencia sin cerrar
+- STL desactualizado
+- Centro sin STL, si existiera error de configuración
+
+Canales:
+
+- Email
+- Notificaciones internas dentro de la aplicación
+
+Destinatarios configurables:
+
+- Responsable técnico
+- Gerente del centro
+- Administrador
+- Empresa mantenedora
+- Usuarios específicos
+
+Cada alerta deberá guardar:
+
+- Fecha de generación
+- Usuario destinatario
+- Centro
+- País
+- STL
+- Instalación
+- Actuación
+- Motivo
+- Estado
+- Fecha de lectura si aplica
+
+El sistema deberá permitir configurar reglas de aviso por:
+
+- País
+- STL
+- Centro
+- Tipo de instalación
+- Tipo de actuación
+- Responsable
+- Nivel de riesgo
+
+Este módulo podrá estar integrado en configuración y será accesible desde la pantalla principal mediante el icono de notificaciones.
+
+
+25. MÓDULO: COPIAS DE SEGURIDAD
+
+Este módulo permitirá gestionar copias de seguridad.
+
+Copias automáticas:
+
+- Base de datos
+- Documentación
+- Configuración
+- Auditoría
+- STL
+- Matriz normativa
+
+Opciones para administradores:
+
+- Generar backup manual
+- Descargar backup completo
+- Exportar documentación
+- Exportar base de datos
+- Exportar STL
+- Exportar matriz normativa
+- Restaurar versión anterior bajo confirmación
+- Ver historial de backups
+
+El sistema deberá registrar en auditoría:
+
+- Usuario que genera backup
+- Fecha
+- Tipo de backup
+- Resultado
+- Restauraciones realizadas
+
+Este módulo deberá estar accesible desde la pantalla principal para usuarios con permisos de administración.
+
+
+26. MÓDULO: ADMINISTRACIÓN Y ROLES
+
+La aplicación deberá disponer de un módulo de administración.
+
+Roles mínimos:
+
+SUPER_ADMIN:
+
+- Acceso completo
+- Gestión de usuarios
+- Gestión de roles
+- Configuración global
+- Configuración STL
+- Configuración matriz normativa
+- Acceso a backups
+- Acceso a auditoría completa
+
+ADMIN:
+
+- Gestión global
+- Gestión de centros
+- Gestión de catálogos
+- Gestión de STL
+- Gestión de informes
+- Gestión de usuarios asignados
+
+TECHNICAL_RESPONSIBLE:
+
+- Acceso a centros asignados
+- Gestión de inspecciones
+- Carga documental
+- Gestión de incidencias
+- Consulta de dashboards
+
+CENTRE_MANAGER:
+
+- Acceso a sus centros
+- Consulta de cumplimiento
+- Consulta documental
+- Gestión limitada de incidencias
+
+PROVEEDOR:
+
+- Acceso limitado a actuaciones asignadas
+- Carga de documentación
+- Consulta de vencimientos propios
+
+LECTURA:
+
+- Consulta sin edición
+
+El sistema deberá permitir:
+
+- Crear usuarios
+- Editar usuarios
+- Asignar roles
+- Asignar centros
+- Activar o desactivar usuarios
+- Consultar actividad
+- Limitar acceso documental
+- Limitar acceso por país
+- Limitar acceso por centro
+- Limitar acceso por STL
+
+Este módulo deberá estar accesible desde la pantalla principal para usuarios autorizados.
+
+
+27. MÓDULO: AUDITORÍA Y TRAZABILIDAD
+
+La aplicación deberá registrar automáticamente todas las acciones relevantes.
+
+Registrar:
+
+- Creación
+- Modificación
+- Eliminación
+- Subida documental
+- Descarga documental si se considera necesario
+- Cambio de estado
+- Cambio de fechas
+- Cambio de responsable
+- Cambio de STL
+- Cambio de marco normativo
+- Cambio de versión STL
+- Importaciones
+- Exportaciones
+- Generación de informes
+- Backups
+- Restauraciones
+- Accesos no autorizados
+
+Cada registro de auditoría deberá guardar:
+
+- Usuario
+- Fecha
+- Hora
+- Acción realizada
+- Entidad afectada
+- Valor anterior
+- Valor nuevo
+- Dirección IP si está disponible
+- Resultado de la acción
+
+Cada actuación deberá mostrar un historial visual de estados.
+
+Historial de estados:
+
+- Fecha
+- Hora
+- Usuario
+- Estado anterior
+- Estado nuevo
+- Comentario asociado
+- Documento asociado si aplica
+
+Este módulo deberá estar accesible desde la pantalla principal para usuarios autorizados.
+
+
+28. SEGURIDAD
+
+Implementar seguridad desde el inicio.
+
+Requisitos:
+
+- Autenticación segura
+- Control de acceso por rol
+- Protección de rutas
+- Validación de formularios
+- Protección CSRF
+- Validación server-side
+- Validación de archivos subidos
+- Registro de auditoría
+- Storage privado
+- URLs firmadas
+- Row Level Security en Supabase
+- Cifrado en tránsito mediante TLS
+- Separación de permisos por centro
+- Separación de permisos por país
+- Separación de permisos por STL
+- Separación de permisos por rol
+
+Todos los documentos almacenados en Supabase Storage deberán ser privados por defecto.
+
+Cada usuario solo podrá acceder a los centros asignados.
+
+Las operaciones sensibles deberán validarse en servidor.
+
+No se deberá confiar exclusivamente en la validación del frontend.
+
+La aplicación deberá estar preparada para cumplir criterios básicos de protección de datos y buenas prácticas de seguridad corporativa.
+
+
+29. MODELO DE DATOS
+
+Diseñar el modelo mediante Prisma.
+
+Entidades mínimas:
+
+- Users
+- Roles
+- UserRoles
+- ShoppingCenters
+- Countries
+- RegulatoryFrameworks
+- STLTemplates
+- STLTemplateVersions
+- STLTemplateItems
+- RegulatoryMatrix
+- Installations
+- InstallationTypes
+- InspectionTypes
+- Inspections
+- InspectionSchedules
+- ComplianceStatuses
+- ComplianceIncidents
+- Documents
+- DocumentVersions
+- Notifications
+- ResponsiblePersons
+- MaintenanceCompanies
+- ControlBodies
+- AuditLog
+- Imports
+- Reports
+- Backups
+- Settings
+
+Todas las relaciones deberán implementarse correctamente.
+
+Relaciones necesarias:
+
+- Un usuario puede tener varios roles.
+- Un usuario puede estar asignado a varios centros.
+- Un centro pertenece a un país.
+- Un centro tiene un STL asignado.
+- Un centro puede tener un marco normativo asignado.
+- Un centro tiene múltiples instalaciones.
+- Una instalación pertenece a un STL.
+- Una instalación tiene múltiples actuaciones.
+- Una actuación pertenece a un STL.
+- Una actuación puede tener referencia normativa.
+- Una actuación puede tener múltiples inspecciones.
+- Una actuación puede tener múltiples documentos.
+- Un documento puede tener varias versiones.
+- Una actuación puede estar asociada a responsables.
+- Una incidencia puede estar asociada a una actuación.
+- Una alerta puede estar asociada a una actuación, centro, STL o documento.
+- Todo cambio relevante genera auditoría.
+
+
+30. PREPARACIÓN PARA IA FUTURA
+
+No implementar IA inicialmente.
+
+Aunque inicialmente no se implementará inteligencia artificial, toda la arquitectura debe quedar preparada para futuras integraciones.
+
+Diseñar una estructura modular que permita incorporar posteriormente:
+
+OCR documental:
+
+- Informes OCA
+- Certificados reglamentarios
+- Revisiones PCI
+- Revisiones RITE
+- Certificados de ascensores
+- Informes de legionella
+- Analíticas
+- Informes eléctricos
+- Informes de climatización
+
+Extracción automática de datos:
+
+- Fecha de inspección
+- Fecha de vencimiento
+- Organismo emisor
+- Resultado
+- Instalación afectada
+- Observaciones relevantes
+- Número de certificado
+- Técnico firmante si aplica
+
+Validación documental automática:
+
+- Comparar frecuencia legal prevista
+- Verificar fecha de vencimiento
+- Verificar documentación disponible
+- Detectar riesgos de incumplimiento
+- Detectar documentos incoherentes
+- Detectar documentos caducados
+
+Asistente técnico futuro:
+
+El sistema deberá quedar preparado para permitir consultas como:
+
+- Qué inspecciones vencen este mes
+- Qué centros tienen incumplimientos críticos
+- Qué certificados faltan
+- Qué instalaciones necesitan actualización documental
+- Qué centros de Portugal tienen vencimientos en los próximos 60 días
+- Qué OCA están desfavorables
+- Qué actuaciones no tienen documento asociado
+- Qué centros tienen STL desactualizado
+- Qué diferencias existen entre STL España y STL Portugal
+
+La arquitectura deberá mantener separadas las capas de negocio, documentación, normativa, STL y análisis para facilitar esta evolución futura sin rediseñar la plataforma.
+
+
+31. REQUISITOS TÉCNICOS DE RENDIMIENTO
+
+La aplicación deberá:
+
+- Cargar dashboards principales de forma rápida
+- Soportar más de 100 centros
+- Soportar miles de actuaciones
+- Soportar decenas de miles de documentos
+- Mantener trazabilidad completa
+- Permitir escalado futuro
+- Optimizar consultas a base de datos
+- Utilizar paginación en tablas grandes
+- Utilizar filtros eficientes
+- Evitar cargas innecesarias
+- Optimizar generación de informes
+- Optimizar consultas por país y STL
+
+Requisitos de experiencia:
+
+- Dashboard claro
+- Tablas filtrables
+- Búsqueda global
+- Carga progresiva
+- Estados de carga visibles
+- Mensajes de error comprensibles
+- Confirmación para acciones críticas
+
+
+32. DATOS DEMO
+
+El repositorio deberá incluir datos de demostración completos.
+
+Generar automáticamente:
+
+- Centros de España
+- Centros de Portugal
+- Instalaciones
+- Actuaciones
+- Revisiones
+- Documentos ficticios
+- Incidencias
+- Usuarios
+- Roles
+- Responsables
+- Empresas mantenedoras
+- Organismos de control
+- Marcos normativos
+- STL España demo
+- STL Portugal demo
+- Matriz normativa demo
+- Alertas
+- Auditoría de ejemplo
+
+Los datos demo deberán permitir ver todas las funcionalidades inmediatamente después del despliegue.
+
+Debe existir un seed de Prisma para cargar los datos iniciales.
+
+
+33. ENTREGABLE FINAL
+
+Generar un repositorio completo de producción que incluya:
+
+- Código fuente completo
+- Estructura Next.js 15 App Router
+- TypeScript
+- Tailwind CSS
+- ShadCN UI
+- Prisma ORM
+- Modelo de base de datos
+- Migraciones
+- Seed de datos demo
+- Autenticación
+- Gestión documental
+- Dashboard general
+- Pantalla principal tipo portal
+- Dashboard corporativo STL
+- Dashboard individual por centro
+- Dashboard normativo
+- Dashboard de riesgo
+- Panel de vencimientos
+- Gestión de centros
+- Gestión de instalaciones
+- Gestión de actuaciones
+- Gestión de responsables
+- Gestión documental corporativa
+- Gestión STL España / Portugal
+- Gestión de matriz normativa
+- Gestión multipaís España / Portugal
+- Importación STL
+- Importación Excel
+- Informes PDF
+- Exportaciones Excel y CSV
+- Sistema de alertas
+- Control de roles
+- Auditoría
+- Copias de seguridad
+- Configuración Vercel
+- Variables de entorno documentadas
+- README completo
+- Instrucciones de despliegue
+- Datos demo basados en estructura STL
+
+El código deberá ser:
+
+- Profesional
+- Escalable
+- Mantenible
+- Documentado
+- Modular
+- Seguro
+- Preparado para producción
+
+La aplicación deberá poder desplegarse desde GitHub hacia Vercel y quedar operativa con los datos demo iniciales.
+
+El nombre visible de la herramienta en toda la interfaz será:
+
+STL SAVILLS
+
+No utilizar otros nombres como Savills GAMO, Savills Audit o GMAO, salvo que aparezcan únicamente como referencias internas antiguas que deban ser sustituidas.
+

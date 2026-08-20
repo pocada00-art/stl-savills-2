@@ -1,0 +1,596 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CountryCode { ES PT }
+enum STLStatus { DRAFT ACTIVE SUPERSEDED ARCHIVED }
+enum ComplianceStatus { FAVORABLE CONDITIONED UNFAVORABLE PENDING NO_INFORMATION }
+enum RiskSeverity { LOW MEDIUM HIGH CRITICAL }
+enum IncidentStatus { OPEN IN_PROGRESS THIRD_PARTY CLOSED CANCELLED }
+enum RoleName { ADMIN GESTOR LECTURA }
+enum CenterStatus { ACTIVE RESOLVED }
+enum ReviewPeriod { S1 S2 }
+enum ReviewStatus { DRAFT IN_PROGRESS READY CONFIRMED }
+enum AlertType { DUE_90 DUE_60 DUE_30 DUE TODAY POST_DUE NON_COMPLIANCE DOCUMENT_PENDING CRITICAL_RISK STL_OUTDATED REVIEW_PENDING REVIEW_CONFIRMATION_PENDING NO_INFORMATION }
+enum NotificationChannel { IN_APP EMAIL BOTH }
+enum AlertState { OPEN READ RESOLVED DISMISSED }
+enum ParticipantRole { GESTOR ADMINISTRADOR OTRO }
+
+model User {
+  id String @id @default(cuid())
+  name String?
+  email String @unique
+  passwordHash String?
+  locale String @default("es")
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  roles UserRole[]
+  centerAssignments UserCenter[]
+  audits AuditLog[]
+  notifications Notification[]
+  confirmedReviews STLReview[] @relation("ReviewConfirmedBy")
+  confirmedItems ReviewItem[] @relation("ItemConfirmedBy")
+  reviewParticipants ReviewParticipant[]
+  alertRuleRecipients AlertRuleRecipient[]
+}
+
+model Role {
+  id String @id @default(cuid())
+  name RoleName @unique
+  users UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user User @relation(fields:[userId], references:[id], onDelete: Cascade)
+  role Role @relation(fields:[roleId], references:[id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+model UserCenter {
+  userId String
+  centerId String
+  user User @relation(fields:[userId], references:[id], onDelete: Cascade)
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Cascade)
+  @@id([userId, centerId])
+}
+
+model Country {
+  id String @id @default(cuid())
+  code CountryCode @unique
+  name String
+  centers ShoppingCenter[]
+  frameworks RegulatoryFramework[]
+  stls STLTemplate[]
+}
+
+model RegulatoryFramework {
+  id String @id @default(cuid())
+  countryId String
+  name String
+  description String?
+  country Country @relation(fields:[countryId], references:[id])
+  centers ShoppingCenter[]
+  matrix RegulatoryMatrix[]
+  installations Installation[]
+  inspections Inspection[]
+}
+
+model STLTemplate {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  countryId String
+  version String
+  effectiveFrom DateTime?
+  status STLStatus @default(DRAFT)
+  description String?
+  country Country @relation(fields:[countryId], references:[id])
+  versions STLTemplateVersion[]
+  centers ShoppingCenter[]
+  @@index([countryId, status])
+}
+
+model STLTemplateVersion {
+  id String @id @default(cuid())
+  templateId String
+  version String
+  effectiveFrom DateTime?
+  status STLStatus @default(DRAFT)
+  template STLTemplate @relation(fields:[templateId], references:[id], onDelete: Restrict)
+  items STLTemplateItem[]
+  @@unique([templateId, version])
+}
+
+model STLTemplateItem {
+  id String @id @default(cuid())
+  versionId String
+  code String
+  category String?
+  installationName String
+  actionName String
+  actionType String?
+  frequency String?
+  requiredDocument String?
+  weighting Decimal? @db.Decimal(8,2)
+  legalReference String?
+  active Boolean @default(true)
+  version STLTemplateVersion @relation(fields:[versionId], references:[id], onDelete: Restrict)
+  inspections Inspection[]
+  centerElements CenterElement[]
+  @@index([versionId, code])
+}
+
+model ShoppingCenter {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  shortCode String?
+  address String?
+  city String?
+  province String?
+  countryId String
+  property String?
+  portfolio String?
+  manager String?
+  technicalResponsible String?
+  contactName String?
+  contactEmail String?
+  contactPhone String?
+  status CenterStatus @default(ACTIVE)
+  imageUrl String?
+  logoUrl String?
+  latitude Decimal? @db.Decimal(10,7)
+  longitude Decimal? @db.Decimal(10,7)
+  stlId String
+  frameworkId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  country Country @relation(fields:[countryId], references:[id])
+  stl STLTemplate @relation(fields:[stlId], references:[id])
+  framework RegulatoryFramework? @relation(fields:[frameworkId], references:[id])
+  users UserCenter[]
+  installations Installation[]
+  inspections Inspection[]
+  documents Document[]
+  incidents ComplianceIncident[]
+  notifications Notification[]
+  risks Risk[]
+  audits AuditLog[]
+  centerElements CenterElement[]
+  reviews STLReview[]
+  certificates ReviewCertificate[]
+  alerts Alert[]
+  @@index([countryId, status])
+}
+
+model CenterElement {
+  id String @id @default(cuid())
+  centerId String
+  stlItemId String
+  active Boolean @default(true)
+  addedAt DateTime @default(now())
+  deactivatedAt DateTime?
+  observations String?
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Cascade)
+  stlItem STLTemplateItem @relation(fields:[stlItemId], references:[id], onDelete: Restrict)
+  reviewItems ReviewItem[]
+  @@unique([centerId, stlItemId])
+  @@index([centerId, active])
+}
+
+model ReviewParticipant {
+  id String @id @default(cuid())
+  reviewId String
+  userId String?
+  role ParticipantRole
+  name String
+  signatureData String?
+  signedAt DateTime?
+  review STLReview @relation(fields:[reviewId], references:[id], onDelete: Cascade)
+  user User? @relation(fields:[userId], references:[id])
+  @@index([reviewId])
+}
+
+model STLReview {
+  id String @id @default(cuid())
+  centerId String
+  year Int
+  period ReviewPeriod
+  status ReviewStatus @default(IN_PROGRESS)
+  startedAt DateTime @default(now())
+  confirmedAt DateTime?
+  confirmedById String?
+  score Decimal? @db.Decimal(8,2)
+  maxScore Decimal? @db.Decimal(8,2)
+  notes String?
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Cascade)
+  confirmedBy User? @relation("ReviewConfirmedBy", fields:[confirmedById], references:[id])
+  items ReviewItem[]
+  participants ReviewParticipant[]
+  certificate ReviewCertificate?
+  @@unique([centerId, year, period])
+  @@index([centerId, year, period])
+}
+
+model ReviewItem {
+  id String @id @default(cuid())
+  reviewId String
+  centerElementId String
+  status ComplianceStatus @default(NO_INFORMATION)
+  inspectionDate DateTime?
+  companyName String?
+  observations String?
+  confirmedAt DateTime?
+  confirmedById String?
+  review STLReview @relation(fields:[reviewId], references:[id], onDelete: Cascade)
+  centerElement CenterElement @relation(fields:[centerElementId], references:[id], onDelete: Restrict)
+  confirmedBy User? @relation("ItemConfirmedBy", fields:[confirmedById], references:[id])
+  @@unique([reviewId, centerElementId])
+  @@index([reviewId, status])
+}
+
+model ReviewCertificate {
+  id String @id @default(cuid())
+  reviewId String @unique
+  centerId String
+  certificateNumber String @unique
+  generatedAt DateTime @default(now())
+  storagePath String?
+  participantsSnapshot Json?
+  review STLReview @relation(fields:[reviewId], references:[id], onDelete: Cascade)
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Restrict)
+}
+
+model InstallationType {
+  id String @id @default(cuid())
+  name String @unique
+  installations Installation[]
+}
+
+model Installation {
+  id String @id @default(cuid())
+  centerId String
+  typeId String?
+  code String
+  name String
+  country CountryCode
+  stlCode String
+  frameworkId String?
+  responsibleId String?
+  maintenanceCompanyId String?
+  status String @default("ACTIVE")
+  observations String?
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Restrict)
+  type InstallationType? @relation(fields:[typeId], references:[id])
+  framework RegulatoryFramework? @relation(fields:[frameworkId], references:[id])
+  responsible ResponsiblePerson? @relation(fields:[responsibleId], references:[id])
+  maintenanceCompany MaintenanceCompany? @relation(fields:[maintenanceCompanyId], references:[id])
+  inspections Inspection[]
+  documents Document[]
+  incidents ComplianceIncident[]
+  risks Risk[]
+}
+
+model InspectionType {
+  id String @id @default(cuid())
+  name String @unique
+  inspections Inspection[]
+}
+
+model Inspection {
+  id String @id @default(cuid())
+  centerId String
+  installationId String?
+  stlItemId String?
+  typeId String?
+  code String?
+  country CountryCode
+  stlCode String
+  frameworkId String?
+  frequency String?
+  lastDate DateTime?
+  nextDate DateTime?
+  deadline DateTime?
+  secondInspectionDate DateTime?
+  status ComplianceStatus @default(NO_INFORMATION)
+  result String?
+  responsibleId String?
+  maintenanceCompanyId String?
+  controlBodyId String?
+  risk RiskSeverity?
+  normativeReference String?
+  technicalNotes String?
+  internalComments String?
+  ownerComments String?
+  recommendations String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Restrict)
+  installation Installation? @relation(fields:[installationId], references:[id])
+  stlItem STLTemplateItem? @relation(fields:[stlItemId], references:[id])
+  type InspectionType? @relation(fields:[typeId], references:[id])
+  framework RegulatoryFramework? @relation(fields:[frameworkId], references:[id])
+  responsible ResponsiblePerson? @relation(fields:[responsibleId], references:[id])
+  maintenanceCompany MaintenanceCompany? @relation(fields:[maintenanceCompanyId], references:[id])
+  controlBody ControlBody? @relation(fields:[controlBodyId], references:[id])
+  documents Document[]
+  incidents ComplianceIncident[]
+  notifications Notification[]
+  risks Risk[]
+  stateHistory InspectionStateHistory[]
+  @@index([centerId, nextDate])
+}
+
+model InspectionSchedule {
+  id String @id @default(cuid())
+  inspectionId String
+  frequency String
+  calculationBasis String @default("LAST_ACTION")
+  customRule String?
+  inspection Inspection @relation(fields:[inspectionId], references:[id], onDelete: Cascade)
+  @@unique([inspectionId])
+}
+
+model ComplianceStatusConfig {
+  id String @id @default(cuid())
+  stlCode String
+  status ComplianceStatus
+  score Decimal @db.Decimal(8,2)
+  active Boolean @default(true)
+  @@unique([stlCode, status])
+}
+
+model RegulatoryMatrix {
+  id String @id @default(cuid())
+  frameworkId String
+  country CountryCode
+  base String
+  legalReference String
+  article String?
+  legalFrequency String?
+  requiredDocument String?
+  complianceCriteria String?
+  riskCriteria String?
+  internalNotes String?
+  framework RegulatoryFramework @relation(fields:[frameworkId], references:[id], onDelete: Restrict)
+}
+
+model ResponsiblePerson {
+  id String @id @default(cuid())
+  name String
+  email String?
+  phone String?
+  role String?
+  observations String?
+  installations Installation[]
+  inspections Inspection[]
+}
+
+model MaintenanceCompany {
+  id String @id @default(cuid())
+  name String
+  email String?
+  phone String?
+  observations String?
+  installations Installation[]
+  inspections Inspection[]
+}
+
+model ControlBody {
+  id String @id @default(cuid())
+  name String
+  email String?
+  phone String?
+  inspections Inspection[]
+}
+
+model Document {
+  id String @id @default(cuid())
+  name String
+  type String
+  category String?
+  centerId String
+  country CountryCode
+  stlCode String?
+  installationId String?
+  inspectionId String?
+  uploadedAt DateTime @default(now())
+  documentDate DateTime?
+  expiresAt DateTime?
+  version String @default("1")
+  ownerUserId String?
+  status String @default("ACTIVE")
+  storagePath String
+  observations String?
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Restrict)
+  installation Installation? @relation(fields:[installationId], references:[id])
+  inspection Inspection? @relation(fields:[inspectionId], references:[id])
+  versions DocumentVersion[]
+  notifications Notification[]
+}
+
+model DocumentVersion {
+  id String @id @default(cuid())
+  documentId String
+  version String
+  storagePath String
+  uploadedAt DateTime @default(now())
+  uploadedBy String?
+  document Document @relation(fields:[documentId], references:[id], onDelete: Cascade)
+}
+
+model ComplianceIncident {
+  id String @id @default(cuid())
+  centerId String
+  installationId String?
+  inspectionId String?
+  country CountryCode
+  stlCode String
+  detectedAt DateTime @default(now())
+  description String
+  severity RiskSeverity
+  responsibleId String?
+  maintenanceCompanyId String?
+  targetDate DateTime?
+  status IncidentStatus @default(OPEN)
+  closureEvidence String?
+  internalComments String?
+  ownerComments String?
+  center ShoppingCenter @relation(fields:[centerId], references:[id])
+  installation Installation? @relation(fields:[installationId], references:[id])
+  inspection Inspection? @relation(fields:[inspectionId], references:[id])
+}
+
+model Notification {
+  id String @id @default(cuid())
+  userId String?
+  centerId String?
+  inspectionId String?
+  documentId String?
+  stlCode String?
+  reason String
+  generatedAt DateTime @default(now())
+  readAt DateTime?
+  channel NotificationChannel @default(IN_APP)
+  state AlertState @default(OPEN)
+  user User? @relation(fields:[userId], references:[id])
+  center ShoppingCenter? @relation(fields:[centerId], references:[id])
+  inspection Inspection? @relation(fields:[inspectionId], references:[id])
+  document Document? @relation(fields:[documentId], references:[id])
+}
+
+model Alert {
+  id String @id @default(cuid())
+  type AlertType
+  state AlertState @default(OPEN)
+  generatedAt DateTime @default(now())
+  readAt DateTime?
+  resolvedAt DateTime?
+  recipientUserId String?
+  centerId String
+  country CountryCode
+  stlCode String?
+  installationId String?
+  inspectionId String?
+  documentId String?
+  reason String
+  channel NotificationChannel @default(BOTH)
+  center ShoppingCenter @relation(fields:[centerId], references:[id], onDelete: Cascade)
+  @@index([recipientUserId, state])
+  @@index([centerId, generatedAt])
+}
+
+model AlertRule {
+  id String @id @default(cuid())
+  name String
+  active Boolean @default(true)
+  country CountryCode?
+  stlCode String?
+  centerId String?
+  installationType String?
+  actionType String?
+  responsibleId String?
+  riskLevel RiskSeverity?
+  daysBefore Int?
+  alertType AlertType
+  channel NotificationChannel @default(BOTH)
+  recipients AlertRuleRecipient[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AlertRuleRecipient {
+  ruleId String
+  userId String
+  rule AlertRule @relation(fields:[ruleId], references:[id], onDelete: Cascade)
+  user User @relation(fields:[userId], references:[id], onDelete: Cascade)
+  @@id([ruleId, userId])
+}
+
+model Risk {
+  id String @id @default(cuid())
+  centerId String
+  installationId String?
+  inspectionId String?
+  country CountryCode
+  stlCode String
+  severity RiskSeverity
+  status String @default("OPEN")
+  targetDate DateTime?
+  impact String?
+  center ShoppingCenter @relation(fields:[centerId], references:[id])
+  installation Installation? @relation(fields:[installationId], references:[id])
+  inspection Inspection? @relation(fields:[inspectionId], references:[id])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  userId String?
+  centerId String?
+  action String
+  entity String
+  entityId String?
+  previousValue Json?
+  newValue Json?
+  ipAddress String?
+  result String?
+  createdAt DateTime @default(now())
+  user User? @relation(fields:[userId], references:[id])
+  center ShoppingCenter? @relation(fields:[centerId], references:[id])
+  @@index([entity, entityId])
+}
+
+model InspectionStateHistory {
+  id String @id @default(cuid())
+  inspectionId String
+  previous ComplianceStatus?
+  next ComplianceStatus
+  comment String?
+  documentId String?
+  changedAt DateTime @default(now())
+  inspection Inspection @relation(fields:[inspectionId], references:[id], onDelete: Cascade)
+}
+
+model ImportJob {
+  id String @id @default(cuid())
+  filename String
+  country CountryCode?
+  stlVersion String?
+  status String
+  summary Json?
+  createdBy String?
+  createdAt DateTime @default(now())
+}
+
+model Report {
+  id String @id @default(cuid())
+  name String
+  type String
+  filters Json?
+  storagePath String?
+  createdBy String?
+  createdAt DateTime @default(now())
+}
+
+model Backup {
+  id String @id @default(cuid())
+  type String
+  storagePath String?
+  result String
+  createdBy String?
+}
+
+model Setting {
+  id String @id @default(cuid())
+  key String @unique
+  value Json
+  updatedAt DateTime @updatedAt
+}

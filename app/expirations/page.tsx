@@ -1,0 +1,12 @@
+"use client";
+import { useMemo, useState } from "react";
+import { demo } from "@/lib/data";
+import { Card, SectionTitle, Badge, SortHeader } from "@/components/ui";
+
+const rows=Array.from({length:18},(_,i)=>{const c=demo.centers[i%demo.centers.length]; const days=[-7,2,12,27,45,68,88][i%7]; const date=new Date(); date.setDate(date.getDate()+days); return {c,days,date,installation:(demo.esCatalog[i%demo.esCatalog.length] as any).installation,action:(demo.esCatalog[i%demo.esCatalog.length] as any).action,risk:i%9===0?"Crítico":i%4===0?"Alto":"Medio"};});
+export default function Expirations(){
+ const [sort,setSort]=useState({key:"days" as keyof typeof rows[number],dir:"asc" as "asc"|"desc"});
+ const list=useMemo(()=>[...rows].sort((a,b)=>String(a[sort.key]).localeCompare(String(b[sort.key]),"es",{numeric:true})*(sort.dir==="asc"?1:-1)),[sort]);
+ const toggle=(key:any)=>setSort(s=>({key,dir:s.key===key&&s.dir==="asc"?"desc":"asc"}));
+ return <div className="space-y-6"><SectionTitle title="Panel de vencimientos" subtitle="Priorización diaria de inspecciones y documentación"/><div className="grid gap-4 md:grid-cols-4">{[["Vencidas",rows.filter(x=>x.days<0),"danger"],["30 días",rows.filter(x=>x.days>=0&&x.days<=30),"warning"],["60 días",rows.filter(x=>x.days>30&&x.days<=60),"info"],["90 días",rows.filter(x=>x.days>60),"success"]].map(([t,v,tone]:any)=><Card key={t} className="p-5"><Badge tone={tone}>{t}</Badge><div className="mt-3 text-2xl font-black">{v.length}</div><div className="text-xs text-slate-400">actuaciones</div></Card>)}</div><Card className="p-6"><SectionTitle title="Listado priorizado"/><div className="table-wrap"><table className="table"><thead><tr><th><SortHeader label="Centro" onClick={()=>toggle("c")}/></th><th><SortHeader label="Instalación" onClick={()=>toggle("installation")}/></th><th><SortHeader label="Actuación" onClick={()=>toggle("action")}/></th><th><SortHeader label="Vencimiento" onClick={()=>toggle("date")}/></th><th><SortHeader label="Días" onClick={()=>toggle("days")}/></th><th><SortHeader label="Riesgo" onClick={()=>toggle("risk")}/></th></tr></thead><tbody>{list.map((x,i)=><tr key={i}><td className="font-semibold">{x.c.name}</td><td>{x.installation}</td><td>{x.action}</td><td>{x.date.toLocaleDateString("es-ES")}</td><td className={x.days<0?"font-bold text-red-600":"font-semibold"}>{x.days}</td><td><Badge tone={x.risk==="Crítico"?"danger":x.risk==="Alto"?"warning":"info"}>{x.risk}</Badge></td></tr>)}</tbody></table></div></Card></div>
+}
