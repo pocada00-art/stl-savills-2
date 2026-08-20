@@ -8,7 +8,12 @@ datasource db {
 }
 
 enum CountryCode { ES PT }
-enum STLStatus { DRAFT ACTIVE SUPERSEDED ARCHIVED }
+enum STLStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
 enum ComplianceStatus { FAVORABLE CONDITIONED UNFAVORABLE PENDING NO_INFORMATION }
 enum RiskSeverity { LOW MEDIUM HIGH CRITICAL }
 enum IncidentStatus { OPEN IN_PROGRESS THIRD_PARTY CLOSED CANCELLED }
