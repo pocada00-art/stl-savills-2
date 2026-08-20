@@ -203,7 +203,7 @@ model STLTemplateItem {
   version STLTemplateVersion @relation(fields:[versionId], references:[id], onDelete: Restrict)
   inspections Inspection[]
   centerElements CenterElement[]
-  @@index([versionId, code])
+  @@unique([versionId, code])
 }
 
 model ShoppingCenter {
