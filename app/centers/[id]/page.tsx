@@ -8,7 +8,6 @@ import {
   ImagePlus,
   Plus,
   RotateCcw,
-  CheckCircle2,
   Search,
   FileCheck2,
   BarChart3,
@@ -234,24 +233,15 @@ function getResultVisual(result: string) {
 }
 
 /**
- * Convierte la frecuencia de la instalación en meses.
+ * Convierte la frecuencia a meses.
  *
- * Ejemplos:
- * mensual       -> 1
- * bimensual     -> 2
- * trimestral    -> 3
- * cuatrimestral -> 4
- * semestral     -> 6
- * anual         -> 12
- * bienal        -> 24
- *
- * También admite formatos como:
- * "3 meses"
- * "6 meses"
- * "1 año"
- * "2 años"
+ * IMPORTANTE:
+ * Se comprueban primero las frecuencias
+ * específicas como bimensual para evitar
+ * que "bimensual" sea interpretado como
+ * "mensual".
  */
-function parseFrequency(frequency: string) {
+function parseFrequency(frequency: string): number | null {
   const value = String(frequency || "")
     .trim()
     .toLowerCase();
@@ -260,32 +250,35 @@ function parseFrequency(frequency: string) {
     return null;
   }
 
-  if (value.includes("mensual")) {
-    return { months: 1 };
-  }
-
-  if (value.includes("bimensual")) {
-    return { months: 2 };
+  if (
+    value.includes("bimensual") ||
+    value.includes("bimestral")
+  ) {
+    return 2;
   }
 
   if (value.includes("trimestral")) {
-    return { months: 3 };
+    return 3;
   }
 
   if (value.includes("cuatrimestral")) {
-    return { months: 4 };
+    return 4;
   }
 
   if (value.includes("semestral")) {
-    return { months: 6 };
+    return 6;
   }
 
   if (value.includes("bienal")) {
-    return { months: 24 };
+    return 24;
+  }
+
+  if (value.includes("mensual")) {
+    return 1;
   }
 
   if (value.includes("anual")) {
-    return { months: 12 };
+    return 12;
   }
 
   const numeric = value.match(
@@ -303,33 +296,29 @@ function parseFrequency(frequency: string) {
       value.includes("año") ||
       value.includes("años")
     ) {
-      return {
-        months: amount * 12,
-      };
+      return amount * 12;
     }
 
-    return {
-      months: amount,
-    };
+    return amount;
   }
 
   return null;
 }
 
 /**
- * Calcula exclusivamente la próxima revisión.
+ * Calcula la próxima revisión.
  *
- * En este paso NO se aplican:
- * - festivos
+ * FASE ACTUAL:
+ *
+ * próxima revisión =
+ * fecha de ejecución + frecuencia
+ *
+ * Todavía NO se aplican:
  * - sábados
  * - domingos
+ * - festivos
  *
- * Solamente:
- *
- * fecha de revisión + frecuencia
- *
- * Devuelve una fecha en formato YYYY-MM-DD,
- * compatible directamente con los inputs type="date".
+ * La función devuelve YYYY-MM-DD.
  */
 function calculateNextReview(
   date: string,
@@ -339,13 +328,13 @@ function calculateNextReview(
     return "";
   }
 
-  const parsed = parseFrequency(frequency);
+  const months = parseFrequency(frequency);
 
-  if (!parsed) {
+  if (!months) {
     return "";
   }
 
-  const match = String(date).match(
+  const match = date.match(
     /^(\d{4})-(\d{2})-(\d{2})$/
   );
 
@@ -360,20 +349,20 @@ function calculateNextReview(
   if (
     !Number.isInteger(year) ||
     !Number.isInteger(month) ||
-    !Number.isInteger(day) ||
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > 31
+    !Number.isInteger(day)
   ) {
     return "";
   }
 
   /**
-   * Trabajamos con Date local y no con
-   * new Date("YYYY-MM-DD"), para evitar
-   * desplazamientos de fecha provocados
-   * por UTC.
+   * Guardamos el día original.
+   */
+  const originalDay = day;
+
+  /**
+   * Creamos la fecha usando componentes locales.
+   * No usamos new Date("YYYY-MM-DD") para
+   * evitar problemas de zona horaria.
    */
   const result = new Date(
     year,
@@ -381,46 +370,90 @@ function calculateNextReview(
     day
   );
 
+  result.setHours(0, 0, 0, 0);
+
   if (Number.isNaN(result.getTime())) {
     return "";
   }
 
-  result.setHours(0, 0, 0, 0);
+  /**
+   * Calculamos el mes de destino de forma
+   * independiente para evitar que JavaScript
+   * desborde automáticamente al mes siguiente
+   * cuando el día no existe.
+   *
+   * Ejemplo:
+   *
+   * 31/01 + 1 mes
+   *
+   * no debe convertirse accidentalmente
+   * en 03/03.
+   */
+  const targetMonthIndex =
+    month - 1 + months;
+
+  const targetYear =
+    year +
+    Math.floor(
+      targetMonthIndex / 12
+    );
+
+  const targetMonth =
+    targetMonthIndex % 12;
 
   /**
-   * Añadimos los meses correspondientes
-   * a la frecuencia.
+   * Número de días del mes destino.
    */
-  result.setMonth(
-    result.getMonth() + parsed.months
+  const lastDayOfTargetMonth =
+    new Date(
+      targetYear,
+      targetMonth + 1,
+      0
+    ).getDate();
+
+  /**
+   * Si el día original no existe en el
+   * mes destino, utilizamos el último día
+   * de ese mes.
+   */
+  const targetDay = Math.min(
+    originalDay,
+    lastDayOfTargetMonth
   );
 
-  /**
-   * Normalización del día.
-   *
-   * Por ejemplo, si la fecha original es
-   * el último día de un mes y el mes destino
-   * no tiene ese día, JavaScript puede saltar
-   * al mes siguiente.
-   *
-   * En esta primera fase dejamos que el
-   * comportamiento sea el natural del calendario.
-   */
+  const finalDate = new Date(
+    targetYear,
+    targetMonth,
+    targetDay
+  );
 
-  const resultYear =
-    result.getFullYear();
+  finalDate.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
-  const resultMonth =
-    String(
-      result.getMonth() + 1
-    ).padStart(2, "0");
+  if (
+    Number.isNaN(
+      finalDate.getTime()
+    )
+  ) {
+    return "";
+  }
 
-  const resultDay =
-    String(
-      result.getDate()
-    ).padStart(2, "0");
+  const finalYear =
+    finalDate.getFullYear();
 
-  return `${resultYear}-${resultMonth}-${resultDay}`;
+  const finalMonth = String(
+    finalDate.getMonth() + 1
+  ).padStart(2, "0");
+
+  const finalDay = String(
+    finalDate.getDate()
+  ).padStart(2, "0");
+
+  return `${finalYear}-${finalMonth}-${finalDay}`;
 }
 
 function calculateResult(
@@ -429,11 +462,6 @@ function calculateResult(
   secondReviewDate: string,
   nextReviewDate: string
 ) {
-  /**
-   * Si APTO, APTO CONDICIONADO o NO APTO
-   * no tienen fecha de revisión, el resultado
-   * es ERROR.
-   */
   if (
     (
       status === "APTO" ||
@@ -445,19 +473,10 @@ function calculateResult(
     return "ERROR";
   }
 
-  /**
-   * Sin fecha no podemos calcular resultado.
-   */
   if (!date) {
     return "-";
   }
 
-  /**
-   * APTO CONDICIONADO:
-   *
-   * La fecha que determina PTE. es la
-   * segunda revisión.
-   */
   if (
     status === "APTO CONDICIONADO"
   ) {
@@ -484,12 +503,6 @@ function calculateResult(
     return "CONDICIONADO";
   }
 
-  /**
-   * APTO y NO APTO:
-   *
-   * La fecha que determina PTE. es la
-   * próxima revisión.
-   */
   if (
     status === "APTO" ||
     status === "NO APTO"
@@ -550,9 +563,7 @@ function formatDate(value: string) {
 export default function CenterDetail() {
   const params = useParams();
 
-  const id = String(
-    params.id
-  );
+  const id = String(params.id);
 
   const center =
     demo.centers.find(
@@ -629,9 +640,7 @@ export default function CenterDetail() {
 
   useEffect(() => {
     const h = () =>
-      setState(
-        loadState()
-      );
+      setState(loadState());
 
     window.addEventListener(
       "stl-role-change",
@@ -663,16 +672,10 @@ export default function CenterDetail() {
     );
   }
 
-  /**
-   * A partir de este punto TypeScript sabe
-   * que center existe.
-   */
-  const currentCenter =
-    center;
+  const currentCenter = center;
 
   const catalog =
-    currentCenter.country ===
-    "España"
+    currentCenter.country === "España"
       ? demo.esCatalog
       : demo.ptCatalog;
 
@@ -786,9 +789,7 @@ export default function CenterDetail() {
 
           if (match) {
             const reviewYear =
-              Number(
-                match[1]
-              );
+              Number(match[1]);
 
             if (
               reviewYear <=
@@ -857,9 +858,7 @@ export default function CenterDetail() {
       },
     };
 
-    updateState(
-      next
-    );
+    updateState(next);
   }
 
   function getItem(
@@ -905,8 +904,7 @@ export default function CenterDetail() {
   function confirmReview() {
     if (
       state.role !== "ADMIN" ||
-      summary.pendingConfirmation >
-        0
+      summary.pendingConfirmation > 0
     ) {
       return;
     }
@@ -931,13 +929,8 @@ export default function CenterDetail() {
             "ADMINISTRADOR",
           signed: true,
         },
-        ...(
-          review.participants ||
-          []
-        ).filter(
-          p =>
-            p.role ===
-            "OTRO"
+        ...(review.participants || []).filter(
+          p => p.role === "OTRO"
         ),
       ],
     };
@@ -958,9 +951,7 @@ export default function CenterDetail() {
 
     delete next.reviews[key];
 
-    updateState(
-      next
-    );
+    updateState(next);
   }
 
   function uploadImage(
@@ -975,21 +966,16 @@ export default function CenterDetail() {
     reader.onload = () => {
       updateCenter(
         field,
-        String(
-          reader.result
-        )
+        String(reader.result)
       );
     };
 
-    reader.readAsDataURL(
-      file
-    );
+    reader.readAsDataURL(file);
   }
 
   const readOnly =
     state.role === "LECTURA" ||
-    currentCenter.status !==
-      "Activo";
+    currentCenter.status !== "Activo";
 
   const admin =
     state.role === "ADMIN";
@@ -1046,9 +1032,7 @@ export default function CenterDetail() {
 
               {overrides.logoUrl ? (
                 <img
-                  src={
-                    overrides.logoUrl
-                  }
+                  src={overrides.logoUrl}
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1064,10 +1048,7 @@ export default function CenterDetail() {
             <div>
 
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {
-                  currentCenter.country
-                }{" "}
-                ·{" "}
+                {currentCenter.country} ·{" "}
                 {currentCenter.stl}
               </div>
 
@@ -1084,9 +1065,7 @@ export default function CenterDetail() {
               <div className="mt-3 flex gap-2">
 
                 <Badge tone="success">
-                  {
-                    currentCenter.status
-                  }
+                  {currentCenter.status}
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
@@ -1096,8 +1075,7 @@ export default function CenterDetail() {
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº{" "}
-                  {currentCenter.code}
+                  Nº {currentCenter.code}
                 </span>
 
               </div>
@@ -1110,12 +1088,8 @@ export default function CenterDetail() {
 
             {overrides.imageUrl ? (
               <img
-                src={
-                  overrides.imageUrl
-                }
-                alt={
-                  currentCenter.name
-                }
+                src={overrides.imageUrl}
+                alt={currentCenter.name}
                 className="h-32 w-full rounded-xl object-cover"
               />
             ) : (
@@ -1146,9 +1120,7 @@ export default function CenterDetail() {
           ],
           [
             "No aptos",
-            summary.counts[
-              "NO APTO"
-            ],
+            summary.counts["NO APTO"],
           ],
           [
             "Condicionados",
@@ -1156,22 +1128,20 @@ export default function CenterDetail() {
               "APTO CONDICIONADO"
             ],
           ],
-        ].map(
-          ([t, v]) => (
-            <Card
-              key={String(t)}
-              className="p-5"
-            >
-              <div className="text-2xl font-black">
-                {v}
-              </div>
+        ].map(([t, v]) => (
+          <Card
+            key={String(t)}
+            className="p-5"
+          >
+            <div className="text-2xl font-black">
+              {v}
+            </div>
 
-              <div className="mt-1 text-sm text-slate-500">
-                {t}
-              </div>
-            </Card>
-          )
-        )}
+            <div className="mt-1 text-sm text-slate-500">
+              {t}
+            </div>
+          </Card>
+        ))}
 
       </div>
 
@@ -1192,13 +1162,9 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openCenterData
-            }
+            open={openCenterData}
             onClick={() =>
-              setOpenCenterData(
-                v => !v
-              )
+              setOpenCenterData(v => !v)
             }
           />
 
@@ -1215,9 +1181,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.property ??
                     currentCenter.property ??
@@ -1239,9 +1203,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.address ??
                     currentCenter.address ??
@@ -1263,13 +1225,8 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    overrides.city ??
-                    ""
-                  }
+                  disabled={readOnly}
+                  value={overrides.city ?? ""}
                   onChange={e =>
                     updateCenter(
                       "city",
@@ -1286,12 +1243,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
-                    overrides.province ??
-                    ""
+                    overrides.province ?? ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1309,9 +1263,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.manager ??
                     currentCenter.manager ??
@@ -1333,12 +1285,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
-                    overrides.managerPhone ??
-                    ""
+                    overrides.managerPhone ?? ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1356,13 +1305,10 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   type="email"
                   value={
-                    overrides.managerEmail ??
-                    ""
+                    overrides.managerEmail ?? ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1382,9 +1328,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.technicalResponsible ??
                     ""
@@ -1405,9 +1349,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.technicalResponsiblePhone ??
                     ""
@@ -1428,9 +1370,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   type="email"
                   value={
                     overrides.technicalResponsibleEmail ??
@@ -1521,13 +1461,9 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openHistory
-            }
+            open={openHistory}
             onClick={() =>
-              setOpenHistory(
-                v => !v
-              )
+              setOpenHistory(v => !v)
             }
           />
 
@@ -1536,95 +1472,82 @@ export default function CenterDetail() {
         {openHistory && (
           <>
 
-            {reviewYears.length ===
-            0 ? (
+            {reviewYears.length === 0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                 No hay revisiones históricas cargadas.
               </div>
             ) : (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
 
-                {reviewYears.flatMap(
-                  y =>
-                    (
-                      [
-                        "S1",
-                        "S2",
-                      ] as Period[]
-                    ).map(
-                      p => {
-                        const r =
-                          state.reviews[
-                            reviewKey(
-                              currentCenter.id,
-                              y,
-                              p
-                            )
-                          ];
+                {reviewYears.flatMap(y =>
+                  (
+                    ["S1", "S2"] as Period[]
+                  ).map(p => {
+                    const r =
+                      state.reviews[
+                        reviewKey(
+                          currentCenter.id,
+                          y,
+                          p
+                        )
+                      ];
 
-                        const historicalActiveIds =
-                          catalog
-                            .filter(
-                              (
-                                x: any
-                              ) =>
-                                activeMap[
-                                  x.id
-                                ] !==
-                                false
-                            )
-                            .map(
-                              (
-                                x: any
-                              ) =>
-                                x.id
-                            );
-
-                        const sum =
-                          reviewSummary(
-                            r,
-                            historicalActiveIds
-                          );
-
-                        return (
-                          <div
-                            key={`${y}-${p}`}
-                            className="rounded-xl border border-slate-200 p-4"
-                          >
-
-                            <div className="flex items-center justify-between">
-
-                              <div className="text-xs font-semibold text-slate-400">
-                                {p}{" "}
-                                {y}
-                              </div>
-
-                              {r?.confirmed && (
-                                <Badge tone="success">
-                                  Confirmada
-                                </Badge>
-                              )}
-
-                            </div>
-
-                            <div className="mt-2 text-xl font-black">
-                              {r
-                                ? `${sum.score}%`
-                                : "—"}
-                            </div>
-
-                            <div className="mt-1 text-xs text-slate-500">
-                              {r
-                                ? r.confirmed
-                                  ? "Revisión confirmada"
-                                  : "Revisión cargada sin confirmar"
-                                : "Sin revisión cargada"}
-                            </div>
-
-                          </div>
+                    const historicalActiveIds =
+                      catalog
+                        .filter(
+                          (x: any) =>
+                            activeMap[
+                              x.id
+                            ] !== false
+                        )
+                        .map(
+                          (x: any) =>
+                            x.id
                         );
-                      }
-                    )
+
+                    const sum =
+                      reviewSummary(
+                        r,
+                        historicalActiveIds
+                      );
+
+                    return (
+                      <div
+                        key={`${y}-${p}`}
+                        className="rounded-xl border border-slate-200 p-4"
+                      >
+
+                        <div className="flex items-center justify-between">
+
+                          <div className="text-xs font-semibold text-slate-400">
+                            {p} {y}
+                          </div>
+
+                          {r?.confirmed && (
+                            <Badge tone="success">
+                              Confirmada
+                            </Badge>
+                          )}
+
+                        </div>
+
+                        <div className="mt-2 text-xl font-black">
+                          {r
+                            ? `${sum.score}%`
+                            : "—"}
+                        </div>
+
+                        <div className="mt-1 text-xs text-slate-500">
+                          {r
+                            ? r.confirmed
+                              ? "Revisión confirmada"
+                              : "Revisión cargada sin confirmar"
+                            : "Sin revisión cargada"}
+                        </div>
+
+                      </div>
+                    );
+                  })
                 )}
 
               </div>
@@ -1653,13 +1576,9 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openReview
-            }
+            open={openReview}
             onClick={() =>
-              setOpenReview(
-                v => !v
-              )
+              setOpenReview(v => !v)
             }
           />
 
@@ -1673,30 +1592,18 @@ export default function CenterDetail() {
               <Select
                 value={String(year)}
                 onChange={v =>
-                  setYear(
-                    Number(v)
-                  )
+                  setYear(Number(v))
                 }
               >
-                <option>
-                  2026
-                </option>
-
-                <option>
-                  2027
-                </option>
-
-                <option>
-                  2028
-                </option>
+                <option>2026</option>
+                <option>2027</option>
+                <option>2028</option>
               </Select>
 
               <Select
                 value={period}
                 onChange={v =>
-                  setPeriod(
-                    v as Period
-                  )
+                  setPeriod(v as Period)
                 }
               >
                 <option value="S1">
@@ -1711,9 +1618,7 @@ export default function CenterDetail() {
               {admin && (
                 <Button
                   variant="secondary"
-                  onClick={
-                    resetPeriod
-                  }
+                  onClick={resetPeriod}
                 >
                   <RotateCcw className="mr-2 inline h-4 w-4" />
                   Reiniciar demo
@@ -1773,22 +1678,19 @@ export default function CenterDetail() {
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
 
-              {STATUSES.map(
-                s => (
-                  <span
-                    key={s}
-                    className="rounded-full border border-slate-200 px-3 py-1"
-                  >
-                    <b>
-                      {
-                        summary
-                          .counts[s]
-                      }
-                    </b>{" "}
-                    {s}
-                  </span>
-                )
-              )}
+              {STATUSES.map(s => (
+                <span
+                  key={s}
+                  className="rounded-full border border-slate-200 px-3 py-1"
+                >
+                  <b>
+                    {
+                      summary.counts[s]
+                    }
+                  </b>{" "}
+                  {s}
+                </span>
+              ))}
 
             </div>
 
@@ -1798,20 +1700,16 @@ export default function CenterDetail() {
                 <div>
 
                   <div className="font-bold text-emerald-800">
-                    Revisión{" "}
-                    {period}{" "}
-                    {year}{" "}
-                    confirmada
+                    Revisión {period}{" "}
+                    {year} confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
-
                     Administrador:{" "}
                     {
                       review.confirmedBy
                     }{" "}
                     ·{" "}
-
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
@@ -1819,7 +1717,6 @@ export default function CenterDetail() {
                           "es-ES"
                         )
                       : "—"}
-
                   </div>
 
                 </div>
@@ -1829,9 +1726,7 @@ export default function CenterDetail() {
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
-
                   Ver / exportar certificado
-
                 </Link>
 
               </div>
@@ -1845,10 +1740,7 @@ export default function CenterDetail() {
 
               <div className="mt-2 space-y-2">
 
-                {(
-                  review.participants ||
-                  []
-                ).map(
+                {(review.participants || []).map(
                   (p, i) => (
                     <div
                       key={i}
@@ -1856,8 +1748,7 @@ export default function CenterDetail() {
                     >
 
                       <span>
-                        {p.name}{" "}
-                        ·{" "}
+                        {p.name} ·{" "}
                         {p.role}
                       </span>
 
@@ -1876,14 +1767,11 @@ export default function CenterDetail() {
                                   []),
                               ];
 
-                            participants[
-                              i
-                            ] = {
+                            participants[i] = {
                               ...participants[
                                 i
                               ],
-                              signed:
-                                true,
+                              signed: true,
                             };
 
                             updateState({
@@ -1917,9 +1805,7 @@ export default function CenterDetail() {
                   <div className="mt-3 flex gap-2">
 
                     <input
-                      value={
-                        participant
-                      }
+                      value={participant}
                       onChange={e =>
                         setParticipant(
                           e.target.value
@@ -1938,23 +1824,19 @@ export default function CenterDetail() {
                           return;
                         }
 
-                        const nextReview =
-                          {
-                            ...review,
-                            participants:
-                              [
-                                ...(review.participants ||
-                                  []),
-                                {
-                                  name:
-                                    participant.trim(),
-                                  role:
-                                    "OTRO",
-                                  signed:
-                                    false,
-                                },
-                              ],
-                          };
+                        const nextReview = {
+                          ...review,
+                          participants: [
+                            ...(review.participants ||
+                              []),
+                            {
+                              name:
+                                participant.trim(),
+                              role: "OTRO",
+                              signed: false,
+                            },
+                          ],
+                        };
 
                         updateState({
                           ...state,
@@ -1964,9 +1846,7 @@ export default function CenterDetail() {
                           },
                         });
 
-                        setParticipant(
-                          ""
-                        );
+                        setParticipant("");
                       }}
                     >
                       Añadir
@@ -1992,13 +1872,9 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openInstallations
-            }
+            open={openInstallations}
             onClick={() =>
-              setOpenInstallations(
-                v => !v
-              )
+              setOpenInstallations(v => !v)
             }
           />
 
@@ -2049,9 +1925,7 @@ export default function CenterDetail() {
                 <input
                   value={q}
                   onChange={e =>
-                    setQ(
-                      e.target.value
-                    )
+                    setQ(e.target.value)
                   }
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
@@ -2060,23 +1934,17 @@ export default function CenterDetail() {
               </div>
 
               <Select
-                value={
-                  category
-                }
-                onChange={
-                  setCategory
-                }
+                value={category}
+                onChange={setCategory}
               >
-                {categories.map(
-                  c => (
-                    <option
-                      key={c}
-                      value={c}
-                    >
-                      {c}
-                    </option>
-                  )
-                )}
+                {categories.map(c => (
+                  <option
+                    key={c}
+                    value={c}
+                  >
+                    {c}
+                  </option>
+                ))}
               </Select>
 
             </div>
@@ -2155,9 +2023,7 @@ export default function CenterDetail() {
                       (x: any) => {
 
                         const item =
-                          getItem(
-                            x.id
-                          );
+                          getItem(x.id);
 
                         const locked =
                           readOnly ||
@@ -2170,14 +2036,22 @@ export default function CenterDetail() {
                           );
 
                         /**
-                         * ESTE ES EL CÁLCULO
-                         * QUE QUEREMOS COMPROBAR
-                         * EN ESTA FASE.
+                         * CÁLCULO DIRECTO:
+                         *
+                         * item.date
+                         * +
+                         * x.frequency
+                         *
+                         * No depende del resultado.
+                         * No depende de hoy.
+                         * No depende del estado.
                          */
                         const nextDate =
                           calculateNextReview(
                             item.date,
-                            x.frequency
+                            String(
+                              x.frequency || ""
+                            )
                           );
 
                         const result =
@@ -2232,9 +2106,7 @@ export default function CenterDetail() {
 
                               {x.category && (
                                 <div className="mt-1 text-xs text-slate-400">
-                                  {
-                                    x.category
-                                  }
+                                  {x.category}
                                 </div>
                               )}
 
@@ -2259,9 +2131,7 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <input
-                                disabled={
-                                  locked
-                                }
+                                disabled={locked}
                                 value={
                                   item.equipmentId
                                 }
@@ -2283,9 +2153,7 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <input
-                                disabled={
-                                  locked
-                                }
+                                disabled={locked}
                                 value={
                                   item.company
                                 }
@@ -2307,9 +2175,7 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <select
-                                disabled={
-                                  locked
-                                }
+                                disabled={locked}
                                 value={
                                   item.status
                                 }
@@ -2343,9 +2209,7 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <input
-                                disabled={
-                                  locked
-                                }
+                                disabled={locked}
                                 type="date"
                                 value={
                                   item.date
@@ -2370,27 +2234,29 @@ export default function CenterDetail() {
 
                                 <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
 
-                                <div>
-
-                                  {nextDate ? (
-                                    <>
-                                      <div className="font-semibold text-slate-700">
-                                        {formatDate(
-                                          nextDate
-                                        )}
-                                      </div>
-
-                                      <div className="text-[10px] text-slate-400">
-                                        Calculada automáticamente
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div className="text-xs text-slate-400">
-                                      —
+                                {nextDate ? (
+                                  <div>
+                                    <div className="font-semibold text-slate-700">
+                                      {formatDate(
+                                        nextDate
+                                      )}
                                     </div>
-                                  )}
 
-                                </div>
+                                    <div className="text-[10px] text-slate-400">
+                                      {x.frequency
+                                        ? `Fecha + ${x.frequency}`
+                                        : "Calculada automáticamente"}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-slate-400">
+                                    {!item.date
+                                      ? "Introduce fecha"
+                                      : !x.frequency
+                                      ? "Sin frecuencia"
+                                      : "Frecuencia no reconocida"}
+                                  </div>
+                                )}
 
                               </div>
 
@@ -2401,9 +2267,7 @@ export default function CenterDetail() {
                               {item.status ===
                               "APTO CONDICIONADO" ? (
                                 <input
-                                  disabled={
-                                    locked
-                                  }
+                                  disabled={locked}
                                   type="date"
                                   value={
                                     item.secondReviewDate
@@ -2446,9 +2310,7 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <textarea
-                                disabled={
-                                  locked
-                                }
+                                disabled={locked}
                                 value={
                                   item.comment
                                 }
@@ -2494,8 +2356,7 @@ export default function CenterDetail() {
                       }
                     )}
 
-                    {visible.length ===
-                      0 && (
+                    {visible.length === 0 && (
                       <tr>
                         <td
                           colSpan={15}
@@ -2519,7 +2380,7 @@ export default function CenterDetail() {
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                En esta fase, la próxima revisión se calcula únicamente sumando a la fecha de ejecución el número de meses indicado por la frecuencia de la instalación. La lógica de fines de semana y festivos se añadirá posteriormente.
+                En esta fase, la próxima revisión se calcula exclusivamente como fecha de ejecución + frecuencia. Todavía no se aplican sábados, domingos ni festivos.
               </div>
 
             </div>
@@ -2542,7 +2403,6 @@ export default function CenterDetail() {
                         }
                       >
                         <Plus className="mr-2 inline h-4 w-4" />
-
                         Añadir elemento
                       </Button>
                     ) : undefined
@@ -2616,23 +2476,15 @@ export default function CenterDetail() {
                                 <div className="min-w-0">
 
                                   <div className="truncate text-sm font-semibold">
-                                    {
-                                      x.code
-                                    }{" "}
-                                    ·{" "}
+                                    {x.code} ·{" "}
                                     {
                                       x.installation
                                     }
                                   </div>
 
                                   <div className="truncate text-xs text-slate-500">
-                                    {
-                                      x.action
-                                    }{" "}
-                                    ·{" "}
-                                    {
-                                      x.frequency
-                                    }
+                                    {x.action} ·{" "}
+                                    {x.frequency}
                                   </div>
 
                                 </div>
@@ -2669,8 +2521,7 @@ export default function CenterDetail() {
 
               <div className="mt-4">
 
-                {inactiveItems.length ===
-                0 ? (
+                {inactiveItems.length === 0 ? (
                   <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                     No hay elementos no activos actualmente.
                     Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
@@ -2719,9 +2570,7 @@ export default function CenterDetail() {
                                 </div>
 
                                 <div className="truncate text-xs text-slate-500">
-                                  {
-                                    x.action
-                                  }
+                                  {x.action}
                                 </div>
 
                               </div>
