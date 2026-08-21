@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -121,11 +121,7 @@ export default function CenterDetail() {
     (x: any) => activeMap[x.id] === false
   );
 
-  const key = reviewKey(
-    center.id,
-    year,
-    period
-  );
+  const key = reviewKey(center.id, year, period);
 
   const review =
     state.reviews[key] || {
@@ -154,22 +150,64 @@ export default function CenterDetail() {
 
   const visible = activeItems.filter(
     (x: any) =>
-      (category === "Todas" ||
-        x.category === category) &&
+      (category === "Todas" || x.category === category) &&
       `${x.code} ${x.installation} ${x.action} ${x.category}`
         .toLowerCase()
         .includes(q.toLowerCase())
   );
 
+  /*
+   * HISTÓRICO DE CUMPLIMIENTO
+   *
+   * Se muestran siempre 2024, 2025 y el año actual.
+   * Además, si existen revisiones anteriores a 2024,
+   * también se incorporan automáticamente.
+   *
+   * Nunca se muestran años futuros.
+   */
+  const historyPeriods = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+
+    const years = new Set<number>([
+      2024,
+      2025,
+      currentYear,
+    ]);
+
+    Object.keys(state.reviews).forEach(reviewId => {
+      const parts = reviewId.split(":");
+
+      if (parts.length !== 3) return;
+
+      const centerId = parts[0];
+      const reviewYear = Number(parts[1]);
+
+      if (
+        centerId === center.id &&
+        Number.isInteger(reviewYear) &&
+        reviewYear <= currentYear
+      ) {
+        years.add(reviewYear);
+      }
+    });
+
+    return Array.from(years)
+      .filter(y => y <= currentYear)
+      .sort((a, b) => a - b)
+      .flatMap(y =>
+        (["S1", "S2"] as Period[]).map(p => ({
+          year: y,
+          period: p,
+        }))
+      );
+  }, [state.reviews, center.id]);
+
   function updateState(next: V1State) {
     setState(next);
     saveState(next);
-
     setSaved(true);
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 1500);
+    setTimeout(() => setSaved(false), 1500);
   }
 
   function updateCenter(
@@ -207,17 +245,12 @@ export default function CenterDetail() {
   }
 
   function getItem(itemId: string) {
-    return (
-      review.items[itemId] ||
-      blankItem()
-    );
+    return review.items[itemId] || blankItem();
   }
 
   function updateItem(
     itemId: string,
-    patch: Partial<
-      ReturnType<typeof blankItem>
-    >
+    patch: Partial<ReturnType<typeof blankItem>>
   ) {
     const current = getItem(itemId);
 
@@ -242,14 +275,11 @@ export default function CenterDetail() {
   }
 
   function confirmItem(itemId: string) {
-    if (state.role !== "ADMIN") {
-      return;
-    }
+    if (state.role !== "ADMIN") return;
 
     updateItem(itemId, {
       confirmed: true,
-      confirmedAt:
-        new Date().toISOString(),
+      confirmedAt: new Date().toISOString(),
       confirmedBy: "Administrador Demo",
     });
   }
@@ -265,8 +295,7 @@ export default function CenterDetail() {
     const nextReview = {
       ...review,
       confirmed: true,
-      confirmedAt:
-        new Date().toISOString(),
+      confirmedAt: new Date().toISOString(),
       confirmedBy: "Administrador Demo",
       participants: [
         {
@@ -295,9 +324,7 @@ export default function CenterDetail() {
   }
 
   function resetPeriod() {
-    const next = {
-      ...state,
-    };
+    const next = { ...state };
 
     delete next.reviews[key];
 
@@ -311,10 +338,7 @@ export default function CenterDetail() {
     const reader = new FileReader();
 
     reader.onload = () =>
-      updateCenter(
-        field,
-        String(reader.result)
-      );
+      updateCenter(field, String(reader.result));
 
     reader.readAsDataURL(file);
   }
@@ -382,14 +406,12 @@ export default function CenterDetail() {
                 />
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
-                  {center.shortCode ||
-                    center.code}
+                  {center.shortCode || center.code}
                 </span>
               )}
             </div>
 
             <div>
-
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
                 {center.country} · {center.stl}
               </div>
@@ -405,26 +427,22 @@ export default function CenterDetail() {
               </p>
 
               <div className="mt-3 flex gap-2">
-
                 <Badge tone="success">
                   {center.status}
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Código{" "}
-                  {center.shortCode || "—"}
+                  Código {center.shortCode || "—"}
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Nº {center.code}
                 </span>
-
               </div>
             </div>
           </div>
 
           <div className="flex items-center justify-center bg-white/5 p-4">
-
             {overrides.imageUrl ? (
               <img
                 src={overrides.imageUrl}
@@ -436,18 +454,13 @@ export default function CenterDetail() {
                 Imagen del centro
               </div>
             )}
-
           </div>
         </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-5">
-
         {[
-          [
-            "Cumplimiento",
-            `${summary.score}%`,
-          ],
+          ["Cumplimiento", `${summary.score}%`],
           [
             "Confirmados",
             `${summary.confirmed}/${summary.total}`,
@@ -462,15 +475,10 @@ export default function CenterDetail() {
           ],
           [
             "Condicionados",
-            summary.counts[
-              "APTO CONDICIONADO"
-            ],
+            summary.counts["APTO CONDICIONADO"],
           ],
         ].map(([t, v]) => (
-          <Card
-            key={String(t)}
-            className="p-5"
-          >
+          <Card key={String(t)} className="p-5">
             <div className="text-2xl font-black">
               {v}
             </div>
@@ -480,13 +488,11 @@ export default function CenterDetail() {
             </div>
           </Card>
         ))}
-
       </div>
 
       {/* DATOS DEL CENTRO */}
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
 
           <SectionTitle
@@ -504,23 +510,16 @@ export default function CenterDetail() {
           <SectionToggle
             open={openCenterData}
             onClick={() =>
-              setOpenCenterData(
-                v => !v
-              )
+              setOpenCenterData(v => !v)
             }
           />
-
         </div>
 
         {openCenterData && (
           <>
+            <div className="grid gap-4 md:grid-cols-4">
 
-            <div className="grid gap-4 md:grid-cols-6">
-
-              {/* PROPIEDAD */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm md:col-span-1">
                 <span className="text-xs text-slate-400">
                   Propiedad
                 </span>
@@ -540,13 +539,9 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* DIRECCIÓN */}
-
-              <label className="text-sm md:col-span-4">
-
+              <label className="text-sm md:col-span-3">
                 <span className="text-xs text-slate-400">
                   Dirección
                 </span>
@@ -566,22 +561,16 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* CIUDAD */}
-
-              <label className="text-sm md:col-span-3">
-
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Ciudad
                 </span>
 
                 <input
                   disabled={readOnly}
-                  value={
-                    overrides.city ?? ""
-                  }
+                  value={overrides.city ?? ""}
                   onChange={e =>
                     updateCenter(
                       "city",
@@ -590,22 +579,16 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* PROVINCIA */}
-
-              <label className="text-sm md:col-span-3">
-
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Provincia
                 </span>
 
                 <input
                   disabled={readOnly}
-                  value={
-                    overrides.province ?? ""
-                  }
+                  value={overrides.province ?? ""}
                   onChange={e =>
                     updateCenter(
                       "province",
@@ -614,22 +597,16 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* GERENTE */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Gerente
                 </span>
 
                 <input
                   disabled={readOnly}
-                  value={
-                    overrides.manager ?? ""
-                  }
+                  value={overrides.manager ?? ""}
                   onChange={e =>
                     updateCenter(
                       "manager",
@@ -638,23 +615,16 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* TELÉFONO GERENTE */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Teléfono gerente
                 </span>
 
                 <input
                   disabled={readOnly}
-                  value={
-                    overrides.managerPhone ??
-                    ""
-                  }
+                  value={overrides.managerPhone ?? ""}
                   onChange={e =>
                     updateCenter(
                       "managerPhone",
@@ -663,13 +633,9 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* EMAIL GERENTE */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Email gerente
                 </span>
@@ -677,10 +643,7 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   type="email"
-                  value={
-                    overrides.managerEmail ??
-                    ""
-                  }
+                  value={overrides.managerEmail ?? ""}
                   onChange={e =>
                     updateCenter(
                       "managerEmail",
@@ -689,13 +652,9 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* RESPONSABLE TÉCNICO */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Responsable técnico
                 </span>
@@ -714,13 +673,9 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* TELÉFONO RESPONSABLE TÉCNICO */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Teléfono responsable técnico
                 </span>
@@ -739,13 +694,9 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
-              {/* EMAIL RESPONSABLE TÉCNICO */}
-
-              <label className="text-sm md:col-span-2">
-
+              <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Email responsable técnico
                 </span>
@@ -765,7 +716,6 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
-
               </label>
 
             </div>
@@ -774,9 +724,7 @@ export default function CenterDetail() {
               <div className="mt-5 flex flex-wrap gap-3">
 
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
                   <ImagePlus className="mr-2 inline h-4 w-4" />
-
                   Logo
 
                   <input
@@ -795,13 +743,10 @@ export default function CenterDetail() {
                       }
                     }}
                   />
-
                 </label>
 
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
                   <ImagePlus className="mr-2 inline h-4 w-4" />
-
                   Imagen centro
 
                   <input
@@ -820,121 +765,104 @@ export default function CenterDetail() {
                       }
                     }}
                   />
-
                 </label>
 
               </div>
             )}
-
           </>
         )}
-
       </Card>
 
       {/* HISTÓRICO DE CUMPLIMIENTO */}
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
 
           <SectionTitle
             title="Histórico de cumplimiento"
-            subtitle="Evolución S1 / S2 y siguientes años"
+            subtitle="Revisiones históricas del centro hasta la fecha actual"
           />
 
           <SectionToggle
             open={openHistory}
             onClick={() =>
-              setOpenHistory(
-                v => !v
-              )
+              setOpenHistory(v => !v)
             }
           />
-
         </div>
 
         {openHistory && (
           <>
-
             <div className="grid gap-3 md:grid-cols-4">
 
-              {[2026, 2027, 2028]
-                .flatMap(y =>
-                  (
-                    ["S1", "S2"] as Period[]
-                  ).map(p => {
+              {historyPeriods.map(
+                ({ year: historyYear, period: historyPeriod }) => {
+                  const historyReview =
+                    state.reviews[
+                      reviewKey(
+                        center.id,
+                        historyYear,
+                        historyPeriod
+                      )
+                    ];
 
-                    const r =
-                      state.reviews[
-                        reviewKey(
-                          center.id,
-                          y,
-                          p
-                        )
-                      ];
+                  const historyActiveIds =
+                    catalog
+                      .filter(
+                        (x: any) =>
+                          activeMap[x.id] !== false
+                      )
+                      .map((x: any) => x.id);
 
-                    const sum =
-                      reviewSummary(
-                        r,
-                        catalog
-                          .filter(
-                            (x: any) =>
-                              activeMap[
-                                x.id
-                              ] !== false
-                          )
-                          .map(
-                            (x: any) =>
-                              x.id
-                          )
-                      );
-
-                    return (
-                      <div
-                        key={`${y}-${p}`}
-                        className="rounded-xl border border-slate-200 p-4"
-                      >
-
-                        <div className="text-xs text-slate-400">
-                          {p} {y}
-                        </div>
-
-                        <div className="mt-2 text-xl font-black">
-                          {r
-                            ? `${sum.score}%`
-                            : "—"}
-                        </div>
-
-                        <div className="mt-1 text-xs">
-                          {r?.confirmed
-                            ? "Confirmada"
-                            : "Sin confirmar"}
-                        </div>
-
-                      </div>
+                  const historySummary =
+                    reviewSummary(
+                      historyReview,
+                      historyActiveIds
                     );
-                  })
-                )}
+
+                  return (
+                    <div
+                      key={`${historyYear}-${historyPeriod}`}
+                      className="rounded-xl border border-slate-200 p-4"
+                    >
+                      <div className="text-xs text-slate-400">
+                        {historyPeriod} {historyYear}
+                      </div>
+
+                      <div className="mt-2 text-xl font-black">
+                        {historyReview
+                          ? `${historySummary.score}%`
+                          : "—"}
+                      </div>
+
+                      <div className="mt-1 text-xs">
+                        {historyReview
+                          ? historyReview.confirmed
+                            ? "Confirmada"
+                            : "Sin confirmar"
+                          : "Sin revisión cargada"}
+                      </div>
+                    </div>
+                  );
+                }
+              )}
 
             </div>
 
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-
               <BarChart3 className="h-4 w-4" />
 
-              La evolución gráfica se alimentará de todas las revisiones confirmadas.
-
+              El histórico muestra las revisiones disponibles del centro
+              hasta el año actual. Las revisiones anteriores a 2024
+              aparecerán automáticamente cuando sean cargadas.
             </div>
-
           </>
         )}
-
       </Card>
 
       {/* REVISIÓN TÉCNICO-LEGAL */}
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
 
           <SectionTitle
@@ -945,12 +873,9 @@ export default function CenterDetail() {
           <SectionToggle
             open={openReview}
             onClick={() =>
-              setOpenReview(
-                v => !v
-              )
+              setOpenReview(v => !v)
             }
           />
-
         </div>
 
         {openReview && (
@@ -964,17 +889,15 @@ export default function CenterDetail() {
                   setYear(Number(v))
                 }
               >
+                <option>2024</option>
+                <option>2025</option>
                 <option>2026</option>
-                <option>2027</option>
-                <option>2028</option>
               </Select>
 
               <Select
                 value={period}
                 onChange={v =>
-                  setPeriod(
-                    v as Period
-                  )
+                  setPeriod(v as Period)
                 }
               >
                 <option value="S1">
@@ -1001,7 +924,6 @@ export default function CenterDetail() {
             <div className="mt-5 grid gap-4 md:grid-cols-4">
 
               <div className="rounded-xl bg-slate-50 p-4">
-
                 <div className="text-xs text-slate-400">
                   Estado
                 </div>
@@ -1011,11 +933,9 @@ export default function CenterDetail() {
                     ? "CONFIRMADA"
                     : "EN CURSO"}
                 </div>
-
               </div>
 
               <div className="rounded-xl bg-slate-50 p-4">
-
                 <div className="text-xs text-slate-400">
                   Elementos
                 </div>
@@ -1024,11 +944,9 @@ export default function CenterDetail() {
                   {summary.confirmed}/
                   {summary.total}
                 </div>
-
               </div>
 
               <div className="rounded-xl bg-amber-50 p-4">
-
                 <div className="text-xs text-amber-700">
                   Pendientes confirmar
                 </div>
@@ -1036,11 +954,9 @@ export default function CenterDetail() {
                 <div className="mt-1 text-xl font-black text-amber-700">
                   {summary.pendingConfirmation}
                 </div>
-
               </div>
 
               <div className="rounded-xl bg-emerald-50 p-4">
-
                 <div className="text-xs text-emerald-700">
                   Cumplimiento
                 </div>
@@ -1048,7 +964,6 @@ export default function CenterDetail() {
                 <div className="mt-1 text-xl font-black text-emerald-700">
                   {summary.score}%
                 </div>
-
               </div>
 
             </div>
@@ -1060,24 +975,20 @@ export default function CenterDetail() {
                   key={s}
                   className="rounded-full border border-slate-200 px-3 py-1"
                 >
-                  <b>
-                    {summary.counts[s]}
-                  </b>{" "}
+                  <b>{summary.counts[s]}</b>{" "}
                   {s}
                 </span>
               ))}
 
             </div>
 
-            {summary.pendingConfirmation ===
-              0 &&
+            {summary.pendingConfirmation === 0 &&
               summary.total > 0 &&
               !review.confirmed &&
               admin && (
                 <div className="mt-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 
                   <div>
-
                     <div className="font-bold text-emerald-800">
                       Todos los elementos están confirmados
                     </div>
@@ -1085,18 +996,11 @@ export default function CenterDetail() {
                     <div className="text-xs text-emerald-700">
                       La revisión ya puede ser cerrada por el Administrador.
                     </div>
-
                   </div>
 
-                  <Button
-                    onClick={
-                      confirmReview
-                    }
-                  >
+                  <Button onClick={confirmReview}>
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
-
-                    Confirmar{" "}
-                    {period} {year}
+                    Confirmar {period} {year}
                   </Button>
 
                 </div>
@@ -1106,10 +1010,8 @@ export default function CenterDetail() {
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 
                 <div>
-
                   <div className="font-bold text-emerald-800">
-                    Revisión {period}{" "}
-                    {year} confirmada
+                    Revisión {period} {year} confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
@@ -1118,12 +1020,9 @@ export default function CenterDetail() {
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
-                        ).toLocaleString(
-                          "es-ES"
-                        )
+                        ).toLocaleString("es-ES")
                       : "—"}
                   </div>
-
                 </div>
 
                 <Link
@@ -1131,7 +1030,6 @@ export default function CenterDetail() {
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
-
                   Ver / exportar certificado
                 </Link>
 
@@ -1146,17 +1044,14 @@ export default function CenterDetail() {
 
               <div className="mt-2 space-y-2">
 
-                {(review.participants ||
-                  []).map(
+                {(review.participants || []).map(
                   (p, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
                     >
-
                       <span>
-                        {p.name} ·{" "}
-                        {p.role}
+                        {p.name} · {p.role}
                       </span>
 
                       {p.signed ? (
@@ -1168,21 +1063,13 @@ export default function CenterDetail() {
                         <Button
                           variant="secondary"
                           onClick={() => {
+                            const participants = [
+                              ...(review.participants || []),
+                            ];
 
-                            const participants =
-                              [
-                                ...(review.participants ||
-                                  []),
-                              ];
-
-                            participants[
-                              i
-                            ] = {
-                              ...participants[
-                                i
-                              ],
-                              signed:
-                                true,
+                            participants[i] = {
+                              ...participants[i],
+                              signed: true,
                             };
 
                             updateState({
@@ -1204,7 +1091,6 @@ export default function CenterDetail() {
                           Pendiente
                         </Badge>
                       )}
-
                     </div>
                   )
                 )}
@@ -1229,34 +1115,31 @@ export default function CenterDetail() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-
                         if (
                           !participant.trim()
                         ) {
                           return;
                         }
 
-                        const nextReview =
-                          {
-                            ...review,
-                            participants: [
-                              ...(review.participants ||
-                                []),
-                              {
-                                name: participant.trim(),
-                                role: "OTRO",
-                                signed:
-                                  false,
-                              },
-                            ],
-                          };
+                        const nextReview = {
+                          ...review,
+                          participants: [
+                            ...(review.participants ||
+                              []),
+                            {
+                              name:
+                                participant.trim(),
+                              role: "OTRO",
+                              signed: false,
+                            },
+                          ],
+                        };
 
                         updateState({
                           ...state,
                           reviews: {
                             ...state.reviews,
-                            [key]:
-                              nextReview,
+                            [key]: nextReview,
                           },
                         });
 
@@ -1270,10 +1153,8 @@ export default function CenterDetail() {
                 )}
 
             </div>
-
           </>
         )}
-
       </Card>
 
       {/* INSTALACIONES Y ACTUACIONES */}
@@ -1290,9 +1171,7 @@ export default function CenterDetail() {
           <SectionToggle
             open={openInstallations}
             onClick={() =>
-              setOpenInstallations(
-                v => !v
-              )
+              setOpenInstallations(v => !v)
             }
           />
 
@@ -1336,7 +1215,6 @@ export default function CenterDetail() {
               <table className="table">
 
                 <thead>
-
                   <tr>
                     <th>Código</th>
                     <th>Instalación</th>
@@ -1348,183 +1226,161 @@ export default function CenterDetail() {
                     <th>Confirmación</th>
                     <th></th>
                   </tr>
-
                 </thead>
 
                 <tbody>
 
-                  {visible.map(
-                    (x: any) => {
+                  {visible.map((x: any) => {
+                    const item = getItem(x.id);
 
-                      const item =
-                        getItem(x.id);
+                    const locked =
+                      readOnly ||
+                      review.confirmed ||
+                      item.confirmed;
 
-                      const locked =
-                        readOnly ||
-                        review.confirmed ||
-                        item.confirmed;
+                    return (
+                      <tr
+                        key={x.id}
+                        className={
+                          item.confirmed
+                            ? "bg-emerald-50/40"
+                            : item.status ===
+                              "NO APTO"
+                            ? "bg-red-50/40"
+                            : item.status ===
+                              "APTO CONDICIONADO"
+                            ? "bg-amber-50/40"
+                            : ""
+                        }
+                      >
 
-                      return (
-                        <tr
-                          key={x.id}
-                          className={
-                            item.confirmed
-                              ? "bg-emerald-50/40"
-                              : item.status ===
-                                "NO APTO"
-                              ? "bg-red-50/40"
-                              : item.status ===
-                                "APTO CONDICIONADO"
-                              ? "bg-amber-50/40"
-                              : ""
-                          }
-                        >
+                        <td className="font-mono text-xs">
+                          {x.code}
+                        </td>
 
-                          <td className="font-mono text-xs">
-                            {x.code}
-                          </td>
+                        <td className="font-semibold">
+                          {x.installation}
+                        </td>
 
-                          <td className="font-semibold">
-                            {x.installation}
-                          </td>
+                        <td>
+                          {x.action}
+                        </td>
 
-                          <td>
-                            {x.action}
-                          </td>
+                        <td>
+                          {x.frequency}
+                        </td>
 
-                          <td>
-                            {x.frequency}
-                          </td>
+                        <td>
+                          <Select
+                            value={
+                              item.status
+                            }
+                            onChange={v =>
+                              updateItem(
+                                x.id,
+                                {
+                                  status:
+                                    v as V1Status,
+                                }
+                              )
+                            }
+                          >
+                            {STATUSES.map(s => (
+                              <option
+                                key={s}
+                              >
+                                {s}
+                              </option>
+                            ))}
+                          </Select>
+                        </td>
 
-                          <td>
+                        <td>
+                          <input
+                            disabled={locked}
+                            type="date"
+                            value={item.date}
+                            onChange={e =>
+                              updateItem(
+                                x.id,
+                                {
+                                  date:
+                                    e.target.value,
+                                }
+                              )
+                            }
+                            className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
+                          />
+                        </td>
 
-                            <Select
-                              value={
-                                item.status
-                              }
-                              onChange={v =>
-                                updateItem(
-                                  x.id,
-                                  {
-                                    status:
-                                      v as V1Status,
-                                  }
+                        <td>
+                          <input
+                            disabled={locked}
+                            value={
+                              item.company
+                            }
+                            onChange={e =>
+                              updateItem(
+                                x.id,
+                                {
+                                  company:
+                                    e.target.value,
+                                }
+                              )
+                            }
+                            placeholder="Empresa"
+                            className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
+                          />
+                        </td>
+
+                        <td>
+
+                          {item.confirmed ? (
+                            <Badge tone="success">
+                              Confirmado
+                            </Badge>
+                          ) : admin ? (
+                            <Button
+                              variant="secondary"
+                              onClick={() =>
+                                confirmItem(
+                                  x.id
                                 )
                               }
                             >
-                              {STATUSES.map(
-                                s => (
-                                  <option
-                                    key={s}
-                                  >
-                                    {s}
-                                  </option>
-                                )
-                              )}
-                            </Select>
+                              <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                              Confirmar
+                            </Button>
+                          ) : (
+                            <Badge tone="warning">
+                              Pendiente
+                            </Badge>
+                          )}
 
-                          </td>
+                        </td>
 
-                          <td>
+                        <td>
 
-                            <input
-                              disabled={
-                                locked
-                              }
-                              type="date"
-                              value={
-                                item.date
-                              }
-                              onChange={e =>
-                                updateItem(
+                          {!readOnly && (
+                            <button
+                              onClick={() =>
+                                setActive(
                                   x.id,
-                                  {
-                                    date: e
-                                      .target
-                                      .value,
-                                  }
+                                  false
                                 )
                               }
-                              className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
-                            />
+                              title="Eliminar del listado activo"
+                              className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
 
-                          </td>
+                        </td>
 
-                          <td>
-
-                            <input
-                              disabled={
-                                locked
-                              }
-                              value={
-                                item.company
-                              }
-                              onChange={e =>
-                                updateItem(
-                                  x.id,
-                                  {
-                                    company:
-                                      e.target
-                                        .value,
-                                  }
-                                )
-                              }
-                              placeholder="Empresa"
-                              className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
-                            />
-
-                          </td>
-
-                          <td>
-
-                            {item.confirmed ? (
-                              <Badge tone="success">
-                                Confirmado
-                              </Badge>
-                            ) : admin ? (
-                              <Button
-                                variant="secondary"
-                                onClick={() =>
-                                  confirmItem(
-                                    x.id
-                                  )
-                                }
-                              >
-                                <CheckCircle2 className="mr-1 inline h-3 w-3" />
-
-                                Confirmar
-                              </Button>
-                            ) : (
-                              <Badge tone="warning">
-                                Pendiente
-                              </Badge>
-                            )}
-
-                          </td>
-
-                          <td>
-
-                            {!readOnly && (
-                              <button
-                                onClick={() =>
-                                  setActive(
-                                    x.id,
-                                    false
-                                  )
-                                }
-                                title="Eliminar del listado activo"
-                                className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            )}
-
-                          </td>
-
-                        </tr>
-                      );
-                    }
-                  )}
+                      </tr>
+                    );
+                  })}
 
                 </tbody>
 
@@ -1542,7 +1398,6 @@ export default function CenterDetail() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-
                         if (
                           inactiveItems[0]
                         ) {
@@ -1552,11 +1407,9 @@ export default function CenterDetail() {
                             true
                           );
                         }
-
                       }}
                     >
                       <Plus className="mr-2 inline h-4 w-4" />
-
                       Añadir elemento
                     </Button>
                   ) : undefined
