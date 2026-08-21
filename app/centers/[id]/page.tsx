@@ -55,6 +55,16 @@ const STATUSES: V1Status[] = [
   "SIN INFORMACIÓN",
 ];
 
+const RESULT_FILTERS = [
+  "Todos",
+  "FAVORABLE",
+  "CONDICIONADO",
+  "DESFAVORABLE",
+  "PTE.",
+  "ERROR",
+  "-",
+];
+
 type CenterFormValues = {
   address?: string;
   manager?: string;
@@ -76,10 +86,6 @@ type CenterFormValues = {
 type IconComponent = React.ComponentType<{
   className?: string;
 }>;
-
-/* -------------------------------------------------------------------------- */
-/*                               ICONOS / VISUAL                               */
-/* -------------------------------------------------------------------------- */
 
 function getInstallationVisual(
   installation = "",
@@ -186,9 +192,6 @@ function getStatusClasses(status: V1Status) {
     case "PENDIENTE":
       return "bg-orange-50 text-orange-700 border-orange-200";
 
-    case "SIN INFORMACIÓN":
-      return "bg-slate-50 text-slate-600 border-slate-200";
-
     default:
       return "bg-slate-50 text-slate-600 border-slate-200";
   }
@@ -240,20 +243,44 @@ function getResultVisual(result: string) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                           FRECUENCIAS / FECHAS                              */
-/* -------------------------------------------------------------------------- */
-
 function parseFrequency(frequency: string) {
-  const value = String(frequency || "").toLowerCase();
+  const value = String(frequency || "")
+    .trim()
+    .toLowerCase();
 
-  if (value.includes("mensual")) return { months: 1 };
-  if (value.includes("bimensual")) return { months: 2 };
-  if (value.includes("trimestral")) return { months: 3 };
-  if (value.includes("cuatrimestral")) return { months: 4 };
-  if (value.includes("semestral")) return { months: 6 };
-  if (value.includes("anual")) return { months: 12 };
-  if (value.includes("bienal")) return { months: 24 };
+  if (value.includes("mensual")) {
+    return { months: 1 };
+  }
+
+  if (value.includes("bimensual")) {
+    return { months: 2 };
+  }
+
+  if (value.includes("trimestral")) {
+    return { months: 3 };
+  }
+
+  if (value.includes("cuatrimestral")) {
+    return { months: 4 };
+  }
+
+  if (value.includes("semestral")) {
+    return { months: 6 };
+  }
+
+  if (
+    value.includes("bienal") ||
+    value.includes("bianual")
+  ) {
+    return { months: 24 };
+  }
+
+  if (
+    value.includes("anual") ||
+    value.includes("anuales")
+  ) {
+    return { months: 12 };
+  }
 
   const numeric = value.match(
     /(\d+)\s*(mes|meses|año|años)/
@@ -262,24 +289,23 @@ function parseFrequency(frequency: string) {
   if (numeric) {
     const amount = Number(numeric[1]);
 
-    if (value.includes("año")) {
-      return { months: amount * 12 };
+    if (
+      value.includes("año") ||
+      value.includes("años")
+    ) {
+      return {
+        months: amount * 12,
+      };
     }
 
-    return { months: amount };
+    return {
+      months: amount,
+    };
   }
 
   return null;
 }
 
-/* -------------------------------------------------------------------------- */
-/*                        FESTIVOS NACIONALES                                 */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Calcula el domingo de Pascua para un año determinado.
- * Algoritmo de Meeus/Jones/Butcher para el calendario gregoriano.
- */
 function getEasterSunday(year: number) {
   const a = year % 19;
   const b = Math.floor(year / 100);
@@ -294,130 +320,154 @@ function getEasterSunday(year: number) {
   const k = c % 4;
   const l =
     (32 + 2 * e + 2 * i - h - k) % 7;
-  const m =
-    Math.floor((a + 11 * h + 22 * l) / 451);
+  const m = Math.floor(
+    (a + 11 * h + 22 * l) / 451
+  );
 
-  const month =
-    Math.floor(
-      (h + l - 7 * m + 114) / 31
-    );
+  const month = Math.floor(
+    (h + l - 7 * m + 114) / 31
+  );
 
   const day =
     ((h + l - 7 * m + 114) % 31) + 1;
 
   return new Date(
-    year,
-    month - 1,
-    day
+    `${year}-${String(month).padStart(
+      2,
+      "0"
+    )}-${String(day).padStart(
+      2,
+      "0"
+    )}T00:00:00`
   );
 }
 
-function dateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+function dateToKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    ),
+    String(date.getDate()).padStart(
+      2,
+      "0"
+    ),
+  ].join("-");
 }
 
-function addDays(
-  date: Date,
-  amount: number
-) {
-  const result = new Date(date);
-  result.setDate(
-    result.getDate() + amount
-  );
-  return result;
-}
-
-/**
- * Festivos nacionales de España.
- *
- * Se incluyen los festivos nacionales generales:
- * 1 enero, 6 enero, Viernes Santo, 1 mayo,
- * 15 agosto, 12 octubre, 1 noviembre,
- * 6 diciembre, 8 diciembre y 25 diciembre.
- */
 function getSpainNationalHolidays(
   year: number
 ) {
-  const easter =
-    getEasterSunday(year);
+  const holidays = new Set<string>();
 
-  const goodFriday = addDays(
-    easter,
-    -2
+  const add = (
+    month: number,
+    day: number
+  ) => {
+    holidays.add(
+      `${year}-${String(month).padStart(
+        2,
+        "0"
+      )}-${String(day).padStart(
+        2,
+        "0"
+      )}`
+    );
+  };
+
+  add(1, 1);
+  add(1, 6);
+  add(5, 1);
+  add(8, 15);
+  add(10, 12);
+  add(11, 1);
+  add(12, 6);
+  add(12, 8);
+  add(12, 25);
+
+  const easter = getEasterSunday(year);
+
+  const goodFriday = new Date(easter);
+
+  goodFriday.setDate(
+    goodFriday.getDate() - 2
   );
 
-  return new Set([
-    `${year}-01-01`,
-    `${year}-01-06`,
-    dateKey(goodFriday),
-    `${year}-05-01`,
-    `${year}-08-15`,
-    `${year}-10-12`,
-    `${year}-11-01`,
-    `${year}-12-06`,
-    `${year}-12-08`,
-    `${year}-12-25`,
-  ]);
+  holidays.add(
+    dateToKey(goodFriday)
+  );
+
+  return holidays;
 }
 
-/**
- * Festivos nacionales de Portugal.
- *
- * Se incluyen los principales festivos nacionales:
- * 1 enero, Viernes Santo, Domingo de Pascua,
- * 25 abril, 1 mayo, 10 junio, 15 agosto,
- * 5 octubre, 1 noviembre, 1 diciembre,
- * 8 diciembre y 25 diciembre.
- *
- * También se incluye Corpus Christi, que forma parte
- * de los festivos nacionales portugueses.
- */
 function getPortugalNationalHolidays(
   year: number
 ) {
-  const easter =
-    getEasterSunday(year);
+  const holidays = new Set<string>();
 
-  const goodFriday = addDays(
-    easter,
-    -2
+  const add = (
+    month: number,
+    day: number
+  ) => {
+    holidays.add(
+      `${year}-${String(month).padStart(
+        2,
+        "0"
+      )}-${String(day).padStart(
+        2,
+        "0"
+      )}`
+    );
+  };
+
+  add(1, 1);
+  add(4, 25);
+  add(5, 1);
+  add(6, 10);
+  add(8, 15);
+  add(10, 5);
+  add(11, 1);
+  add(12, 1);
+  add(12, 8);
+  add(12, 25);
+
+  const easter = getEasterSunday(year);
+
+  const goodFriday = new Date(easter);
+
+  goodFriday.setDate(
+    goodFriday.getDate() - 2
   );
 
-  const corpusChristi = addDays(
-    easter,
-    60
+  holidays.add(
+    dateToKey(goodFriday)
   );
 
-  return new Set([
-    `${year}-01-01`,
-    dateKey(goodFriday),
-    dateKey(easter),
-    `${year}-04-25`,
-    `${year}-05-01`,
-    `${year}-06-10`,
-    dateKey(corpusChristi),
-    `${year}-08-15`,
-    `${year}-10-05`,
-    `${year}-11-01`,
-    `${year}-12-01`,
-    `${year}-12-08`,
-    `${year}-12-25`,
-  ]);
+  const corpusChristi = new Date(easter);
+
+  corpusChristi.setDate(
+    corpusChristi.getDate() + 60
+  );
+
+  holidays.add(
+    dateToKey(corpusChristi)
+  );
+
+  return holidays;
 }
 
-function isHoliday(
+function isNonWorkingDay(
   date: Date,
   country: string
 ) {
-  const key = dateKey(date);
+  const day = date.getDay();
+
+  if (day === 0 || day === 6) {
+    return true;
+  }
+
+  const key = dateToKey(date);
 
   if (country === "España") {
     return getSpainNationalHolidays(
@@ -434,56 +484,24 @@ function isHoliday(
   return false;
 }
 
-function isWorkingDay(
-  date: Date,
-  country: string
-) {
-  const day =
-    date.getDay();
-
-  if (
-    day === 0 ||
-    day === 6
-  ) {
-    return false;
-  }
-
-  if (
-    isHoliday(
-      date,
-      country
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * Si la fecha calculada cae en sábado, domingo o festivo,
- * retrocede hasta encontrar el día laborable inmediatamente anterior.
- *
- * Esto también cubre varios días consecutivos no laborables.
- */
 function adjustToPreviousWorkingDay(
   date: Date,
   country: string
 ) {
-  const result = new Date(date);
+  const adjusted = new Date(date);
 
   while (
-    !isWorkingDay(
-      result,
+    isNonWorkingDay(
+      adjusted,
       country
     )
   ) {
-    result.setDate(
-      result.getDate() - 1
+    adjusted.setDate(
+      adjusted.getDate() - 1
     );
   }
 
-  return result;
+  return adjusted;
 }
 
 function calculateNextReview(
@@ -502,98 +520,83 @@ function calculateNextReview(
     return "";
   }
 
-  const d = new Date(
+  const baseDate = new Date(
     `${date}T00:00:00`
   );
 
   if (
     Number.isNaN(
-      d.getTime()
+      baseDate.getTime()
     )
   ) {
     return "";
   }
 
-  d.setMonth(
-    d.getMonth() +
+  const nextDate = new Date(baseDate);
+
+  nextDate.setMonth(
+    nextDate.getMonth() +
       parsed.months
   );
 
-  const adjusted =
+  const adjustedDate =
     adjustToPreviousWorkingDay(
-      d,
+      nextDate,
       country
     );
 
-  return dateKey(adjusted);
+  return dateToKey(adjustedDate);
 }
-
-/* -------------------------------------------------------------------------- */
-/*                             LÓGICA RESULTADO                               */
-/* -------------------------------------------------------------------------- */
 
 function calculateResult(
   status: V1Status,
   date: string,
-  nextReviewDate: string,
-  secondReviewDate: string
+  secondReviewDate: string,
+  nextReviewDate: string
 ) {
-  /**
-   * APTO / CONDICIONADO / NO APTO sin fecha:
-   * ERROR.
-   */
   if (
-    !date &&
     (
       status === "APTO" ||
       status ===
         "APTO CONDICIONADO" ||
       status === "NO APTO"
-    )
+    ) &&
+    !date
   ) {
     return "ERROR";
   }
 
-  /**
-   * Si no hay fecha y el estado es PENDIENTE
-   * o SIN INFORMACIÓN, no hay resultado calculable.
-   */
-  if (!date) {
+  if (
+    status === "SIN INFORMACIÓN" ||
+    status === "PENDIENTE"
+  ) {
     return "-";
   }
 
-  const today =
-    new Date();
-
-  today.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  /**
-   * APTO CONDICIONADO:
-   *
-   * La segunda revisión es la que determina
-   * si sigue condicionado o pasa a pendiente.
-   */
   if (
     status ===
     "APTO CONDICIONADO"
   ) {
-    if (
-      !secondReviewDate
-    ) {
+    if (!date) {
       return "ERROR";
     }
 
-    const secondDate =
-      new Date(
-        `${secondReviewDate}T00:00:00`
-      );
+    if (!secondReviewDate) {
+      return "ERROR";
+    }
+
+    const firstDate = new Date(
+      `${date}T00:00:00`
+    );
+
+    const secondDate = new Date(
+      `${secondReviewDate}T00:00:00`
+    );
 
     if (
+      Number.isNaN(
+        firstDate.getTime()
+      ) ||
       Number.isNaN(
         secondDate.getTime()
       )
@@ -602,75 +605,38 @@ function calculateResult(
     }
 
     if (
-      secondDate <
-      today
-    ) {
-      return "PTE.";
-    }
-
-    return "CONDICIONADO";
-  }
-
-  /**
-   * APTO:
-   *
-   * La fecha de ejecución es únicamente
-   * la fecha en la que se hizo la revisión.
-   *
-   * La comparación se realiza contra
-   * la próxima revisión calculada.
-   */
-  if (
-    status === "APTO"
-  ) {
-    if (
-      !nextReviewDate
+      secondDate <= firstDate
     ) {
       return "ERROR";
     }
 
-    const nextDate =
-      new Date(
-        `${nextReviewDate}T00:00:00`
-      );
+    const today = new Date();
 
-    if (
-      Number.isNaN(
-        nextDate.getTime()
-      )
-    ) {
-      return "ERROR";
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    if (secondDate > today) {
+      return "CONDICIONADO";
     }
 
-    if (
-      nextDate <
-      today
-    ) {
-      return "PTE.";
-    }
-
-    return "FAVORABLE";
+    return "PTE.";
   }
 
-  /**
-   * NO APTO:
-   *
-   * Misma lógica temporal que APTO,
-   * pero el resultado es DESFAVORABLE.
-   */
   if (
+    status === "APTO" ||
     status === "NO APTO"
   ) {
-    if (
-      !nextReviewDate
-    ) {
+    if (!nextReviewDate) {
       return "ERROR";
     }
 
-    const nextDate =
-      new Date(
-        `${nextReviewDate}T00:00:00`
-      );
+    const nextDate = new Date(
+      `${nextReviewDate}T00:00:00`
+    );
 
     if (
       Number.isNaN(
@@ -680,30 +646,35 @@ function calculateResult(
       return "ERROR";
     }
 
-    if (
-      nextDate <
-      today
-    ) {
-      return "PTE.";
+    const today = new Date();
+
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    if (nextDate > today) {
+      return status === "APTO"
+        ? "FAVORABLE"
+        : "DESFAVORABLE";
     }
 
-    return "DESFAVORABLE";
+    return "PTE.";
   }
 
-  return "-";
+  return "ERROR";
 }
 
-function formatDate(
-  value: string
-) {
+function formatDate(value: string) {
   if (!value) {
     return "—";
   }
 
-  const d =
-    new Date(
-      `${value}T00:00:00`
-    );
+  const d = new Date(
+    `${value}T00:00:00`
+  );
 
   if (
     Number.isNaN(
@@ -718,16 +689,9 @@ function formatDate(
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              COMPONENTE                                    */
-/* -------------------------------------------------------------------------- */
-
 export default function CenterDetail() {
-  const params =
-    useParams();
-
-  const id =
-    String(params.id);
+  const params = useParams();
+  const id = String(params.id);
 
   const center =
     demo.centers.find(
@@ -735,9 +699,7 @@ export default function CenterDetail() {
     ) ||
     demo.centers.find(
       c =>
-        encodeURIComponent(
-          c.id
-        ) === id
+        encodeURIComponent(c.id) === id
     );
 
   const [state, setState] =
@@ -759,38 +721,29 @@ export default function CenterDetail() {
   const [q, setQ] =
     useState("");
 
-  const [
-    category,
-    setCategory,
-  ] = useState("Todas");
+  const [category, setCategory] =
+    useState("Todas");
 
-  const [
-    actionType,
-    setActionType,
-  ] = useState("Todas");
+  const [installationFilter, setInstallationFilter] =
+    useState("Todas");
 
-  const [
-    resultFilter,
-    setResultFilter,
-  ] = useState("Todos");
+  const [actionFilter, setActionFilter] =
+    useState("Todas");
+
+  const [resultFilter, setResultFilter] =
+    useState("Todos");
 
   const [saved, setSaved] =
     useState(false);
 
-  const [
-    participant,
-    setParticipant,
-  ] = useState("");
+  const [participant, setParticipant] =
+    useState("");
 
-  const [
-    showAddElement,
-    setShowAddElement,
-  ] = useState(false);
+  const [showAddElement, setShowAddElement] =
+    useState(false);
 
-  const [
-    addElementSearch,
-    setAddElementSearch,
-  ] = useState("");
+  const [addElementSearch, setAddElementSearch] =
+    useState("");
 
   const [
     openCenterData,
@@ -813,16 +766,12 @@ export default function CenterDetail() {
   ] = useState(true);
 
   useEffect(() => {
-    setState(
-      loadState()
-    );
+    setState(loadState());
   }, []);
 
   useEffect(() => {
     const h = () =>
-      setState(
-        loadState()
-      );
+      setState(loadState());
 
     window.addEventListener(
       "stl-role-change",
@@ -854,12 +803,10 @@ export default function CenterDetail() {
     );
   }
 
-  const currentCenter =
-    center;
+  const currentCenter = center;
 
   const catalog =
-    center.country ===
-    "España"
+    center.country === "España"
       ? demo.esCatalog
       : demo.ptCatalog;
 
@@ -876,30 +823,23 @@ export default function CenterDetail() {
   const activeItems =
     catalog.filter(
       (x: any) =>
-        activeMap[
-          x.id
-        ] !== false
+        activeMap[x.id] !== false
     );
 
   const inactiveItems =
     catalog.filter(
       (x: any) =>
-        activeMap[
-          x.id
-        ] === false
+        activeMap[x.id] === false
     );
 
-  const key =
-    reviewKey(
-      center.id,
-      year,
-      period
-    );
+  const key = reviewKey(
+    center.id,
+    year,
+    period
+  );
 
   const review =
-    state.reviews[
-      key
-    ] || {
+    state.reviews[key] || {
       year,
       period,
       confirmed: false,
@@ -911,8 +851,7 @@ export default function CenterDetail() {
     reviewSummary(
       review,
       activeItems.map(
-        (x: any) =>
-          x.id
+        (x: any) => x.id
       )
     );
 
@@ -930,14 +869,21 @@ export default function CenterDetail() {
     ),
   ];
 
-  /**
-   * Tipo de actuación.
-   *
-   * Se obtiene del catálogo utilizando el campo action.
-   * Si el catálogo contiene diferentes valores de actuación,
-   * aparecerán automáticamente en este filtro.
-   */
-  const actionTypes = [
+  const installationTypes = [
+    "Todas",
+    ...Array.from(
+      new Set(
+        catalog
+          .map(
+            (x: any) =>
+              x.installation
+          )
+          .filter(Boolean)
+      )
+    ),
+  ];
+
+  const actions = [
     "Todas",
     ...Array.from(
       new Set(
@@ -951,24 +897,27 @@ export default function CenterDetail() {
     ),
   ];
 
-  const resultOptions = [
-    "Todos",
-    "FAVORABLE",
-    "CONDICIONADO",
-    "DESFAVORABLE",
-    "PTE.",
-    "ERROR",
-    "-",
-  ];
+  function getItem(
+    itemId: string
+  ) {
+    return (
+      review.items[itemId] ||
+      blankItem()
+    );
+  }
+
+  const readOnly =
+    state.role === "LECTURA" ||
+    center.status !== "Activo";
+
+  const admin =
+    state.role === "ADMIN";
 
   const visible =
     activeItems.filter(
       (x: any) => {
         const item =
-          review.items[
-            x.id
-          ] ||
-          blankItem();
+          getItem(x.id);
 
         const nextDate =
           calculateNextReview(
@@ -981,27 +930,9 @@ export default function CenterDetail() {
           calculateResult(
             item.status,
             item.date,
-            nextDate,
-            item.secondReviewDate
+            item.secondReviewDate,
+            nextDate
           );
-
-        const matchesCategory =
-          category ===
-            "Todas" ||
-          x.category ===
-            category;
-
-        const matchesAction =
-          actionType ===
-            "Todas" ||
-          x.action ===
-            actionType;
-
-        const matchesResult =
-          resultFilter ===
-            "Todos" ||
-          result ===
-            resultFilter;
 
         const matchesSearch =
           `${x.code} ${x.installation} ${x.action} ${x.category}`
@@ -1010,11 +941,31 @@ export default function CenterDetail() {
               q.toLowerCase()
             );
 
+        const matchesCategory =
+          category === "Todas" ||
+          x.category === category;
+
+        const matchesInstallation =
+          installationFilter ===
+            "Todas" ||
+          x.installation ===
+            installationFilter;
+
+        const matchesAction =
+          actionFilter ===
+            "Todas" ||
+          x.action === actionFilter;
+
+        const matchesResult =
+          resultFilter === "Todos" ||
+          result === resultFilter;
+
         return (
+          matchesSearch &&
           matchesCategory &&
+          matchesInstallation &&
           matchesAction &&
-          matchesResult &&
-          matchesSearch
+          matchesResult
         );
       }
     );
@@ -1032,56 +983,50 @@ export default function CenterDetail() {
   const currentYear =
     new Date().getFullYear();
 
-  const reviewYears =
-    useMemo(() => {
-      const years =
-        new Set<number>();
+  const reviewYears = useMemo(() => {
+    const years =
+      new Set<number>();
 
-      for (
-        let y = 2024;
-        y <= currentYear;
-        y++
-      ) {
-        years.add(y);
-      }
+    for (
+      let y = 2024;
+      y <= currentYear;
+      y++
+    ) {
+      years.add(y);
+    }
 
-      Object.keys(
-        state.reviews
-      ).forEach(
-        reviewId => {
-          const match =
-            reviewId.match(
-              /:(\d{4}):(S1|S2)$/
-            );
+    Object.keys(
+      state.reviews
+    ).forEach(reviewId => {
+      const match =
+        reviewId.match(
+          /:(\d{4}):(S1|S2)$/
+        );
 
-          if (match) {
-            const reviewYear =
-              Number(
-                match[1]
-              );
+      if (match) {
+        const reviewYear =
+          Number(match[1]);
 
-            if (
-              reviewYear <=
-              currentYear
-            ) {
-              years.add(
-                reviewYear
-              );
-            }
-          }
+        if (
+          reviewYear <=
+          currentYear
+        ) {
+          years.add(
+            reviewYear
+          );
         }
-      );
+      }
+    });
 
-      return Array.from(
-        years
-      ).sort(
-        (a, b) =>
-          a - b
-      );
-    }, [
-      state.reviews,
-      currentYear,
-    ]);
+    return Array.from(
+      years
+    ).sort(
+      (a, b) => a - b
+    );
+  }, [
+    state.reviews,
+    currentYear,
+  ]);
 
   function updateState(
     next: V1State
@@ -1126,28 +1071,13 @@ export default function CenterDetail() {
       },
     };
 
-    updateState(
-      next
-    );
-  }
-
-  function getItem(
-    itemId: string
-  ) {
-    return (
-      review.items[
-        itemId
-      ] ||
-      blankItem()
-    );
+    updateState(next);
   }
 
   function updateItem(
     itemId: string,
     patch: Partial<
-      ReturnType<
-        typeof blankItem
-      >
+      ReturnType<typeof blankItem>
     >
   ) {
     const current =
@@ -1175,10 +1105,8 @@ export default function CenterDetail() {
 
   function confirmReview() {
     if (
-      state.role !==
-        "ADMIN" ||
-      summary.pendingConfirmation >
-        0
+      state.role !== "ADMIN" ||
+      summary.pendingConfirmation > 0
     ) {
       return;
     }
@@ -1203,9 +1131,7 @@ export default function CenterDetail() {
         },
         ...(review.participants ||
           []).filter(
-            p =>
-              p.role ===
-              "OTRO"
+            p => p.role === "OTRO"
           ),
       ],
     };
@@ -1224,13 +1150,9 @@ export default function CenterDetail() {
       ...state,
     };
 
-    delete next.reviews[
-      key
-    ];
+    delete next.reviews[key];
 
-    updateState(
-      next
-    );
+    updateState(next);
   }
 
   function uploadImage(
@@ -1251,20 +1173,8 @@ export default function CenterDetail() {
       );
     };
 
-    reader.readAsDataURL(
-      file
-    );
+    reader.readAsDataURL(file);
   }
-
-  const readOnly =
-    state.role ===
-      "LECTURA" ||
-    center.status !==
-      "Activo";
-
-  const admin =
-    state.role ===
-    "ADMIN";
 
   function SectionToggle({
     open,
@@ -1295,11 +1205,6 @@ export default function CenterDetail() {
 
   return (
     <div className="space-y-6">
-
-      {/* ------------------------------------------------------------------ */}
-      {/* CABECERA                                                           */}
-      {/* ------------------------------------------------------------------ */}
-
       <div className="flex items-center gap-3">
         <Link
           href="/centers"
@@ -1315,11 +1220,8 @@ export default function CenterDetail() {
 
       <Card className="overflow-hidden">
         <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
-
           <div className="flex items-center gap-5 p-6">
-
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
-
               {overrides.logoUrl ? (
                 <img
                   src={
@@ -1334,11 +1236,9 @@ export default function CenterDetail() {
                     center.code}
                 </span>
               )}
-
             </div>
 
             <div>
-
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
                 {center.country} ·{" "}
                 {center.stl}
@@ -1355,7 +1255,6 @@ export default function CenterDetail() {
               </p>
 
               <div className="mt-3 flex gap-2">
-
                 <Badge tone="success">
                   {center.status}
                 </Badge>
@@ -1369,15 +1268,11 @@ export default function CenterDetail() {
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Nº {center.code}
                 </span>
-
               </div>
-
             </div>
-
           </div>
 
           <div className="flex items-center justify-center bg-white/5 p-4">
-
             {overrides.imageUrl ? (
               <img
                 src={
@@ -1391,18 +1286,11 @@ export default function CenterDetail() {
                 Imagen del centro
               </div>
             )}
-
           </div>
-
         </div>
       </Card>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* RESUMEN                                                            */}
-      {/* ------------------------------------------------------------------ */}
-
       <div className="grid gap-4 md:grid-cols-5">
-
         {[
           [
             "Cumplimiento",
@@ -1442,17 +1330,10 @@ export default function CenterDetail() {
             </div>
           </Card>
         ))}
-
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* DATOS DEL CENTRO                                                   */}
-      {/* ------------------------------------------------------------------ */}
-
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Datos del centro"
             subtitle="Edición disponible según perfil"
@@ -1466,32 +1347,25 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openCenterData
-            }
+            open={openCenterData}
             onClick={() =>
               setOpenCenterData(
                 v => !v
               )
             }
           />
-
         </div>
 
         {openCenterData && (
           <>
-
             <div className="grid gap-4 md:grid-cols-4">
-
               <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Propiedad
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.property ??
                     center.property ??
@@ -1513,9 +1387,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.address ??
                     center.address ??
@@ -1537,9 +1409,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.city ??
                     ""
@@ -1560,9 +1430,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.province ??
                     ""
@@ -1583,9 +1451,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.manager ??
                     center.manager ??
@@ -1607,9 +1473,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.managerPhone ??
                     ""
@@ -1630,9 +1494,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   type="email"
                   value={
                     overrides.managerEmail ??
@@ -1656,9 +1518,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.technicalResponsible ??
                     ""
@@ -1679,9 +1539,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.technicalResponsiblePhone ??
                     ""
@@ -1702,9 +1560,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   type="email"
                   value={
                     overrides.technicalResponsibleEmail ??
@@ -1721,14 +1577,11 @@ export default function CenterDetail() {
               </label>
 
               <div />
-
             </div>
 
             {!readOnly && (
               <div className="mt-5 flex flex-wrap gap-3">
-
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
                   <ImagePlus className="mr-2 inline h-4 w-4" />
 
                   Logo
@@ -1749,11 +1602,9 @@ export default function CenterDetail() {
                       }
                     }}
                   />
-
                 </label>
 
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
                   <ImagePlus className="mr-2 inline h-4 w-4" />
 
                   Imagen centro
@@ -1774,25 +1625,15 @@ export default function CenterDetail() {
                       }
                     }}
                   />
-
                 </label>
-
               </div>
             )}
-
           </>
         )}
-
       </Card>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* HISTÓRICO                                                          */}
-      {/* ------------------------------------------------------------------ */}
-
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Histórico de cumplimiento"
             subtitle="Revisiones realizadas del centro hasta la fecha actual"
@@ -1806,12 +1647,10 @@ export default function CenterDetail() {
               )
             }
           />
-
         </div>
 
         {openHistory && (
           <>
-
             {reviewYears.length ===
             0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
@@ -1819,7 +1658,6 @@ export default function CenterDetail() {
               </div>
             ) : (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
-
                 {reviewYears.flatMap(
                   y =>
                     (
@@ -1827,106 +1665,83 @@ export default function CenterDetail() {
                         "S1",
                         "S2",
                       ] as Period[]
-                    ).map(
-                      p => {
-                        const r =
-                          state.reviews[
-                            reviewKey(
-                              center.id,
-                              y,
-                              p
-                            )
-                          ];
+                    ).map(p => {
+                      const r =
+                        state.reviews[
+                          reviewKey(
+                            center.id,
+                            y,
+                            p
+                          )
+                        ];
 
-                        const historicalActiveIds =
-                          catalog
-                            .filter(
-                              (
-                                x: any
-                              ) =>
-                                activeMap[
-                                  x.id
-                                ] !==
-                                false
-                            )
-                            .map(
-                              (
-                                x: any
-                              ) =>
+                      const historicalActiveIds =
+                        catalog
+                          .filter(
+                            (x: any) =>
+                              activeMap[
                                 x.id
-                            );
-
-                        const sum =
-                          reviewSummary(
-                            r,
-                            historicalActiveIds
+                              ] !== false
+                          )
+                          .map(
+                            (x: any) =>
+                              x.id
                           );
 
-                        return (
-                          <div
-                            key={`${y}-${p}`}
-                            className="rounded-xl border border-slate-200 p-4"
-                          >
-
-                            <div className="flex items-center justify-between">
-
-                              <div className="text-xs font-semibold text-slate-400">
-                                {p}{" "}
-                                {y}
-                              </div>
-
-                              {r?.confirmed && (
-                                <Badge tone="success">
-                                  Confirmada
-                                </Badge>
-                              )}
-
-                            </div>
-
-                            <div className="mt-2 text-xl font-black">
-                              {r
-                                ? `${sum.score}%`
-                                : "—"}
-                            </div>
-
-                            <div className="mt-1 text-xs text-slate-500">
-                              {r
-                                ? r.confirmed
-                                  ? "Revisión confirmada"
-                                  : "Revisión cargada sin confirmar"
-                                : "Sin revisión cargada"}
-                            </div>
-
-                          </div>
+                      const sum =
+                        reviewSummary(
+                          r,
+                          historicalActiveIds
                         );
-                      }
-                    )
-                )}
 
+                      return (
+                        <div
+                          key={`${y}-${p}`}
+                          className="rounded-xl border border-slate-200 p-4"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs font-semibold text-slate-400">
+                              {p} {y}
+                            </div>
+
+                            {r?.confirmed && (
+                              <Badge tone="success">
+                                Confirmada
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="mt-2 text-xl font-black">
+                            {r
+                              ? `${sum.score}%`
+                              : "—"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-500">
+                            {r
+                              ? r.confirmed
+                                ? "Revisión confirmada"
+                                : "Revisión cargada sin confirmar"
+                              : "Sin revisión cargada"}
+                          </div>
+                        </div>
+                      );
+                    }
+                )}
               </div>
             )}
 
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-
               <BarChart3 className="h-4 w-4" />
 
               El histórico muestra únicamente años hasta el año actual.
-
             </div>
-
           </>
         )}
-
       </Card>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* REVISIÓN TÉCNICO-LEGAL                                             */}
-      {/* ------------------------------------------------------------------ */}
-
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Revisión técnico-legal"
             subtitle="Dos revisiones anuales con histórico independiente."
@@ -1940,31 +1755,20 @@ export default function CenterDetail() {
               )
             }
           />
-
         </div>
 
         {openReview && (
           <>
-
             <div className="mt-5 flex flex-wrap gap-2">
-
               <Select
                 value={String(year)}
                 onChange={v =>
-                  setYear(
-                    Number(v)
-                  )
+                  setYear(Number(v))
                 }
               >
-                <option>
-                  2026
-                </option>
-                <option>
-                  2027
-                </option>
-                <option>
-                  2028
-                </option>
+                <option>2026</option>
+                <option>2027</option>
+                <option>2028</option>
               </Select>
 
               <Select
@@ -1995,11 +1799,9 @@ export default function CenterDetail() {
                   Reiniciar demo
                 </Button>
               )}
-
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-4">
-
               <div className="rounded-xl bg-slate-50 p-4">
                 <div className="text-xs text-slate-400">
                   Estado
@@ -2042,42 +1844,29 @@ export default function CenterDetail() {
                   {summary.score}%
                 </div>
               </div>
-
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-
-              {STATUSES.map(
-                s => (
-                  <span
-                    key={s}
-                    className="rounded-full border border-slate-200 px-3 py-1"
-                  >
-                    <b>
-                      {
-                        summary
-                          .counts[
-                          s
-                        ]
-                      }
-                    </b>{" "}
-                    {s}
-                  </span>
-                )
-              )}
-
+              {STATUSES.map(s => (
+                <span
+                  key={s}
+                  className="rounded-full border border-slate-200 px-3 py-1"
+                >
+                  <b>
+                    {summary.counts[s]}
+                  </b>{" "}
+                  {s}
+                </span>
+              ))}
             </div>
 
             {summary.pendingConfirmation ===
               0 &&
-              summary.total >
-                0 &&
+              summary.total > 0 &&
               !review.confirmed &&
               admin && (
                 <div className="mt-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
                   <div>
-
                     <div className="font-bold text-emerald-800">
                       Todos los elementos están confirmados
                     </div>
@@ -2085,7 +1874,6 @@ export default function CenterDetail() {
                     <div className="text-xs text-emerald-700">
                       La revisión ya puede ser cerrada por el Administrador.
                     </div>
-
                   </div>
 
                   <Button
@@ -2095,34 +1883,26 @@ export default function CenterDetail() {
                   >
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
 
-                    Confirmar{" "}
-                    {period}{" "}
+                    Confirmar {period}{" "}
                     {year}
                   </Button>
-
                 </div>
               )}
 
             {review.confirmed && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
                 <div>
-
                   <div className="font-bold text-emerald-800">
-                    Revisión{" "}
-                    {period}{" "}
-                    {year}{" "}
-                    confirmada
+                    Revisión {period}{" "}
+                    {year} confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
-
                     Administrador:{" "}
                     {
                       review.confirmedBy
                     }{" "}
                     ·{" "}
-
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
@@ -2130,9 +1910,7 @@ export default function CenterDetail() {
                           "es-ES"
                         )
                       : "—"}
-
                   </div>
-
                 </div>
 
                 <Link
@@ -2142,20 +1920,16 @@ export default function CenterDetail() {
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
 
                   Ver / exportar certificado
-
                 </Link>
-
               </div>
             )}
 
             <div className="mt-5 rounded-xl border border-slate-200 p-4">
-
               <div className="text-sm font-bold">
                 Participantes de la revisión
               </div>
 
               <div className="mt-2 space-y-2">
-
                 {(
                   review.participants ||
                   []
@@ -2165,10 +1939,8 @@ export default function CenterDetail() {
                       key={i}
                       className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
                     >
-
                       <span>
-                        {p.name}{" "}
-                        ·{" "}
+                        {p.name} ·{" "}
                         {p.role}
                       </span>
 
@@ -2181,7 +1953,6 @@ export default function CenterDetail() {
                         <Button
                           variant="secondary"
                           onClick={() => {
-
                             const participants =
                               [
                                 ...(review.participants ||
@@ -2208,7 +1979,6 @@ export default function CenterDetail() {
                                 },
                               },
                             });
-
                           }}
                         >
                           Firmar
@@ -2218,17 +1988,14 @@ export default function CenterDetail() {
                           Pendiente
                         </Badge>
                       )}
-
                     </div>
                   )
                 )}
-
               </div>
 
               {!readOnly &&
                 !review.confirmed && (
                   <div className="mt-3 flex gap-2">
-
                     <input
                       value={
                         participant
@@ -2245,7 +2012,6 @@ export default function CenterDetail() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-
                         if (
                           !participant.trim()
                         ) {
@@ -2277,33 +2043,20 @@ export default function CenterDetail() {
                           },
                         });
 
-                        setParticipant(
-                          ""
-                        );
-
+                        setParticipant("");
                       }}
                     >
                       Añadir
                     </Button>
-
                   </div>
                 )}
-
             </div>
-
           </>
         )}
-
       </Card>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* INSTALACIONES Y ACTUACIONES                                        */}
-      {/* ------------------------------------------------------------------ */}
-
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Instalaciones y actuaciones"
             subtitle={`${activeItems.length} elementos activos · ${inactiveItems.length} elementos no activos`}
@@ -2319,22 +2072,15 @@ export default function CenterDetail() {
               )
             }
           />
-
         </div>
 
         {openInstallations && (
           <>
-
-            {/* ------------------------------------------------------------ */}
-            {/* LEYENDA                                                     */}
-            {/* ------------------------------------------------------------ */}
-
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-
               <div className="flex flex-wrap items-center gap-2">
-
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <ClipboardCheck className="h-4 w-4" />
+
                   Leyenda de resultados
                 </div>
 
@@ -2357,19 +2103,11 @@ export default function CenterDetail() {
                 <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                   ERROR
                 </span>
-
               </div>
-
             </div>
 
-            {/* ------------------------------------------------------------ */}
-            {/* FILTROS                                                      */}
-            {/* ------------------------------------------------------------ */}
-
-            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
-
-              <div className="relative min-w-0 flex-1">
-
+            <div className="mb-4 mt-5 grid gap-3 xl:grid-cols-5">
+              <div className="relative min-w-0 xl:col-span-2">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                 <input
@@ -2382,10 +2120,86 @@ export default function CenterDetail() {
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
                 />
-
               </div>
 
-              {/* Filtro tipo de instalación */}
+              <Select
+                value={
+                  installationFilter
+                }
+                onChange={
+                  setInstallationFilter
+                }
+              >
+                {installationTypes.map(
+                  installation => (
+                    <option
+                      key={
+                        installation
+                      }
+                      value={
+                        installation
+                      }
+                    >
+                      {installation ===
+                      "Todas"
+                        ? "Todas las instalaciones"
+                        : installation}
+                    </option>
+                  )
+                )}
+              </Select>
+
+              <Select
+                value={
+                  actionFilter
+                }
+                onChange={
+                  setActionFilter
+                }
+              >
+                {actions.map(
+                  action => (
+                    <option
+                      key={action}
+                      value={action}
+                    >
+                      {action ===
+                      "Todas"
+                        ? "Todas las actuaciones"
+                        : action}
+                    </option>
+                  )
+                )}
+              </Select>
+
+              <select
+                value={
+                  resultFilter
+                }
+                onChange={e =>
+                  setResultFilter(
+                    e.target.value
+                  )
+                }
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#002A54]"
+              >
+                {RESULT_FILTERS.map(
+                  result => (
+                    <option
+                      key={result}
+                      value={result}
+                    >
+                      {result ===
+                      "Todos"
+                        ? "Todos los resultados"
+                        : result}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-2">
               <Select
                 value={
                   category
@@ -2400,73 +2214,53 @@ export default function CenterDetail() {
                       key={c}
                       value={c}
                     >
-                      Instalación:{" "}
-                      {c}
+                      {c ===
+                      "Todas"
+                        ? "Todas las categorías"
+                        : c}
                     </option>
                   )
                 )}
               </Select>
 
-              {/* Filtro tipo de actuación */}
-              <Select
-                value={
-                  actionType
-                }
-                onChange={
-                  setActionType
-                }
-              >
-                {actionTypes.map(
-                  action => (
-                    <option
-                      key={action}
-                      value={action}
-                    >
-                      Actuación:{" "}
-                      {action}
-                    </option>
-                  )
-                )}
-              </Select>
-
-              {/* Filtro resultado */}
-              <Select
-                value={
-                  resultFilter
-                }
-                onChange={
-                  setResultFilter
-                }
-              >
-                {resultOptions.map(
-                  result => (
-                    <option
-                      key={result}
-                      value={result}
-                    >
-                      Resultado:{" "}
-                      {result}
-                    </option>
-                  )
-                )}
-              </Select>
-
+              {(installationFilter !==
+                "Todas" ||
+                actionFilter !==
+                  "Todas" ||
+                resultFilter !==
+                  "Todos" ||
+                category !==
+                  "Todas" ||
+                q) && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setQ("");
+                    setCategory(
+                      "Todas"
+                    );
+                    setInstallationFilter(
+                      "Todas"
+                    );
+                    setActionFilter(
+                      "Todas"
+                    );
+                    setResultFilter(
+                      "Todos"
+                    );
+                  }}
+                >
+                  <RotateCcw className="mr-2 inline h-4 w-4" />
+                  Limpiar filtros
+                </Button>
+              )}
             </div>
 
-            {/* ------------------------------------------------------------ */}
-            {/* TABLA                                                         */}
-            {/* ------------------------------------------------------------ */}
-
             <div className="rounded-2xl border border-slate-200">
-
               <div className="overflow-x-auto">
-
-                <table className="min-w-[1900px] w-full text-sm">
-
+                <table className="min-w-[1800px] w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
-
                     <tr>
-
                       <th className="w-24 px-3 py-3">
                         Código
                       </th>
@@ -2520,35 +2314,14 @@ export default function CenterDetail() {
                       </th>
 
                       <th className="w-12 px-3 py-3" />
-
                     </tr>
-
                   </thead>
 
                   <tbody>
-
                     {visible.map(
                       (x: any) => {
-
                         const item =
-                          getItem(
-                            x.id
-                          );
-
-                        /**
-                         * La revisión completa del centro se confirma
-                         * desde arriba. Por tanto, no existe confirmación
-                         * individual del elemento.
-                         */
-                        const locked =
-                          readOnly ||
-                          review.confirmed;
-
-                        const visual =
-                          getInstallationVisual(
-                            x.installation,
-                            x.category
-                          );
+                          getItem(x.id);
 
                         const nextDate =
                           calculateNextReview(
@@ -2561,8 +2334,8 @@ export default function CenterDetail() {
                           calculateResult(
                             item.status,
                             item.date,
-                            nextDate,
-                            item.secondReviewDate
+                            item.secondReviewDate,
+                            nextDate
                           );
 
                         const resultVisual =
@@ -2570,25 +2343,34 @@ export default function CenterDetail() {
                             result
                           );
 
+                        const visual =
+                          getInstallationVisual(
+                            x.installation,
+                            x.category
+                          );
+
                         const Icon =
                           visual.Icon;
 
+                        const locked =
+                          readOnly ||
+                          review.confirmed;
+
+                        const statusClasses =
+                          getStatusClasses(
+                            item.status
+                          );
+
                         return (
                           <tr
-                            key={
-                              x.id
-                            }
+                            key={x.id}
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
-
-                            {/* Código */}
                             <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
                               {x.code}
                             </td>
 
-                            {/* Tipo */}
                             <td className="px-2 py-3 align-top">
-
                               <div
                                 className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 title={
@@ -2600,12 +2382,9 @@ export default function CenterDetail() {
                                   className={`h-4 w-4 ${visual.icon}`}
                                 />
                               </div>
-
                             </td>
 
-                            {/* Instalación */}
                             <td className="px-3 py-3 align-top">
-
                               <div className="font-semibold text-slate-800">
                                 {
                                   x.installation
@@ -2619,33 +2398,22 @@ export default function CenterDetail() {
                                   }
                                 </div>
                               )}
-
                             </td>
 
-                            {/* Actuación */}
                             <td className="px-3 py-3 align-top text-slate-600">
                               {x.action}
                             </td>
 
-                            {/* Frecuencia */}
                             <td className="px-3 py-3 align-top">
-
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-
                                 <CalendarDays className="h-3 w-3" />
 
-                                {
-                                  x.frequency ||
-                                  "—"
-                                }
-
+                                {x.frequency ||
+                                  "—"}
                               </span>
-
                             </td>
 
-                            {/* ID equipo */}
                             <td className="px-3 py-3 align-top">
-
                               <input
                                 disabled={
                                   locked
@@ -2665,12 +2433,9 @@ export default function CenterDetail() {
                                 placeholder="ID equipo"
                                 className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
-
                             </td>
 
-                            {/* Empresa */}
                             <td className="px-3 py-3 align-top">
-
                               <input
                                 disabled={
                                   locked
@@ -2690,12 +2455,9 @@ export default function CenterDetail() {
                                 placeholder="Empresa"
                                 className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
-
                             </td>
 
-                            {/* Estado revisión */}
                             <td className="px-3 py-3 align-top">
-
                               <select
                                 disabled={
                                   locked
@@ -2712,31 +2474,22 @@ export default function CenterDetail() {
                                     }
                                   )
                                 }
-                                className={`w-full rounded-lg border px-2 py-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
-                                  item.status
-                                )}`}
+                                className={`w-44 rounded-lg border px-2 py-2 text-xs font-bold outline-none transition disabled:cursor-not-allowed disabled:opacity-70 ${statusClasses}`}
                               >
                                 {STATUSES.map(
                                   s => (
                                     <option
-                                      key={
-                                        s
-                                      }
-                                      value={
-                                        s
-                                      }
+                                      key={s}
+                                      value={s}
                                     >
                                       {s}
                                     </option>
                                   )
                                 )}
                               </select>
-
                             </td>
 
-                            {/* Fecha ejecución */}
                             <td className="px-3 py-3 align-top">
-
                               <input
                                 disabled={
                                   locked
@@ -2756,18 +2509,13 @@ export default function CenterDetail() {
                                 }
                                 className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs disabled:bg-slate-50"
                               />
-
                             </td>
 
-                            {/* Próxima revisión */}
                             <td className="px-3 py-3 align-top">
-
                               <div className="flex items-center gap-2">
-
                                 <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
 
                                 <div>
-
                                   <div className="font-semibold text-slate-700">
                                     {nextDate
                                       ? formatDate(
@@ -2781,16 +2529,11 @@ export default function CenterDetail() {
                                       Calculada automáticamente
                                     </div>
                                   )}
-
                                 </div>
-
                               </div>
-
                             </td>
 
-                            {/* 2ª revisión */}
                             <td className="px-3 py-3 align-top">
-
                               {item.status ===
                               "APTO CONDICIONADO" ? (
                                 <input
@@ -2805,27 +2548,15 @@ export default function CenterDetail() {
                                   value={
                                     item.secondReviewDate
                                   }
-                                  onChange={e => {
-                                    const value =
-                                      e.target.value;
-
-                                    if (
-                                      item.date &&
-                                      value &&
-                                      value <
-                                        item.date
-                                    ) {
-                                      return;
-                                    }
-
+                                  onChange={e =>
                                     updateItem(
                                       x.id,
                                       {
                                         secondReviewDate:
-                                          value,
+                                          e.target.value,
                                       }
-                                    );
-                                  }}
+                                    )
+                                  }
                                   className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
                                 />
                               ) : (
@@ -2833,31 +2564,21 @@ export default function CenterDetail() {
                                   No aplica
                                 </span>
                               )}
-
                             </td>
 
-                            {/* Resultado */}
                             <td className="px-3 py-3 align-top">
-
                               <span
                                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${resultVisual.className}`}
                               >
-
                                 <span
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {
-                                  result
-                                }
-
+                                {result}
                               </span>
-
                             </td>
 
-                            {/* Comentario */}
                             <td className="px-3 py-3 align-top">
-
                               <textarea
                                 disabled={
                                   locked
@@ -2878,12 +2599,9 @@ export default function CenterDetail() {
                                 rows={2}
                                 className="w-52 resize-y rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
-
                             </td>
 
-                            {/* Eliminar */}
                             <td className="px-3 py-3 align-top">
-
                               {!readOnly &&
                                 !review.confirmed && (
                                   <button
@@ -2900,9 +2618,7 @@ export default function CenterDetail() {
                                     <X className="h-4 w-4" />
                                   </button>
                                 )}
-
                             </td>
-
                           </tr>
                         );
                       }
@@ -2912,46 +2628,28 @@ export default function CenterDetail() {
                       0 && (
                       <tr>
                         <td
-                          colSpan={
-                            15
-                          }
+                          colSpan={15}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con los filtros seleccionados.
                         </td>
                       </tr>
                     )}
-
                   </tbody>
-
                 </table>
-
               </div>
-
             </div>
 
-            {/* ------------------------------------------------------------ */}
-            {/* AVISO DE CÁLCULO                                             */}
-            {/* ------------------------------------------------------------ */}
-
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
-
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                La próxima revisión se calcula automáticamente sumando la frecuencia a la fecha de ejecución. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el día laborable anterior. Para centros de España se utilizan los festivos nacionales españoles y para centros de Portugal los festivos nacionales portugueses.
+                La próxima revisión se calcula automáticamente utilizando la fecha de ejecución y la periodicidad definida para la instalación. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el día laborable anterior. Los festivos se calculan según el país del centro: España o Portugal.
               </div>
-
             </div>
 
-            {/* ------------------------------------------------------------ */}
-            {/* ELEMENTOS NO ACTIVOS                                         */}
-            {/* ------------------------------------------------------------ */}
-
             <div className="mt-6 rounded-2xl border border-slate-200 p-5">
-
               <div className="flex items-center justify-between gap-4">
-
                 <SectionTitle
                   title="Elementos no activos"
                   subtitle="No computan, no generan vencimientos y conservan su histórico"
@@ -2961,32 +2659,27 @@ export default function CenterDetail() {
                         variant="secondary"
                         onClick={() =>
                           setShowAddElement(
-                            v =>
-                              !v
+                            v => !v
                           )
                         }
                       >
                         <Plus className="mr-2 inline h-4 w-4" />
 
                         Añadir elemento
-
                       </Button>
                     ) : undefined
                   }
                 />
-
               </div>
 
               {showAddElement &&
                 !readOnly && (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-
                     <div className="mb-3 text-sm font-bold">
                       Seleccionar elemento del catálogo
                     </div>
 
                     <div className="relative mb-3">
-
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                       <input
@@ -3001,19 +2694,15 @@ export default function CenterDetail() {
                         placeholder="Buscar cualquier elemento..."
                         className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
                       />
-
                     </div>
 
                     <div className="max-h-80 space-y-2 overflow-y-auto">
-
                       {selectableItems.map(
                         (x: any) => {
-
                           const isActive =
                             activeMap[
                               x.id
-                            ] !==
-                            false;
+                            ] !== false;
 
                           const visual =
                             getInstallationVisual(
@@ -3026,14 +2715,10 @@ export default function CenterDetail() {
 
                           return (
                             <div
-                              key={
-                                x.id
-                              }
+                              key={x.id}
                               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
                             >
-
                               <div className="flex min-w-0 items-center gap-3">
-
                                 <div
                                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 >
@@ -3043,27 +2728,20 @@ export default function CenterDetail() {
                                 </div>
 
                                 <div className="min-w-0">
-
                                   <div className="truncate text-sm font-semibold">
-                                    {x.code}{" "}
-                                    ·{" "}
+                                    {x.code} ·{" "}
                                     {
                                       x.installation
                                     }
                                   </div>
 
                                   <div className="truncate text-xs text-slate-500">
-                                    {
-                                      x.action
-                                    }{" "}
-                                    ·{" "}
+                                    {x.action} ·{" "}
                                     {
                                       x.frequency
                                     }
                                   </div>
-
                                 </div>
-
                               </div>
 
                               {isActive ? (
@@ -3083,31 +2761,24 @@ export default function CenterDetail() {
                                   Activar
                                 </Button>
                               )}
-
                             </div>
                           );
                         }
                       )}
-
                     </div>
-
                   </div>
                 )}
 
               <div className="mt-4">
-
                 {inactiveItems.length ===
                 0 ? (
                   <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                     No hay elementos no activos actualmente. Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
                   </div>
                 ) : (
-
                   <div className="grid gap-2 md:grid-cols-2">
-
                     {inactiveItems.map(
                       (x: any) => {
-
                         const visual =
                           getInstallationVisual(
                             x.installation,
@@ -3119,14 +2790,10 @@ export default function CenterDetail() {
 
                         return (
                           <div
-                            key={
-                              x.id
-                            }
+                            key={x.id}
                             className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
                           >
-
                             <div className="flex min-w-0 items-center gap-3">
-
                               <div
                                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
                               >
@@ -3136,12 +2803,9 @@ export default function CenterDetail() {
                               </div>
 
                               <div className="min-w-0">
-
                                 <div className="truncate">
                                   <b>
-                                    {
-                                      x.code
-                                    }
+                                    {x.code}
                                   </b>{" "}
                                   ·{" "}
                                   {
@@ -3154,9 +2818,7 @@ export default function CenterDetail() {
                                     x.action
                                   }
                                 </div>
-
                               </div>
-
                             </div>
 
                             {!readOnly && (
@@ -3172,25 +2834,17 @@ export default function CenterDetail() {
                                 Activar
                               </Button>
                             )}
-
                           </div>
                         );
                       }
                     )}
-
                   </div>
-
                 )}
-
               </div>
-
             </div>
-
           </>
         )}
-
       </Card>
-
     </div>
   );
 }
