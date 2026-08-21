@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
+
 import {
   Card,
   SectionTitle,
@@ -84,8 +85,7 @@ function getInstallationVisual(
   wrapper: string;
   icon: string;
 } {
-  const value =
-    `${installation} ${category}`.toLowerCase();
+  const value = `${installation} ${category}`.toLowerCase();
 
   if (
     value.includes("ascensor") ||
@@ -367,6 +367,8 @@ export default function CenterDetail() {
 
   const [state, setState] = useState<V1State>({
     role: "ADMIN",
+    country: undefined,
+    centerId: undefined,
     centers: {},
     activeItems: {},
     reviews: {},
@@ -659,28 +661,15 @@ export default function CenterDetail() {
     });
   }
 
-  function updateStatusFromCheckbox(
-    itemId: string,
-    status: V1Status,
-    checked: boolean
-  ) {
-    if (!checked) {
-      updateItem(itemId, {
-        status: "SIN INFORMACIÓN",
-      });
-      return;
-    }
-
-    updateItem(itemId, {
-      status,
-    });
-  }
-
   function confirmItem(
     itemId: string
   ) {
-    if (state.role !== "ADMIN")
+    if (
+      state.role !== "ADMIN" ||
+      review.confirmed
+    ) {
       return;
+    }
 
     updateItem(itemId, {
       confirmed: true,
@@ -1815,6 +1804,7 @@ export default function CenterDetail() {
                   c => (
                     <option
                       key={c}
+                      value={c}
                     >
                       {c}
                     </option>
@@ -1828,7 +1818,7 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="min-w-[2300px] w-full text-sm">
+                <table className="min-w-[1800px] w-full text-sm">
 
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
 
@@ -1876,18 +1866,6 @@ export default function CenterDetail() {
 
                       <th className="w-40 px-3 py-3">
                         Resultado
-                      </th>
-
-                      <th className="w-28 px-3 py-3 text-center">
-                        M · Apto?
-                      </th>
-
-                      <th className="w-36 px-3 py-3 text-center">
-                        N · Condicionado?
-                      </th>
-
-                      <th className="w-32 px-3 py-3 text-center">
-                        O · No apto?
                       </th>
 
                       <th className="min-w-[220px] px-3 py-3">
@@ -1947,18 +1925,6 @@ export default function CenterDetail() {
 
                         const Icon =
                           visual.Icon;
-
-                        const isApto =
-                          item.status ===
-                          "APTO";
-
-                        const isCondicionado =
-                          item.status ===
-                          "APTO CONDICIONADO";
-
-                        const isNoApto =
-                          item.status ===
-                          "NO APTO";
 
                         return (
                           <tr
@@ -2071,20 +2037,33 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <Select
-                                value={item.status}
+                                value={
+                                  item.status
+                                }
                                 onChange={v => {
-                                  if (locked) return;
+                                  if (locked) {
+                                    return;
+                                  }
 
-                                  updateItem(x.id, {
-                                    status: v as V1Status,
-                                  });
+                                  updateItem(
+                                    x.id,
+                                    {
+                                      status:
+                                        v as V1Status,
+                                    }
+                                  );
                                 }}
                               >
-                                {STATUSES.map(s => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
+                                {STATUSES.map(
+                                  s => (
+                                    <option
+                                      key={s}
+                                      value={s}
+                                    >
+                                      {s}
+                                    </option>
+                                  )
+                                )}
                               </Select>
 
                               <div
@@ -2092,7 +2071,9 @@ export default function CenterDetail() {
                                   item.status
                                 )}`}
                               >
-                                {item.status}
+                                {
+                                  item.status
+                                }
                               </div>
 
                             </td>
@@ -2166,102 +2147,6 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top text-center">
-
-                              <label className="inline-flex cursor-pointer flex-col items-center gap-1">
-
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    isApto
-                                  }
-                                  disabled={
-                                    locked
-                                  }
-                                  onChange={e =>
-                                    updateStatusFromCheckbox(
-                                      x.id,
-                                      "APTO",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="h-5 w-5 cursor-pointer rounded border-slate-300 text-emerald-600 accent-emerald-600 disabled:cursor-not-allowed"
-                                />
-
-                                <span className="text-[10px] text-slate-500">
-                                  {isApto
-                                    ? "VERDADERO"
-                                    : "FALSO"}
-                                </span>
-
-                              </label>
-
-                            </td>
-
-                            <td className="px-3 py-3 align-top text-center">
-
-                              <label className="inline-flex cursor-pointer flex-col items-center gap-1">
-
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    isCondicionado
-                                  }
-                                  disabled={
-                                    locked
-                                  }
-                                  onChange={e =>
-                                    updateStatusFromCheckbox(
-                                      x.id,
-                                      "APTO CONDICIONADO",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="h-5 w-5 cursor-pointer rounded border-slate-300 text-amber-600 accent-amber-600 disabled:cursor-not-allowed"
-                                />
-
-                                <span className="text-[10px] text-slate-500">
-                                  {isCondicionado
-                                    ? "VERDADERO"
-                                    : "FALSO"}
-                                </span>
-
-                              </label>
-
-                            </td>
-
-                            <td className="px-3 py-3 align-top text-center">
-
-                              <label className="inline-flex cursor-pointer flex-col items-center gap-1">
-
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    isNoApto
-                                  }
-                                  disabled={
-                                    locked
-                                  }
-                                  onChange={e =>
-                                    updateStatusFromCheckbox(
-                                      x.id,
-                                      "NO APTO",
-                                      e.target.checked
-                                    )
-                                  }
-                                  className="h-5 w-5 cursor-pointer rounded border-slate-300 text-red-600 accent-red-600 disabled:cursor-not-allowed"
-                                />
-
-                                <span className="text-[10px] text-slate-500">
-                                  {isNoApto
-                                    ? "VERDADERO"
-                                    : "FALSO"}
-                                </span>
-
-                              </label>
-
-                            </td>
-
                             <td className="px-3 py-3 align-top">
 
                               <textarea
@@ -2324,16 +2209,14 @@ export default function CenterDetail() {
                                 <Badge tone="success">
                                   Confirmado
                                 </Badge>
-                              ) : admin ? (
+                              ) : admin &&
+                                !review.confirmed ? (
                                 <Button
                                   variant="secondary"
                                   onClick={() =>
                                     confirmItem(
                                       x.id
                                     )
-                                  }
-                                  disabled={
-                                    review.confirmed
                                   }
                                 >
                                   <CheckCircle2 className="mr-1 inline h-3 w-3" />
@@ -2352,6 +2235,7 @@ export default function CenterDetail() {
                               {!readOnly &&
                                 !review.confirmed && (
                                   <button
+                                    type="button"
                                     onClick={() =>
                                       setActive(
                                         x.id,
@@ -2376,7 +2260,7 @@ export default function CenterDetail() {
                       0 && (
                       <tr>
                         <td
-                          colSpan={19}
+                          colSpan={16}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con la búsqueda.
@@ -2397,7 +2281,7 @@ export default function CenterDetail() {
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                La próxima revisión se calcula automáticamente utilizando la fecha de revisión y la periodicidad definida para la instalación. Las columnas M, N y O representan respectivamente Apto, Apto condicionado y No apto mediante casillas de verdadero/falso.
+                La próxima revisión se calcula automáticamente utilizando la fecha de revisión y la periodicidad definida para la instalación. El resultado mantiene la lógica de estados de la fórmula proporcionada para España.
               </div>
 
             </div>
