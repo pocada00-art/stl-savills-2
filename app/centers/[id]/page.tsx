@@ -15,6 +15,16 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Building2,
+  Elevator,
+  Zap,
+  Flame,
+  Droplets,
+  ShieldCheck,
+  Settings,
+  CalendarDays,
+  ClipboardCheck,
+  CircleAlert,
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
@@ -63,13 +73,321 @@ type CenterFormValues = {
   logoUrl?: string;
 };
 
+type IconComponent = React.ComponentType<{
+  className?: string;
+}>;
+
+function getInstallationVisual(
+  installation = "",
+  category = ""
+): {
+  Icon: IconComponent;
+  wrapper: string;
+  icon: string;
+} {
+  const value =
+    `${installation} ${category}`.toLowerCase();
+
+  if (
+    value.includes("ascensor") ||
+    value.includes("montacarga") ||
+    value.includes("elevador")
+  ) {
+    return {
+      Icon: Elevator,
+      wrapper: "bg-blue-50 border-blue-100",
+      icon: "text-blue-600",
+    };
+  }
+
+  if (
+    value.includes("alta tensión") ||
+    value.includes("alta tension") ||
+    value.includes("eléctr") ||
+    value.includes("electr")
+  ) {
+    return {
+      Icon: Zap,
+      wrapper: "bg-amber-50 border-amber-100",
+      icon: "text-amber-600",
+    };
+  }
+
+  if (
+    value.includes("contra incend") ||
+    value.includes("incend")
+  ) {
+    return {
+      Icon: Flame,
+      wrapper: "bg-red-50 border-red-100",
+      icon: "text-red-600",
+    };
+  }
+
+  if (
+    value.includes("agua") ||
+    value.includes("fontan") ||
+    value.includes("abastecimiento") ||
+    value.includes("saneamiento")
+  ) {
+    return {
+      Icon: Droplets,
+      wrapper: "bg-cyan-50 border-cyan-100",
+      icon: "text-cyan-600",
+    };
+  }
+
+  if (
+    value.includes("seguridad") ||
+    value.includes("alarma") ||
+    value.includes("intrusión") ||
+    value.includes("intrusion")
+  ) {
+    return {
+      Icon: ShieldCheck,
+      wrapper: "bg-violet-50 border-violet-100",
+      icon: "text-violet-600",
+    };
+  }
+
+  if (
+    value.includes("climat") ||
+    value.includes("aire acondicionado") ||
+    value.includes("ventil")
+  ) {
+    return {
+      Icon: Settings,
+      wrapper: "bg-emerald-50 border-emerald-100",
+      icon: "text-emerald-600",
+    };
+  }
+
+  return {
+    Icon: Building2,
+    wrapper: "bg-slate-50 border-slate-200",
+    icon: "text-slate-500",
+  };
+}
+
+function getStatusClasses(status: V1Status) {
+  switch (status) {
+    case "APTO":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+    case "APTO CONDICIONADO":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+
+    case "NO APTO":
+      return "bg-red-50 text-red-700 border-red-200";
+
+    case "PENDIENTE":
+      return "bg-orange-50 text-orange-700 border-orange-200";
+
+    default:
+      return "bg-slate-50 text-slate-600 border-slate-200";
+  }
+}
+
+function getResultVisual(result: string) {
+  switch (result) {
+    case "FAVORABLE":
+      return {
+        className:
+          "bg-emerald-50 text-emerald-700 border-emerald-200",
+        dot: "bg-emerald-500",
+      };
+
+    case "CONDICIONADO":
+      return {
+        className:
+          "bg-amber-50 text-amber-700 border-amber-200",
+        dot: "bg-amber-500",
+      };
+
+    case "DESFAVORABLE":
+      return {
+        className:
+          "bg-red-50 text-red-700 border-red-200",
+        dot: "bg-red-500",
+      };
+
+    case "PTE.":
+      return {
+        className:
+          "bg-orange-50 text-orange-700 border-orange-200",
+        dot: "bg-orange-500",
+      };
+
+    case "ERROR":
+      return {
+        className:
+          "bg-slate-100 text-slate-700 border-slate-300",
+        dot: "bg-slate-500",
+      };
+
+    default:
+      return {
+        className:
+          "bg-slate-50 text-slate-500 border-slate-200",
+        dot: "bg-slate-300",
+      };
+  }
+}
+
+function parseFrequency(frequency: string) {
+  const value = String(frequency || "").toLowerCase();
+
+  if (value.includes("mensual")) return { months: 1 };
+  if (value.includes("bimensual")) return { months: 2 };
+  if (value.includes("trimestral")) return { months: 3 };
+  if (value.includes("cuatrimestral")) return { months: 4 };
+  if (value.includes("semestral")) return { months: 6 };
+  if (value.includes("anual")) return { months: 12 };
+  if (value.includes("bienal")) return { months: 24 };
+
+  const numeric = value.match(
+    /(\d+)\s*(mes|meses|año|años)/
+  );
+
+  if (numeric) {
+    const amount = Number(numeric[1]);
+
+    if (value.includes("año")) {
+      return { months: amount * 12 };
+    }
+
+    return { months: amount };
+  }
+
+  return null;
+}
+
+function calculateNextReview(
+  date: string,
+  frequency: string
+) {
+  if (!date) return "";
+
+  const parsed = parseFrequency(frequency);
+
+  if (!parsed) return "";
+
+  const d = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(d.getTime())) return "";
+
+  d.setMonth(d.getMonth() + parsed.months);
+
+  return d.toISOString().slice(0, 10);
+}
+
+/*
+ * Traducción de la lógica de la fórmula de Excel aportada:
+ *
+ * K = fecha de revisión
+ * M = condición 1
+ * N = condición 2
+ * O = desfavorable
+ *
+ * Como en la nueva interfaz trabajamos con el resultado
+ * de la revisión, mantenemos la misma lógica de negocio:
+ *
+ * - Sin fecha + resultado incompatible => ERROR
+ * - Sin fecha => "-"
+ * - Fecha vencida => PTE.
+ * - Fecha futura + NO APTO => DESFAVORABLE
+ * - Fecha futura + APTO CONDICIONADO => CONDICIONADO
+ * - Fecha futura + APTO => FAVORABLE
+ * - Sin información suficiente => ERROR
+ */
+function calculateResult(
+  status: V1Status,
+  date: string,
+  secondReviewDate: string
+) {
+  if (!date) {
+    if (
+      status === "APTO" ||
+      status === "APTO CONDICIONADO" ||
+      status === "NO APTO"
+    ) {
+      return "ERROR";
+    }
+
+    return "-";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const reviewDate = new Date(
+    `${date}T00:00:00`
+  );
+
+  if (Number.isNaN(reviewDate.getTime())) {
+    return "ERROR";
+  }
+
+  /*
+   * La segunda revisión se utiliza cuando el resultado
+   * es condicionado y existe una nueva fecha.
+   */
+  if (
+    status === "APTO CONDICIONADO" &&
+    secondReviewDate
+  ) {
+    const secondDate = new Date(
+      `${secondReviewDate}T00:00:00`
+    );
+
+    if (
+      !Number.isNaN(secondDate.getTime()) &&
+      today >= secondDate
+    ) {
+      return "PTE.";
+    }
+  }
+
+  if (today > reviewDate) {
+    return "PTE.";
+  }
+
+  if (status === "NO APTO") {
+    return "DESFAVORABLE";
+  }
+
+  if (status === "APTO CONDICIONADO") {
+    return "CONDICIONADO";
+  }
+
+  if (status === "APTO") {
+    return "FAVORABLE";
+  }
+
+  return "ERROR";
+}
+
+function formatDate(value: string) {
+  if (!value) return "—";
+
+  const d = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(d.getTime())) {
+    return "—";
+  }
+
+  return d.toLocaleDateString("es-ES");
+}
+
 export default function CenterDetail() {
   const params = useParams();
   const id = String(params.id);
 
   const center =
     demo.centers.find(c => c.id === id) ||
-    demo.centers.find(c => encodeURIComponent(c.id) === id);
+    demo.centers.find(
+      c => encodeURIComponent(c.id) === id
+    );
 
   const [state, setState] = useState<V1State>({
     role: "ADMIN",
@@ -78,17 +396,47 @@ export default function CenterDetail() {
     reviews: {},
   });
 
-  const [period, setPeriod] = useState<Period>("S2");
-  const [year, setYear] = useState(2026);
-  const [q, setQ] = useState("");
-  const [category, setCategory] = useState("Todas");
-  const [saved, setSaved] = useState(false);
-  const [participant, setParticipant] = useState("");
+  const [period, setPeriod] =
+    useState<Period>("S2");
 
-  const [openCenterData, setOpenCenterData] = useState(true);
-  const [openHistory, setOpenHistory] = useState(true);
-  const [openReview, setOpenReview] = useState(true);
-  const [openInstallations, setOpenInstallations] = useState(true);
+  const [year, setYear] = useState(2026);
+
+  const [q, setQ] = useState("");
+
+  const [category, setCategory] =
+    useState("Todas");
+
+  const [saved, setSaved] =
+    useState(false);
+
+  const [participant, setParticipant] =
+    useState("");
+
+  const [showAddElement, setShowAddElement] =
+    useState(false);
+
+  const [addElementSearch, setAddElementSearch] =
+    useState("");
+
+  const [
+    openCenterData,
+    setOpenCenterData,
+  ] = useState(true);
+
+  const [
+    openHistory,
+    setOpenHistory,
+  ] = useState(true);
+
+  const [
+    openReview,
+    setOpenReview,
+  ] = useState(true);
+
+  const [
+    openInstallations,
+    setOpenInstallations,
+  ] = useState(true);
 
   useEffect(() => {
     setState(loadState());
@@ -97,10 +445,16 @@ export default function CenterDetail() {
   useEffect(() => {
     const h = () => setState(loadState());
 
-    window.addEventListener("stl-role-change", h);
+    window.addEventListener(
+      "stl-role-change",
+      h
+    );
 
     return () => {
-      window.removeEventListener("stl-role-change", h);
+      window.removeEventListener(
+        "stl-role-change",
+        h
+      );
     };
   }, []);
 
@@ -128,23 +482,31 @@ export default function CenterDetail() {
       ? demo.esCatalog
       : demo.ptCatalog;
 
-  /*
-   * Se mantiene compatibilidad con los campos adicionales
-   * utilizados en la ficha del centro.
-   */
-  const overrides = (state.centers[center.id] || {}) as CenterFormValues;
+  const overrides =
+    (state.centers[
+      center.id
+    ] || {}) as CenterFormValues;
 
-  const activeMap = state.activeItems[center.id] || {};
+  const activeMap =
+    state.activeItems[
+      center.id
+    ] || {};
 
   const activeItems = catalog.filter(
-    (x: any) => activeMap[x.id] !== false
+    (x: any) =>
+      activeMap[x.id] !== false
   );
 
   const inactiveItems = catalog.filter(
-    (x: any) => activeMap[x.id] === false
+    (x: any) =>
+      activeMap[x.id] === false
   );
 
-  const key = reviewKey(center.id, year, period);
+  const key = reviewKey(
+    center.id,
+    year,
+    period
+  );
 
   const review =
     state.reviews[key] || {
@@ -157,7 +519,9 @@ export default function CenterDetail() {
 
   const summary = reviewSummary(
     review,
-    activeItems.map((x: any) => x.id)
+    activeItems.map(
+      (x: any) => x.id
+    )
   );
 
   const categories = [
@@ -165,7 +529,10 @@ export default function CenterDetail() {
     ...Array.from(
       new Set(
         catalog
-          .map((x: any) => x.category)
+          .map(
+            (x: any) =>
+              x.category
+          )
           .filter(Boolean)
       )
     ),
@@ -173,44 +540,70 @@ export default function CenterDetail() {
 
   const visible = activeItems.filter(
     (x: any) =>
-      (category === "Todas" || x.category === category) &&
+      (category === "Todas" ||
+        x.category === category) &&
       `${x.code} ${x.installation} ${x.action} ${x.category}`
         .toLowerCase()
         .includes(q.toLowerCase())
   );
 
-  /*
-   * Histórico:
-   * - No se muestran años futuros.
-   * - Como mínimo se muestran 2024, 2025 y el año actual.
-   * - Si existen revisiones anteriores a 2024, también aparecen.
-   * - Nunca se muestran años posteriores al año actual.
-   */
-  const currentYear = new Date().getFullYear();
+  const selectableItems =
+    catalog.filter((x: any) =>
+      `${x.code} ${x.installation} ${x.action} ${x.category}`
+        .toLowerCase()
+        .includes(
+          addElementSearch.toLowerCase()
+        )
+    );
+
+  const currentYear =
+    new Date().getFullYear();
 
   const reviewYears = useMemo(() => {
     const years = new Set<number>();
 
-    for (let y = 2024; y <= currentYear; y++) {
+    for (
+      let y = 2024;
+      y <= currentYear;
+      y++
+    ) {
       years.add(y);
     }
 
-    Object.keys(state.reviews).forEach(reviewId => {
-      const match = reviewId.match(/:(\d{4}):(S1|S2)$/);
+    Object.keys(state.reviews).forEach(
+      reviewId => {
+        const match =
+          reviewId.match(
+            /:(\d{4}):(S1|S2)$/
+          );
 
-      if (match) {
-        const reviewYear = Number(match[1]);
+        if (match) {
+          const reviewYear =
+            Number(match[1]);
 
-        if (reviewYear <= currentYear) {
-          years.add(reviewYear);
+          if (
+            reviewYear <=
+            currentYear
+          ) {
+            years.add(
+              reviewYear
+            );
+          }
         }
       }
-    });
+    );
 
-    return Array.from(years).sort((a, b) => a - b);
-  }, [state.reviews, currentYear]);
+    return Array.from(years).sort(
+      (a, b) => a - b
+    );
+  }, [
+    state.reviews,
+    currentYear,
+  ]);
 
-  function updateState(next: V1State) {
+  function updateState(
+    next: V1State
+  ) {
     setState(next);
     saveState(next);
     setSaved(true);
@@ -255,14 +648,20 @@ export default function CenterDetail() {
   }
 
   function getItem(itemId: string) {
-    return review.items[itemId] || blankItem();
+    return (
+      review.items[itemId] ||
+      blankItem()
+    );
   }
 
   function updateItem(
     itemId: string,
-    patch: Partial<ReturnType<typeof blankItem>>
+    patch: Partial<
+      ReturnType<typeof blankItem>
+    >
   ) {
-    const current = getItem(itemId);
+    const current =
+      getItem(itemId);
 
     const nextReview = {
       ...review,
@@ -284,13 +683,18 @@ export default function CenterDetail() {
     });
   }
 
-  function confirmItem(itemId: string) {
-    if (state.role !== "ADMIN") return;
+  function confirmItem(
+    itemId: string
+  ) {
+    if (state.role !== "ADMIN")
+      return;
 
     updateItem(itemId, {
       confirmed: true,
-      confirmedAt: new Date().toISOString(),
-      confirmedBy: "Administrador Demo",
+      confirmedAt:
+        new Date().toISOString(),
+      confirmedBy:
+        "Administrador Demo",
     });
   }
 
@@ -305,8 +709,10 @@ export default function CenterDetail() {
     const nextReview = {
       ...review,
       confirmed: true,
-      confirmedAt: new Date().toISOString(),
-      confirmedBy: "Administrador Demo",
+      confirmedAt:
+        new Date().toISOString(),
+      confirmedBy:
+        "Administrador Demo",
       participants: [
         {
           name: "Gestor Demo",
@@ -318,7 +724,8 @@ export default function CenterDetail() {
           role: "ADMINISTRADOR",
           signed: true,
         },
-        ...(review.participants || []).filter(
+        ...(review.participants ||
+          []).filter(
           p => p.role === "OTRO"
         ),
       ],
@@ -334,7 +741,9 @@ export default function CenterDetail() {
   }
 
   function resetPeriod() {
-    const next = { ...state };
+    const next = {
+      ...state,
+    };
 
     delete next.reviews[key];
 
@@ -342,15 +751,20 @@ export default function CenterDetail() {
   }
 
   function uploadImage(
-    field: "imageUrl" | "logoUrl",
+    field:
+      | "imageUrl"
+      | "logoUrl",
     file: File
   ) {
-    const reader = new FileReader();
+    const reader =
+      new FileReader();
 
     reader.onload = () => {
       updateCenter(
         field,
-        String(reader.result)
+        String(
+          reader.result
+        )
       );
     };
 
@@ -361,7 +775,8 @@ export default function CenterDetail() {
     state.role === "LECTURA" ||
     center.status !== "Activo";
 
-  const admin = state.role === "ADMIN";
+  const admin =
+    state.role === "ADMIN";
 
   function SectionToggle({
     open,
@@ -406,7 +821,6 @@ export default function CenterDetail() {
         </div>
       </div>
 
-      {/* CABECERA DEL CENTRO */}
       <Card className="overflow-hidden">
         <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
 
@@ -416,13 +830,16 @@ export default function CenterDetail() {
 
               {overrides.logoUrl ? (
                 <img
-                  src={overrides.logoUrl}
+                  src={
+                    overrides.logoUrl
+                  }
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
-                  {center.shortCode || center.code}
+                  {center.shortCode ||
+                    center.code}
                 </span>
               )}
 
@@ -431,7 +848,8 @@ export default function CenterDetail() {
             <div>
 
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {center.country} · {center.stl}
+                {center.country} ·{" "}
+                {center.stl}
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
@@ -451,7 +869,9 @@ export default function CenterDetail() {
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Código {center.shortCode || "—"}
+                  Código{" "}
+                  {center.shortCode ||
+                    "—"}
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
@@ -468,7 +888,9 @@ export default function CenterDetail() {
 
             {overrides.imageUrl ? (
               <img
-                src={overrides.imageUrl}
+                src={
+                  overrides.imageUrl
+                }
                 alt={center.name}
                 className="h-32 w-full rounded-xl object-cover"
               />
@@ -483,11 +905,13 @@ export default function CenterDetail() {
         </div>
       </Card>
 
-      {/* RESUMEN */}
       <div className="grid gap-4 md:grid-cols-5">
 
         {[
-          ["Cumplimiento", `${summary.score}%`],
+          [
+            "Cumplimiento",
+            `${summary.score}%`,
+          ],
           [
             "Confirmados",
             `${summary.confirmed}/${summary.total}`,
@@ -498,11 +922,15 @@ export default function CenterDetail() {
           ],
           [
             "No aptos",
-            summary.counts["NO APTO"],
+            summary.counts[
+              "NO APTO"
+            ],
           ],
           [
             "Condicionados",
-            summary.counts["APTO CONDICIONADO"],
+            summary.counts[
+              "APTO CONDICIONADO"
+            ],
           ],
         ].map(([t, v]) => (
           <Card
@@ -521,7 +949,6 @@ export default function CenterDetail() {
 
       </div>
 
-      {/* DATOS DEL CENTRO */}
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -541,7 +968,9 @@ export default function CenterDetail() {
           <SectionToggle
             open={openCenterData}
             onClick={() =>
-              setOpenCenterData(v => !v)
+              setOpenCenterData(
+                v => !v
+              )
             }
           />
 
@@ -552,9 +981,7 @@ export default function CenterDetail() {
 
             <div className="grid gap-4 md:grid-cols-4">
 
-              {/* FILA 1: PROPIEDAD - DIRECCIÓN */}
-
-              <label className="text-sm md:col-span-1">
+              <label className="text-sm">
 
                 <span className="text-xs text-slate-400">
                   Propiedad
@@ -602,8 +1029,6 @@ export default function CenterDetail() {
 
               </label>
 
-              {/* FILA 2: CIUDAD - PROVINCIA */}
-
               <label className="text-sm md:col-span-2">
 
                 <span className="text-xs text-slate-400">
@@ -612,7 +1037,10 @@ export default function CenterDetail() {
 
                 <input
                   disabled={readOnly}
-                  value={overrides.city ?? ""}
+                  value={
+                    overrides.city ??
+                    ""
+                  }
                   onChange={e =>
                     updateCenter(
                       "city",
@@ -633,7 +1061,8 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.province ?? ""
+                    overrides.province ??
+                    ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -645,8 +1074,6 @@ export default function CenterDetail() {
                 />
 
               </label>
-
-              {/* FILA 3: GERENTE - TELÉFONO - EMAIL */}
 
               <label className="text-sm">
 
@@ -719,11 +1146,7 @@ export default function CenterDetail() {
 
               </label>
 
-              {/* CUARTA COLUMNA RESERVADA */}
-
               <div />
-
-              {/* FILA 4: RESPONSABLE TÉCNICO - TELÉFONO - EMAIL */}
 
               <label className="text-sm">
 
@@ -860,7 +1283,6 @@ export default function CenterDetail() {
 
       </Card>
 
-      {/* HISTÓRICO DE CUMPLIMIENTO */}
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -873,7 +1295,9 @@ export default function CenterDetail() {
           <SectionToggle
             open={openHistory}
             onClick={() =>
-              setOpenHistory(v => !v)
+              setOpenHistory(
+                v => !v
+              )
             }
           />
 
@@ -889,70 +1313,80 @@ export default function CenterDetail() {
             ) : (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
 
-                {reviewYears.flatMap(y =>
-                  (["S1", "S2"] as Period[]).map(p => {
+                {reviewYears.flatMap(
+                  y =>
+                    (
+                      [
+                        "S1",
+                        "S2",
+                      ] as Period[]
+                    ).map(p => {
 
-                    const r =
-                      state.reviews[
-                        reviewKey(
-                          center.id,
-                          y,
-                          p
-                        )
-                      ];
+                      const r =
+                        state.reviews[
+                          reviewKey(
+                            center.id,
+                            y,
+                            p
+                          )
+                        ];
 
-                    const historicalActiveIds =
-                      catalog
-                        .filter(
-                          (x: any) =>
-                            activeMap[x.id] !== false
-                        )
-                        .map(
-                          (x: any) => x.id
+                      const historicalActiveIds =
+                        catalog
+                          .filter(
+                            (x: any) =>
+                              activeMap[
+                                x.id
+                              ] !== false
+                          )
+                          .map(
+                            (x: any) =>
+                              x.id
+                          );
+
+                      const sum =
+                        reviewSummary(
+                          r,
+                          historicalActiveIds
                         );
 
-                    const sum = reviewSummary(
-                      r,
-                      historicalActiveIds
-                    );
+                      return (
+                        <div
+                          key={`${y}-${p}`}
+                          className="rounded-xl border border-slate-200 p-4"
+                        >
 
-                    return (
-                      <div
-                        key={`${y}-${p}`}
-                        className="rounded-xl border border-slate-200 p-4"
-                      >
+                          <div className="flex items-center justify-between">
 
-                        <div className="flex items-center justify-between">
+                            <div className="text-xs font-semibold text-slate-400">
+                              {p} {y}
+                            </div>
 
-                          <div className="text-xs font-semibold text-slate-400">
-                            {p} {y}
+                            {r?.confirmed && (
+                              <Badge tone="success">
+                                Confirmada
+                              </Badge>
+                            )}
+
                           </div>
 
-                          {r?.confirmed && (
-                            <Badge tone="success">
-                              Confirmada
-                            </Badge>
-                          )}
+                          <div className="mt-2 text-xl font-black">
+                            {r
+                              ? `${sum.score}%`
+                              : "—"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-500">
+                            {r
+                              ? r.confirmed
+                                ? "Revisión confirmada"
+                                : "Revisión cargada sin confirmar"
+                              : "Sin revisión cargada"}
+                          </div>
 
                         </div>
-
-                        <div className="mt-2 text-xl font-black">
-                          {r
-                            ? `${sum.score}%`
-                            : "—"}
-                        </div>
-
-                        <div className="mt-1 text-xs text-slate-500">
-                          {r
-                            ? r.confirmed
-                              ? "Revisión confirmada"
-                              : "Revisión cargada sin confirmar"
-                            : "Sin revisión cargada"}
-                        </div>
-
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
 
               </div>
@@ -963,8 +1397,6 @@ export default function CenterDetail() {
               <BarChart3 className="h-4 w-4" />
 
               El histórico muestra únicamente años hasta el año actual.
-              Las revisiones anteriores a 2024 también aparecerán
-              automáticamente cuando estén cargadas.
 
             </div>
 
@@ -973,7 +1405,6 @@ export default function CenterDetail() {
 
       </Card>
 
-      {/* REVISIÓN TÉCNICO-LEGAL */}
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -986,7 +1417,9 @@ export default function CenterDetail() {
           <SectionToggle
             open={openReview}
             onClick={() =>
-              setOpenReview(v => !v)
+              setOpenReview(
+                v => !v
+              )
             }
           />
 
@@ -1011,7 +1444,9 @@ export default function CenterDetail() {
               <Select
                 value={period}
                 onChange={v =>
-                  setPeriod(v as Period)
+                  setPeriod(
+                    v as Period
+                  )
                 }
               >
                 <option value="S1">
@@ -1026,7 +1461,9 @@ export default function CenterDetail() {
               {admin && (
                 <Button
                   variant="secondary"
-                  onClick={resetPeriod}
+                  onClick={
+                    resetPeriod
+                  }
                 >
                   <RotateCcw className="mr-2 inline h-4 w-4" />
                   Reiniciar demo
@@ -1038,7 +1475,6 @@ export default function CenterDetail() {
             <div className="mt-5 grid gap-4 md:grid-cols-4">
 
               <div className="rounded-xl bg-slate-50 p-4">
-
                 <div className="text-xs text-slate-400">
                   Estado
                 </div>
@@ -1048,11 +1484,9 @@ export default function CenterDetail() {
                     ? "CONFIRMADA"
                     : "EN CURSO"}
                 </div>
-
               </div>
 
               <div className="rounded-xl bg-slate-50 p-4">
-
                 <div className="text-xs text-slate-400">
                   Elementos
                 </div>
@@ -1061,11 +1495,9 @@ export default function CenterDetail() {
                   {summary.confirmed}/
                   {summary.total}
                 </div>
-
               </div>
 
               <div className="rounded-xl bg-amber-50 p-4">
-
                 <div className="text-xs text-amber-700">
                   Pendientes confirmar
                 </div>
@@ -1073,11 +1505,9 @@ export default function CenterDetail() {
                 <div className="mt-1 text-xl font-black text-amber-700">
                   {summary.pendingConfirmation}
                 </div>
-
               </div>
 
               <div className="rounded-xl bg-emerald-50 p-4">
-
                 <div className="text-xs text-emerald-700">
                   Cumplimiento
                 </div>
@@ -1085,7 +1515,6 @@ export default function CenterDetail() {
                 <div className="mt-1 text-xl font-black text-emerald-700">
                   {summary.score}%
                 </div>
-
               </div>
 
             </div>
@@ -1097,7 +1526,9 @@ export default function CenterDetail() {
                   key={s}
                   className="rounded-full border border-slate-200 px-3 py-1"
                 >
-                  <b>{summary.counts[s]}</b>{" "}
+                  <b>
+                    {summary.counts[s]}
+                  </b>{" "}
                   {s}
                 </span>
               ))}
@@ -1122,12 +1553,15 @@ export default function CenterDetail() {
 
                   </div>
 
-                  <Button onClick={confirmReview}>
-
+                  <Button
+                    onClick={
+                      confirmReview
+                    }
+                  >
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
 
-                    Confirmar {period} {year}
-
+                    Confirmar {period}{" "}
+                    {year}
                   </Button>
 
                 </div>
@@ -1139,13 +1573,17 @@ export default function CenterDetail() {
                 <div>
 
                   <div className="font-bold text-emerald-800">
-                    Revisión {period} {year} confirmada
+                    Revisión {period}{" "}
+                    {year} confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
 
                     Administrador:{" "}
-                    {review.confirmedBy} ·{" "}
+                    {
+                      review.confirmedBy
+                    }{" "}
+                    ·{" "}
 
                     {review.confirmedAt
                       ? new Date(
@@ -1163,7 +1601,6 @@ export default function CenterDetail() {
                   href={`/centers/${center.id}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
-
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
 
                   Ver / exportar certificado
@@ -1181,7 +1618,8 @@ export default function CenterDetail() {
 
               <div className="mt-2 space-y-2">
 
-                {(review.participants || []).map(
+                {(review.participants ||
+                  []).map(
                   (p, i) => (
                     <div
                       key={i}
@@ -1189,7 +1627,8 @@ export default function CenterDetail() {
                     >
 
                       <span>
-                        {p.name} · {p.role}
+                        {p.name} ·{" "}
+                        {p.role}
                       </span>
 
                       {p.signed ? (
@@ -1202,14 +1641,20 @@ export default function CenterDetail() {
                           variant="secondary"
                           onClick={() => {
 
-                            const participants = [
-                              ...(review.participants ||
-                                []),
-                            ];
+                            const participants =
+                              [
+                                ...(review.participants ||
+                                  []),
+                              ];
 
-                            participants[i] = {
-                              ...participants[i],
-                              signed: true,
+                            participants[
+                              i
+                            ] = {
+                              ...participants[
+                                i
+                              ],
+                              signed:
+                                true,
                             };
 
                             updateState({
@@ -1244,7 +1689,9 @@ export default function CenterDetail() {
                   <div className="mt-3 flex gap-2">
 
                     <input
-                      value={participant}
+                      value={
+                        participant
+                      }
                       onChange={e =>
                         setParticipant(
                           e.target.value
@@ -1264,19 +1711,22 @@ export default function CenterDetail() {
                           return;
                         }
 
-                        const nextReview = {
-                          ...review,
-                          participants: [
-                            ...(review.participants ||
-                              []),
-                            {
-                              name:
-                                participant.trim(),
-                              role: "OTRO",
-                              signed: false,
-                            },
-                          ],
-                        };
+                        const nextReview =
+                          {
+                            ...review,
+                            participants:
+                              [
+                                ...(review.participants ||
+                                  []),
+                                {
+                                  name:
+                                    participant.trim(),
+                                  role: "OTRO",
+                                  signed:
+                                    false,
+                                },
+                              ],
+                          };
 
                         updateState({
                           ...state,
@@ -1303,7 +1753,6 @@ export default function CenterDetail() {
 
       </Card>
 
-      {/* INSTALACIONES Y ACTUACIONES */}
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -1314,9 +1763,13 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={openInstallations}
+            open={
+              openInstallations
+            }
             onClick={() =>
-              setOpenInstallations(v => !v)
+              setOpenInstallations(
+                v => !v
+              )
             }
           />
 
@@ -1325,16 +1778,51 @@ export default function CenterDetail() {
         {openInstallations && (
           <>
 
-            <div className="mb-4 mt-5 flex flex-col gap-3 lg:flex-row">
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
 
-              <div className="relative flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <ClipboardCheck className="h-4 w-4" />
+                  Leyenda de resultados
+                </div>
+
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  FAVORABLE
+                </span>
+
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                  CONDICIONADO
+                </span>
+
+                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                  DESFAVORABLE
+                </span>
+
+                <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                  PTE.
+                </span>
+
+                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  ERROR
+                </span>
+
+              </div>
+
+            </div>
+
+            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
+
+              <div className="relative min-w-0 flex-1">
 
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                 <input
                   value={q}
                   onChange={e =>
-                    setQ(e.target.value)
+                    setQ(
+                      e.target.value
+                    )
                   }
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
@@ -1343,291 +1831,721 @@ export default function CenterDetail() {
               </div>
 
               <Select
-                value={category}
-                onChange={setCategory}
+                value={
+                  category
+                }
+                onChange={
+                  setCategory
+                }
               >
-                {categories.map(c => (
-                  <option key={c}>
-                    {c}
-                  </option>
-                ))}
+                {categories.map(
+                  c => (
+                    <option
+                      key={c}
+                    >
+                      {c}
+                    </option>
+                  )
+                )}
               </Select>
 
             </div>
 
-            <div className="table-wrap">
+            <div className="rounded-2xl border border-slate-200">
 
-              <table className="table">
+              <div className="overflow-x-auto">
 
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Instalación</th>
-                    <th>Actuación</th>
-                    <th>Frecuencia</th>
-                    <th>Estado revisión</th>
-                    <th>Fecha</th>
-                    <th>Empresa</th>
-                    <th>Confirmación</th>
-                    <th></th>
-                  </tr>
-                </thead>
+                <table className="min-w-[1800px] w-full text-sm">
 
-                <tbody>
+                  <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
 
-                  {visible.map((x: any) => {
+                    <tr>
 
-                    const item =
-                      getItem(x.id);
+                      <th className="w-24 px-3 py-3">
+                        Código
+                      </th>
 
-                    const locked =
-                      readOnly ||
-                      review.confirmed ||
-                      item.confirmed;
+                      <th className="w-16 px-2 py-3 text-center">
+                        Tipo
+                      </th>
 
-                    return (
-                      <tr
-                        key={x.id}
-                        className={
-                          item.confirmed
-                            ? "bg-emerald-50/40"
-                            : item.status ===
-                              "NO APTO"
-                            ? "bg-red-50/40"
-                            : item.status ===
-                              "APTO CONDICIONADO"
-                            ? "bg-amber-50/40"
-                            : ""
-                        }
-                      >
+                      <th className="min-w-[180px] px-3 py-3">
+                        Instalación
+                      </th>
 
-                        <td className="font-mono text-xs">
-                          {x.code}
-                        </td>
+                      <th className="min-w-[180px] px-3 py-3">
+                        Actuación
+                      </th>
 
-                        <td className="font-semibold">
-                          {x.installation}
-                        </td>
+                      <th className="w-28 px-3 py-3">
+                        Frecuencia
+                      </th>
 
-                        <td>
-                          {x.action}
-                        </td>
+                      <th className="w-36 px-3 py-3">
+                        ID equipo
+                      </th>
 
-                        <td>
-                          {x.frequency}
-                        </td>
+                      <th className="w-40 px-3 py-3">
+                        Empresa
+                      </th>
 
-                        <td>
+                      <th className="w-48 px-3 py-3">
+                        Estado revisión
+                      </th>
 
-                          <Select
-                            value={
-                              item.status
-                            }
-                            onChange={v =>
-                              updateItem(
-                                x.id,
-                                {
-                                  status:
-                                    v as V1Status,
-                                }
-                              )
-                            }
+                      <th className="w-36 px-3 py-3">
+                        Fecha
+                      </th>
+
+                      <th className="w-36 px-3 py-3">
+                        Próxima revisión
+                      </th>
+
+                      <th className="w-40 px-3 py-3">
+                        Resultado
+                      </th>
+
+                      <th className="min-w-[220px] px-3 py-3">
+                        Comentario
+                      </th>
+
+                      <th className="w-36 px-3 py-3">
+                        2ª revisión
+                      </th>
+
+                      <th className="w-32 px-3 py-3">
+                        Confirmación
+                      </th>
+
+                      <th className="w-12 px-3 py-3" />
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    {visible.map(
+                      (x: any) => {
+
+                        const item =
+                          getItem(x.id);
+
+                        const locked =
+                          readOnly ||
+                          review.confirmed ||
+                          item.confirmed;
+
+                        const visual =
+                          getInstallationVisual(
+                            x.installation,
+                            x.category
+                          );
+
+                        const nextDate =
+                          calculateNextReview(
+                            item.date,
+                            x.frequency
+                          );
+
+                        const result =
+                          calculateResult(
+                            item.status,
+                            item.date,
+                            item.secondReviewDate
+                          );
+
+                        const resultVisual =
+                          getResultVisual(
+                            result
+                          );
+
+                        const Icon =
+                          visual.Icon;
+
+                        return (
+                          <tr
+                            key={x.id}
+                            className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
-                            {STATUSES.map(
-                              s => (
-                                <option
-                                  key={s}
+                            <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
+                              {x.code}
+                            </td>
+
+                            <td className="px-2 py-3 align-top">
+
+                              <div
+                                className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                                title={
+                                  x.category ||
+                                  x.installation
+                                }
+                              >
+                                <Icon
+                                  className={`h-4 w-4 ${visual.icon}`}
+                                />
+                              </div>
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <div className="font-semibold text-slate-800">
+                                {
+                                  x.installation
+                                }
+                              </div>
+
+                              {x.category && (
+                                <div className="mt-1 text-xs text-slate-400">
+                                  {
+                                    x.category
+                                  }
+                                </div>
+                              )}
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top text-slate-600">
+                              {x.action}
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                                <CalendarDays className="h-3 w-3" />
+                                {
+                                  x.frequency ||
+                                  "—"
+                                }
+                              </span>
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <input
+                                disabled={
+                                  locked
+                                }
+                                value={
+                                  item.equipmentId
+                                }
+                                onChange={e =>
+                                  updateItem(
+                                    x.id,
+                                    {
+                                      equipmentId:
+                                        e.target.value,
+                                    }
+                                  )
+                                }
+                                placeholder="ID equipo"
+                                className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                              />
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <input
+                                disabled={
+                                  locked
+                                }
+                                value={
+                                  item.company
+                                }
+                                onChange={e =>
+                                  updateItem(
+                                    x.id,
+                                    {
+                                      company:
+                                        e.target.value,
+                                    }
+                                  )
+                                }
+                                placeholder="Empresa"
+                                className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                              />
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <Select
+                                value={
+                                  item.status
+                                }
+                                onChange={v =>
+                                  updateItem(
+                                    x.id,
+                                    {
+                                      status:
+                                        v as V1Status,
+                                    }
+                                  )
+                                }
+                                disabled={
+                                  locked
+                                }
+                              >
+
+                                {STATUSES.map(
+                                  s => (
+                                    <option
+                                      key={s}
+                                    >
+                                      {s}
+                                    </option>
+                                  )
+                                )}
+
+                              </Select>
+
+                              <div
+                                className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getStatusClasses(item.status)}`}
+                              >
+                                {
+                                  item.status
+                                }
+                              </div>
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <input
+                                disabled={
+                                  locked
+                                }
+                                type="date"
+                                value={
+                                  item.date
+                                }
+                                onChange={e =>
+                                  updateItem(
+                                    x.id,
+                                    {
+                                      date:
+                                        e.target.value,
+                                    }
+                                  )
+                                }
+                                className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                              />
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <div className="flex items-center gap-2">
+
+                                <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+
+                                <div>
+
+                                  <div className="font-semibold text-slate-700">
+                                    {nextDate
+                                      ? formatDate(
+                                          nextDate
+                                        )
+                                      : "—"}
+                                  </div>
+
+                                  {nextDate && (
+                                    <div className="text-[10px] text-slate-400">
+                                      Calculada
+                                      automáticamente
+                                    </div>
+                                  )}
+
+                                </div>
+
+                              </div>
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <span
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${resultVisual.className}`}
+                              >
+
+                                <span
+                                  className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
+                                />
+
+                                {result}
+
+                              </span>
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              <textarea
+                                disabled={
+                                  locked
+                                }
+                                value={
+                                  item.comment
+                                }
+                                onChange={e =>
+                                  updateItem(
+                                    x.id,
+                                    {
+                                      comment:
+                                        e.target.value,
+                                    }
+                                  )
+                                }
+                                placeholder="Introducir comentario..."
+                                rows={2}
+                                className="w-52 resize-y rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                              />
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              {item.status ===
+                              "APTO CONDICIONADO" ? (
+                                <input
+                                  disabled={
+                                    locked
+                                  }
+                                  type="date"
+                                  value={
+                                    item.secondReviewDate
+                                  }
+                                  onChange={e =>
+                                    updateItem(
+                                      x.id,
+                                      {
+                                        secondReviewDate:
+                                          e.target.value,
+                                      }
+                                    )
+                                  }
+                                  className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                />
+                              ) : (
+                                <span className="text-xs text-slate-300">
+                                  No aplica
+                                </span>
+                              )}
+
+                            </td>
+
+                            <td className="px-3 py-3 align-top">
+
+                              {item.confirmed ? (
+                                <Badge tone="success">
+                                  Confirmado
+                                </Badge>
+                              ) : admin ? (
+                                <Button
+                                  variant="secondary"
+                                  onClick={() =>
+                                    confirmItem(
+                                      x.id
+                                    )
+                                  }
+                                  disabled={
+                                    review.confirmed
+                                  }
                                 >
-                                  {s}
-                                </option>
-                              )
-                            )}
+                                  <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                                  Confirmar
+                                </Button>
+                              ) : (
+                                <Badge tone="warning">
+                                  Pendiente
+                                </Badge>
+                              )}
 
-                          </Select>
+                            </td>
 
+                            <td className="px-3 py-3 align-top">
+
+                              {!readOnly &&
+                                !review.confirmed && (
+                                  <button
+                                    onClick={() =>
+                                      setActive(
+                                        x.id,
+                                        false
+                                      )
+                                    }
+                                    title="Eliminar del listado activo"
+                                    className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                )}
+
+                            </td>
+
+                          </tr>
+                        );
+                      }
+                    )}
+
+                    {visible.length ===
+                      0 && (
+                      <tr>
+                        <td
+                          colSpan={16}
+                          className="px-6 py-12 text-center text-sm text-slate-400"
+                        >
+                          No hay elementos que coincidan con la búsqueda.
                         </td>
-
-                        <td>
-
-                          <input
-                            disabled={locked}
-                            type="date"
-                            value={item.date}
-                            onChange={e =>
-                              updateItem(
-                                x.id,
-                                {
-                                  date:
-                                    e.target.value,
-                                }
-                              )
-                            }
-                            className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
-                          />
-
-                        </td>
-
-                        <td>
-
-                          <input
-                            disabled={locked}
-                            value={
-                              item.company
-                            }
-                            onChange={e =>
-                              updateItem(
-                                x.id,
-                                {
-                                  company:
-                                    e.target.value,
-                                }
-                              )
-                            }
-                            placeholder="Empresa"
-                            className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
-                          />
-
-                        </td>
-
-                        <td>
-
-                          {item.confirmed ? (
-                            <Badge tone="success">
-                              Confirmado
-                            </Badge>
-                          ) : admin ? (
-                            <Button
-                              variant="secondary"
-                              onClick={() =>
-                                confirmItem(
-                                  x.id
-                                )
-                              }
-                            >
-
-                              <CheckCircle2 className="mr-1 inline h-3 w-3" />
-
-                              Confirmar
-
-                            </Button>
-                          ) : (
-                            <Badge tone="warning">
-                              Pendiente
-                            </Badge>
-                          )}
-
-                        </td>
-
-                        <td>
-
-                          {!readOnly && (
-                            <button
-                              onClick={() =>
-                                setActive(
-                                  x.id,
-                                  false
-                                )
-                              }
-                              title="Eliminar del listado activo"
-                              className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                            >
-
-                              <X className="h-4 w-4" />
-
-                            </button>
-                          )}
-
-                        </td>
-
                       </tr>
-                    );
-                  })}
+                    )}
 
-                </tbody>
+                  </tbody>
 
-              </table>
+                </table>
+
+              </div>
 
             </div>
 
-            <div className="mt-6 rounded-xl border border-slate-200 p-5">
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
 
-              <SectionTitle
-                title="Elementos no activos"
-                subtitle="No computan, no generan vencimientos y conservan su histórico"
-                action={
-                  !readOnly ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
-                        if (
-                          inactiveItems[0]
-                        ) {
-                          setActive(
-                            inactiveItems[0].id,
-                            true
+              <div>
+                La próxima revisión se calcula automáticamente utilizando la fecha de revisión y la periodicidad definida para la instalación. El resultado mantiene la lógica de estados de la fórmula proporcionada para España.
+              </div>
+
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-slate-200 p-5">
+
+              <div className="flex items-center justify-between gap-4">
+
+                <SectionTitle
+                  title="Elementos no activos"
+                  subtitle="No computan, no generan vencimientos y conservan su histórico"
+                  action={
+                    !readOnly ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          setShowAddElement(
+                            v => !v
+                          )
+                        }
+                      >
+                        <Plus className="mr-2 inline h-4 w-4" />
+
+                        Añadir elemento
+
+                      </Button>
+                    ) : undefined
+                  }
+                />
+
+              </div>
+
+              {showAddElement &&
+                !readOnly && (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+                    <div className="mb-3 text-sm font-bold">
+                      Seleccionar elemento del catálogo
+                    </div>
+
+                    <div className="relative mb-3">
+
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+
+                      <input
+                        value={
+                          addElementSearch
+                        }
+                        onChange={e =>
+                          setAddElementSearch(
+                            e.target.value
+                          )
+                        }
+                        placeholder="Buscar cualquier elemento..."
+                        className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
+                      />
+
+                    </div>
+
+                    <div className="max-h-80 space-y-2 overflow-y-auto">
+
+                      {selectableItems.map(
+                        (x: any) => {
+
+                          const isActive =
+                            activeMap[
+                              x.id
+                            ] !== false;
+
+                          const visual =
+                            getInstallationVisual(
+                              x.installation,
+                              x.category
+                            );
+
+                          const Icon =
+                            visual.Icon;
+
+                          return (
+                            <div
+                              key={x.id}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
+                            >
+
+                              <div className="flex min-w-0 items-center gap-3">
+
+                                <div
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                                >
+                                  <Icon
+                                    className={`h-4 w-4 ${visual.icon}`}
+                                  />
+                                </div>
+
+                                <div className="min-w-0">
+
+                                  <div className="truncate text-sm font-semibold">
+                                    {x.code} ·{" "}
+                                    {
+                                      x.installation
+                                    }
+                                  </div>
+
+                                  <div className="truncate text-xs text-slate-500">
+                                    {x.action} ·{" "}
+                                    {
+                                      x.frequency
+                                    }
+                                  </div>
+
+                                </div>
+
+                              </div>
+
+                              {isActive ? (
+                                <Badge>
+                                  Activo
+                                </Badge>
+                              ) : (
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setActive(
+                                      x.id,
+                                      true
+                                    );
+                                  }}
+                                >
+                                  Activar
+                                </Button>
+                              )}
+
+                            </div>
                           );
                         }
+                      )}
 
-                      }}
-                    >
+                    </div>
 
-                      <Plus className="mr-2 inline h-4 w-4" />
+                  </div>
+                )}
 
-                      Añadir elemento
+              <div className="mt-4">
 
-                    </Button>
-                  ) : undefined
-                }
-              />
+                {inactiveItems.length ===
+                0 ? (
+                  <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
+                    No hay elementos no activos actualmente.
+                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
+                  </div>
+                ) : (
 
-              {inactiveItems.length === 0 ? (
+                  <div className="grid gap-2 md:grid-cols-2">
 
-                <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                  No hay elementos no activos.
-                </div>
+                    {inactiveItems.map(
+                      (x: any) => {
 
-              ) : (
+                        const visual =
+                          getInstallationVisual(
+                            x.installation,
+                            x.category
+                          );
 
-                <div className="grid gap-2 md:grid-cols-2">
+                        const Icon =
+                          visual.Icon;
 
-                  {inactiveItems.map(
-                    (x: any) => (
-
-                      <div
-                        key={x.id}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
-                      >
-
-                        <div>
-                          <b>{x.code}</b> ·{" "}
-                          {x.installation} —{" "}
-                          {x.action}
-                        </div>
-
-                        {!readOnly && (
-                          <Button
-                            variant="secondary"
-                            onClick={() =>
-                              setActive(
-                                x.id,
-                                true
-                              )
-                            }
+                        return (
+                          <div
+                            key={x.id}
+                            className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
                           >
-                            Activar
-                          </Button>
-                        )}
 
-                      </div>
+                            <div className="flex min-w-0 items-center gap-3">
 
-                    )
-                  )}
+                              <div
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                              >
+                                <Icon
+                                  className={`h-4 w-4 ${visual.icon}`}
+                                />
+                              </div>
 
-                </div>
+                              <div className="min-w-0">
 
-              )}
+                                <div className="truncate">
+                                  <b>
+                                    {x.code}
+                                  </b>{" "}
+                                  ·{" "}
+                                  {
+                                    x.installation
+                                  }
+                                </div>
+
+                                <div className="truncate text-xs text-slate-500">
+                                  {
+                                    x.action
+                                  }
+                                </div>
+
+                              </div>
+
+                            </div>
+
+                            {!readOnly && (
+                              <Button
+                                variant="secondary"
+                                onClick={() =>
+                                  setActive(
+                                    x.id,
+                                    true
+                                  )
+                                }
+                              >
+                                Activar
+                              </Button>
+                            )}
+
+                          </div>
+                        );
+                      }
+                    )}
+
+                  </div>
+
+                )}
+
+              </div>
 
             </div>
 
