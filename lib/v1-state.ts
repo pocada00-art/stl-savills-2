@@ -20,6 +20,11 @@ export type ItemReview = {
   comment: string;
   secondReviewDate: string;
 
+  // Equivalentes a las columnas M, N y O del Excel
+  apto: boolean;
+  condicionado: boolean;
+  noApto: boolean;
+
   confirmed: boolean;
   confirmedAt?: string;
   confirmedBy?: string;
@@ -95,6 +100,10 @@ export function blankItem(): ItemReview {
     observations: "",
     comment: "",
     secondReviewDate: "",
+
+    apto: false,
+    condicionado: false,
+    noApto: false,
 
     confirmed: false,
   };
