@@ -1,5 +1,12 @@
 export type V1Role = "ADMIN" | "GESTOR" | "LECTURA";
-export type V1Status = "APTO" | "APTO CONDICIONADO" | "NO APTO" | "PENDIENTE" | "SIN INFORMACIÓN";
+
+export type V1Status =
+  | "APTO"
+  | "APTO CONDICIONADO"
+  | "NO APTO"
+  | "PENDIENTE"
+  | "SIN INFORMACIÓN";
+
 export type Period = "S1" | "S2";
 
 export type ItemReview = {
@@ -19,20 +26,32 @@ export type ReviewState = {
   confirmedAt?: string;
   confirmedBy?: string;
   items: Record<string, ItemReview>;
-  participants: { name: string; role: string; signed: boolean }[];
+  participants: {
+    name: string;
+    role: string;
+    signed: boolean;
+  }[];
 };
 
 export type CenterOverride = {
+  property?: string;
+
   address?: string;
   city?: string;
   province?: string;
+
   manager?: string;
   managerPhone?: string;
   managerEmail?: string;
+
   technicalResponsible?: string;
   technicalResponsiblePhone?: string;
   technicalResponsibleEmail?: string;
-  property?: string;
+
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+
   imageUrl?: string;
   logoUrl?: string;
 };
@@ -43,13 +62,21 @@ export type V1State = {
   role: V1Role;
   country?: V1Country;
   centerId?: string;
+
   centers: Record<string, CenterOverride>;
-  activeItems: Record<string, Record<string, boolean>>;
+
+  activeItems: Record<
+    string,
+    Record<string, boolean>
+  >;
+
   reviews: Record<string, ReviewState>;
 };
 
 export const STORAGE_KEY = "stl-savills-v1-state";
+
 export const CURRENT_YEAR = 2026;
+
 export const CURRENT_PERIOD: Period = "S2";
 
 export function blankItem(): ItemReview {
@@ -62,7 +89,11 @@ export function blankItem(): ItemReview {
   };
 }
 
-export function reviewKey(centerId: string, year: number, period: Period) {
+export function reviewKey(
+  centerId: string,
+  year: number,
+  period: Period
+) {
   return `${centerId}:${year}:${period}`;
 }
 
@@ -80,7 +111,10 @@ export function loadState(): V1State {
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+
+    if (raw) {
+      return JSON.parse(raw);
+    }
   } catch {}
 
   return {
@@ -95,7 +129,10 @@ export function loadState(): V1State {
 
 export function saveState(state: V1State) {
   if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(state)
+    );
   }
 }
 
@@ -118,16 +155,34 @@ export function reviewSummary(
   );
 
   const counts = {
-    "APTO": items.filter(i => i.status === "APTO").length,
-    "APTO CONDICIONADO": items.filter(i => i.status === "APTO CONDICIONADO").length,
-    "NO APTO": items.filter(i => i.status === "NO APTO").length,
-    "PENDIENTE": items.filter(i => i.status === "PENDIENTE").length,
-    "SIN INFORMACIÓN": items.filter(i => i.status === "SIN INFORMACIÓN").length,
+    "APTO": items.filter(
+      i => i.status === "APTO"
+    ).length,
+
+    "APTO CONDICIONADO": items.filter(
+      i => i.status === "APTO CONDICIONADO"
+    ).length,
+
+    "NO APTO": items.filter(
+      i => i.status === "NO APTO"
+    ).length,
+
+    "PENDIENTE": items.filter(
+      i => i.status === "PENDIENTE"
+    ).length,
+
+    "SIN INFORMACIÓN": items.filter(
+      i => i.status === "SIN INFORMACIÓN"
+    ).length,
   };
 
-  const confirmed = items.filter(i => i.confirmed).length;
+  const confirmed = items.filter(
+    i => i.confirmed
+  ).length;
+
   const points = items.reduce(
-    (sum, i) => sum + scoreForV1Status(i.status),
+    (sum, i) =>
+      sum + scoreForV1Status(i.status),
     0
   );
 
@@ -137,9 +192,12 @@ export function reviewSummary(
     counts,
     confirmed,
     total: items.length,
-    pendingConfirmation: items.length - confirmed,
+    pendingConfirmation:
+      items.length - confirmed,
     points,
     max,
-    score: max ? Math.round((points / max) * 100) : 0,
+    score: max
+      ? Math.round((points / max) * 100)
+      : 0,
   };
 }
