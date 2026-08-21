@@ -2071,41 +2071,28 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <Select
-                                value={
-                                  item.status
-                                }
-                                onChange={v =>
-                                  updateItem(
-                                    x.id,
-                                    {
-                                      status:
-                                        v as V1Status,
-                                    }
-                                  )
-                                }
-                                disabled={
-                                  locked
-                                }
+                                value={item.status}
+                                onChange={v => {
+                                  if (locked) return;
+
+                                  updateItem(x.id, {
+                                    status: v as V1Status,
+                                  });
+                                }}
                               >
-
-                                {STATUSES.map(
-                                  s => (
-                                    <option
-                                      key={s}
-                                    >
-                                      {s}
-                                    </option>
-                                  )
-                                )}
-
+                                {STATUSES.map(s => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
                               </Select>
 
                               <div
-                                className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getStatusClasses(item.status)}`}
-                              >
-                                {
+                                className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getStatusClasses(
                                   item.status
-                                }
+                                )}`}
+                              >
+                                {item.status}
                               </div>
 
                             </td>
