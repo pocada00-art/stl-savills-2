@@ -13,7 +13,13 @@ export type ItemReview = {
   status: V1Status;
   date: string;
   company: string;
+
+  // Datos adicionales de la revisión
+  equipmentId: string;
   observations: string;
+  comment: string;
+  secondReviewDate: string;
+
   confirmed: boolean;
   confirmedAt?: string;
   confirmedBy?: string;
@@ -84,7 +90,12 @@ export function blankItem(): ItemReview {
     status: "SIN INFORMACIÓN",
     date: "",
     company: "",
+
+    equipmentId: "",
     observations: "",
+    comment: "",
+    secondReviewDate: "",
+
     confirmed: false,
   };
 }
