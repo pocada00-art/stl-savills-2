@@ -77,10 +77,6 @@ type IconComponent = React.ComponentType<{
   className?: string;
 }>;
 
-/* =========================================================
-   ICONOS
-========================================================= */
-
 function getInstallationVisual(
   installation = "",
   category = ""
@@ -172,10 +168,6 @@ function getInstallationVisual(
   };
 }
 
-/* =========================================================
-   ESTADOS
-========================================================= */
-
 function getStatusClasses(status: V1Status) {
   switch (status) {
     case "APTO":
@@ -241,46 +233,18 @@ function getResultVisual(result: string) {
   }
 }
 
-/* =========================================================
-   FRECUENCIAS
-========================================================= */
-
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
-    .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
 
-  if (!value) {
-    return null;
-  }
-
-  if (value.includes("mensual")) {
-    return { months: 1 };
-  }
-
-  if (value.includes("bimensual")) {
-    return { months: 2 };
-  }
-
-  if (value.includes("trimestral")) {
-    return { months: 3 };
-  }
-
-  if (value.includes("cuatrimestral")) {
-    return { months: 4 };
-  }
-
-  if (value.includes("semestral")) {
-    return { months: 6 };
-  }
-
-  if (value.includes("anual")) {
-    return { months: 12 };
-  }
-
-  if (value.includes("bienal")) {
-    return { months: 24 };
-  }
+  if (value.includes("mensual")) return { months: 1 };
+  if (value.includes("bimensual")) return { months: 2 };
+  if (value.includes("trimestral")) return { months: 3 };
+  if (value.includes("cuatrimestral")) return { months: 4 };
+  if (value.includes("semestral")) return { months: 6 };
+  if (value.includes("anual")) return { months: 12 };
+  if (value.includes("bienal")) return { months: 24 };
 
   const numeric = value.match(
     /(\d+)\s*(mes|meses|año|años)/
@@ -289,26 +253,70 @@ function parseFrequency(frequency: string) {
   if (numeric) {
     const amount = Number(numeric[1]);
 
-    if (
-      value.includes("año") ||
-      value.includes("años")
-    ) {
-      return {
-        months: amount * 12,
-      };
+    if (value.includes("año")) {
+      return { months: amount * 12 };
     }
 
-    return {
-      months: amount,
-    };
+    return { months: amount };
   }
 
   return null;
 }
 
-/* =========================================================
-   FECHA / FESTIVOS
-========================================================= */
+/**
+ * Festivos nacionales.
+ *
+ * Se incluyen los festivos nacionales fijos y los festivos
+ * nacionales móviles principales de España y Portugal.
+ *
+ * El cálculo se realiza con la fecha local, sin depender de
+ * UTC, para evitar desplazamientos de día.
+ */
+function getEasterSunday(year: number) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h =
+    (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l =
+    (32 + 2 * e + 2 * i - h - k) % 7;
+  const m =
+    Math.floor(
+      (a + 11 * h + 22 * l) / 451
+    );
+
+  const month = Math.floor(
+    (h + l - 7 * m + 114) / 31
+  );
+
+  const day =
+    ((h + l - 7 * m + 114) % 31) + 1;
+
+  return new Date(
+    year,
+    month - 1,
+    day
+  );
+}
+
+function addDays(
+  date: Date,
+  amount: number
+) {
+  const result = new Date(date);
+
+  result.setDate(
+    result.getDate() + amount
+  );
+
+  return result;
+}
 
 function dateToKey(date: Date) {
   const year = date.getFullYear();
@@ -322,206 +330,90 @@ function dateToKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function parseLocalDate(value: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parts = value.split("-");
-
-  if (parts.length !== 3) {
-    return null;
-  }
-
-  const year = Number(parts[0]);
-  const month = Number(parts[1]);
-  const day = Number(parts[2]);
-
-  if (
-    !Number.isFinite(year) ||
-    !Number.isFinite(month) ||
-    !Number.isFinite(day)
-  ) {
-    return null;
-  }
-
-  const date = new Date(
-    year,
-    month - 1,
-    day
-  );
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-
-  date.setHours(0, 0, 0, 0);
-
-  return date;
-}
-
-function formatDate(value: string) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = parseLocalDate(value);
-
-  if (!date) {
-    return "—";
-  }
-
-  return date.toLocaleDateString(
-    "es-ES"
-  );
-}
-
-/*
- * Cálculo de Pascua mediante el algoritmo
- * de Meeus/Jones/Butcher.
- */
-function calculateEaster(year: number) {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor(
-    (b + 8) / 25
-  );
-  const g = Math.floor(
-    (b - f + 1) / 3
-  );
-  const h =
-    (19 * a +
-      b -
-      d -
-      g +
-      15) %
-    30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l =
-    (32 +
-      2 * e +
-      2 * i -
-      h -
-      k) %
-    7;
-  const m = Math.floor(
-    (a + 11 * h + 22 * l) / 451
-  );
-
-  const month = Math.floor(
-    (h + l - 7 * m + 114) / 31
-  );
-
-  const day =
-    ((h + l - 7 * m + 114) % 31) +
-    1;
-
-  return new Date(
-    year,
-    month - 1,
-    day
-  );
-}
-
-function addDays(
-  date: Date,
-  days: number
-) {
-  const result = new Date(date);
-  result.setDate(
-    result.getDate() + days
-  );
-  result.setHours(0, 0, 0, 0);
-
-  return result;
-}
-
-/*
- * Festivos nacionales.
- *
- * Se consideran únicamente festivos nacionales,
- * no festivos autonómicos, regionales o locales.
- */
 function getNationalHolidays(
   year: number,
   country: string
 ) {
   const holidays = new Set<string>();
 
-  const addHoliday = (
-    month: number,
-    day: number
-  ) => {
-    holidays.add(
-      dateToKey(
-        new Date(year, month - 1, day)
-      )
-    );
-  };
-
-  const easter =
-    calculateEaster(year);
-
   if (country === "España") {
-    /*
-     * Festivos nacionales de España.
-     */
-    addHoliday(1, 1);   // Año Nuevo
-    addHoliday(1, 6);   // Epifanía
-    addHoliday(5, 1);   // Fiesta del Trabajo
-    addHoliday(8, 15);  // Asunción
-    addHoliday(10, 12); // Fiesta Nacional
-    addHoliday(11, 1);  // Todos los Santos
-    addHoliday(12, 6);  // Constitución
-    addHoliday(12, 8);  // Inmaculada
-    addHoliday(12, 25); // Navidad
+    [
+      [1, 1],
+      [1, 6],
+      [5, 1],
+      [8, 15],
+      [10, 12],
+      [11, 1],
+      [12, 6],
+      [12, 8],
+      [12, 25],
+    ].forEach(([month, day]) => {
+      holidays.add(
+        dateToKey(
+          new Date(
+            year,
+            month - 1,
+            day
+          )
+        )
+      );
+    });
 
-    /*
-     * Viernes Santo.
-     */
+    const easter =
+      getEasterSunday(year);
+
     holidays.add(
       dateToKey(
         addDays(easter, -2)
+      )
+    );
+
+    holidays.add(
+      dateToKey(
+        addDays(easter, 39)
       )
     );
   }
 
   if (country === "Portugal") {
-    /*
-     * Festivos nacionales de Portugal.
-     */
-    addHoliday(1, 1);   // Ano Novo
-    addHoliday(4, 25);  // Dia da Liberdade
-    addHoliday(5, 1);   // Dia do Trabalhador
-    addHoliday(6, 10);  // Dia de Portugal
-    addHoliday(8, 15);  // Assunção
-    addHoliday(10, 5);  // Implantação da República
-    addHoliday(11, 1);  // Todos os Santos
-    addHoliday(12, 1);  // Restauração da Independência
-    addHoliday(12, 8);  // Imaculada Conceição
-    addHoliday(12, 25); // Natal
+    [
+      [1, 1],
+      [4, 25],
+      [5, 1],
+      [6, 10],
+      [8, 15],
+      [10, 5],
+      [11, 1],
+      [12, 1],
+      [12, 8],
+      [12, 25],
+    ].forEach(([month, day]) => {
+      holidays.add(
+        dateToKey(
+          new Date(
+            year,
+            month - 1,
+            day
+          )
+        )
+      );
+    });
 
-    /*
-     * Sexta-feira Santa.
-     */
+    const easter =
+      getEasterSunday(year);
+
+    holidays.add(
+      dateToKey(
+        addDays(easter, -47)
+      )
+    );
+
     holidays.add(
       dateToKey(
         addDays(easter, -2)
       )
     );
 
-    /*
-     * Corpo de Deus:
-     * 60 días después de Pascua.
-     */
     holidays.add(
       dateToKey(
         addDays(easter, 60)
@@ -532,22 +424,18 @@ function getNationalHolidays(
   return holidays;
 }
 
-function isNonWorkingDay(
+function isWorkingDay(
   date: Date,
   country: string
 ) {
   const day =
     date.getDay();
 
-  /*
-   * 0 = domingo
-   * 6 = sábado
-   */
   if (
     day === 0 ||
     day === 6
   ) {
-    return true;
+    return false;
   }
 
   const holidays =
@@ -556,147 +444,220 @@ function isNonWorkingDay(
       country
     );
 
-  return holidays.has(
+  return !holidays.has(
     dateToKey(date)
   );
 }
 
-/*
- * Si la fecha calculada cae en sábado,
- * domingo o festivo, retrocede hasta
- * encontrar el primer día laborable.
- */
 function moveToPreviousWorkingDay(
   date: Date,
   country: string
 ) {
-  let result = new Date(date);
-
-  result.setHours(0, 0, 0, 0);
+  const result = new Date(date);
 
   while (
-    isNonWorkingDay(
+    !isWorkingDay(
       result,
       country
     )
   ) {
-    result = addDays(
-      result,
-      -1
+    result.setDate(
+      result.getDate() - 1
     );
   }
 
   return result;
 }
 
-/*
- * Calcula:
- *
- * fecha de ejecución + frecuencia
- *
- * y posteriormente aplica la regla:
- *
- * sábado/domingo/festivo
- * -> día laborable anterior.
- */
 function calculateNextReview(
   date: string,
   frequency: string,
   country: string
 ) {
-  if (!date) {
+  if (!date) return "";
+
+  const parsed =
+    parseFrequency(frequency);
+
+  if (!parsed) return "";
+
+  const parts =
+    date.split("-");
+
+  if (parts.length !== 3) {
     return "";
   }
 
-  const parsedFrequency =
-    parseFrequency(
-      frequency
-    );
+  const year =
+    Number(parts[0]);
+  const month =
+    Number(parts[1]);
+  const day =
+    Number(parts[2]);
 
-  if (!parsedFrequency) {
-    return "";
-  }
-
-  const executionDate =
-    parseLocalDate(date);
-
-  if (!executionDate) {
-    return "";
-  }
-
-  const nextDate =
-    new Date(executionDate);
-
-  nextDate.setMonth(
-    nextDate.getMonth() +
-      parsedFrequency.months
+  const d = new Date(
+    year,
+    month - 1,
+    day
   );
 
-  nextDate.setHours(
-    0,
-    0,
-    0,
-    0
+  if (
+    Number.isNaN(d.getTime())
+  ) {
+    return "";
+  }
+
+  d.setMonth(
+    d.getMonth() +
+      parsed.months
   );
 
-  const workingDate =
+  const adjusted =
     moveToPreviousWorkingDay(
-      nextDate,
+      d,
       country
     );
 
   return dateToKey(
-    workingDate
+    adjusted
   );
 }
 
-/* =========================================================
-   RESULTADO
-========================================================= */
+function parseLocalDate(
+  value: string
+) {
+  if (!value) {
+    return null;
+  }
+
+  const parts =
+    value.split("-");
+
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const year =
+    Number(parts[0]);
+  const month =
+    Number(parts[1]);
+  const day =
+    Number(parts[2]);
+
+  const date = new Date(
+    year,
+    month - 1,
+    day
+  );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function getTodayLocal() {
+  const now =
+    new Date();
+
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+}
 
 function calculateResult(
   status: V1Status,
   date: string,
-  secondReviewDate: string,
-  nextReviewDate: string
+  nextReviewDate: string,
+  secondReviewDate: string
 ) {
   /*
-   * APTO / CONDICIONADO / NO APTO
-   * sin fecha de ejecución => ERROR.
+   * APTO / APTO CONDICIONADO / NO APTO sin fecha:
+   * ERROR
    */
   if (
+    !date &&
     (
       status === "APTO" ||
       status ===
         "APTO CONDICIONADO" ||
       status === "NO APTO"
-    ) &&
-    !date
+    )
   ) {
     return "ERROR";
   }
 
   /*
-   * Si no existe fecha todavía,
-   * no podemos calcular resultado.
+   * Estados que no requieren todavía una fecha
+   * de ejecución no generan error.
    */
   if (
-    status === "PENDIENTE" ||
-    status === "SIN INFORMACIÓN"
+    !date &&
+    (
+      status === "PENDIENTE" ||
+      status ===
+        "SIN INFORMACIÓN"
+    )
   ) {
     return "-";
   }
 
+  const today =
+    getTodayLocal();
+
+  /*
+   * APTO:
+   * La fecha de ejecución puede ser hoy
+   * o anterior. Nunca genera PTE por la
+   * antigüedad de esa fecha.
+   *
+   * Se comprueba exclusivamente la próxima
+   * revisión.
+   */
+  if (status === "APTO") {
+    if (!nextReviewDate) {
+      return "ERROR";
+    }
+
+    const nextDate =
+      parseLocalDate(
+        nextReviewDate
+      );
+
+    if (!nextDate) {
+      return "ERROR";
+    }
+
+    if (nextDate < today) {
+      return "PTE.";
+    }
+
+    return "FAVORABLE";
+  }
+
   /*
    * APTO CONDICIONADO:
+   * Debe existir fecha de primera revisión
+   * y fecha de segunda revisión.
    *
-   * La fecha que determina CONDICIONADO/PTE.
-   * es la fecha de la 2ª revisión.
+   * La segunda revisión es la que determina
+   * si el estado está condicionado o pendiente.
    */
   if (
     status ===
     "APTO CONDICIONADO"
   ) {
+    if (!nextReviewDate) {
+      return "ERROR";
+    }
+
     if (!secondReviewDate) {
       return "ERROR";
     }
@@ -710,96 +671,65 @@ function calculateResult(
       return "ERROR";
     }
 
-    /*
-     * La 2ª revisión debe ser posterior
-     * a la primera.
-     */
-    const firstDate =
-      parseLocalDate(date);
-
-    if (
-      firstDate &&
-      secondDate <= firstDate
-    ) {
-      return "ERROR";
+    if (secondDate < today) {
+      return "PTE.";
     }
 
-    const today =
-      new Date();
-
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
-    if (
-      secondDate > today
-    ) {
-      return "CONDICIONADO";
-    }
-
-    return "PTE.";
+    return "CONDICIONADO";
   }
 
   /*
-   * APTO y NO APTO:
+   * NO APTO:
+   * Igual que APTO, la fecha de ejecución
+   * no determina PTE.
    *
-   * el resultado depende exclusivamente
-   * de la próxima revisión calculada.
+   * Se comprueba la próxima revisión.
    */
-  if (!nextReviewDate) {
-    return "ERROR";
-  }
-
-  const nextDate =
-    parseLocalDate(
-      nextReviewDate
-    );
-
-  if (!nextDate) {
-    return "ERROR";
-  }
-
-  const today =
-    new Date();
-
-  today.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  if (
-    nextDate > today
-  ) {
-    if (
-      status === "APTO"
-    ) {
-      return "FAVORABLE";
+  if (status === "NO APTO") {
+    if (!nextReviewDate) {
+      return "ERROR";
     }
 
-    if (
-      status === "NO APTO"
-    ) {
-      return "DESFAVORABLE";
+    const nextDate =
+      parseLocalDate(
+        nextReviewDate
+      );
+
+    if (!nextDate) {
+      return "ERROR";
     }
+
+    if (nextDate < today) {
+      return "PTE.";
+    }
+
+    return "DESFAVORABLE";
   }
 
-  return "PTE.";
+  return "-";
 }
 
-/* =========================================================
-   COMPONENTE
-========================================================= */
+function formatDate(value: string) {
+  if (!value) return "—";
+
+  const d =
+    parseLocalDate(value);
+
+  if (!d) {
+    return "—";
+  }
+
+  return d.toLocaleDateString(
+    "es-ES"
+  );
+}
 
 export default function CenterDetail() {
-  const params = useParams();
-  const id = String(
-    params.id
-  );
+  const params =
+    useParams();
+
+  const id =
+    String(params.id);
 
   const center =
     demo.centers.find(
@@ -877,26 +807,22 @@ export default function CenterDetail() {
   ] = useState(true);
 
   useEffect(() => {
-    setState(
-      loadState()
-    );
+    setState(loadState());
   }, []);
 
   useEffect(() => {
-    const handler = () =>
-      setState(
-        loadState()
-      );
+    const h = () =>
+      setState(loadState());
 
     window.addEventListener(
       "stl-role-change",
-      handler
+      h
     );
 
     return () => {
       window.removeEventListener(
         "stl-role-change",
-        handler
+        h
       );
     };
   }, []);
@@ -918,44 +844,52 @@ export default function CenterDetail() {
     );
   }
 
+  /*
+   * A partir de aquí TypeScript sabe que
+   * currentCenter existe.
+   *
+   * Se utiliza esta referencia en todo el
+   * componente para evitar el error:
+   *
+   * "center is possibly undefined"
+   */
   const currentCenter =
     center;
 
   const catalog =
-    center.country ===
+    currentCenter.country ===
     "España"
       ? demo.esCatalog
       : demo.ptCatalog;
 
   const overrides =
     (state.centers[
-      center.id
+      currentCenter.id
     ] || {}) as CenterFormValues;
 
   const activeMap =
     state.activeItems[
-      center.id
+      currentCenter.id
     ] || {};
 
   const activeItems =
     catalog.filter(
       (x: any) =>
-        activeMap[x.id] !==
-        false
+        activeMap[x.id] !== false
     );
 
   const inactiveItems =
     catalog.filter(
       (x: any) =>
-        activeMap[x.id] ===
-        false
+        activeMap[x.id] === false
     );
 
-  const key = reviewKey(
-    center.id,
-    year,
-    period
-  );
+  const key =
+    reviewKey(
+      currentCenter.id,
+      year,
+      period
+    );
 
   const review =
     state.reviews[key] || {
@@ -970,8 +904,7 @@ export default function CenterDetail() {
     reviewSummary(
       review,
       activeItems.map(
-        (x: any) =>
-          x.id
+        (x: any) => x.id
       )
     );
 
@@ -989,9 +922,8 @@ export default function CenterDetail() {
     ),
   ];
 
-  const actions = [
-    "Todas",
-    ...Array.from(
+  const actionTypes =
+    Array.from(
       new Set(
         catalog
           .map(
@@ -1000,61 +932,62 @@ export default function CenterDetail() {
           )
           .filter(Boolean)
       )
-    ),
-  ];
+    ).sort();
 
   function getItem(
     itemId: string
   ) {
     return (
-      review.items[
-        itemId
-      ] ||
+      review.items[itemId] ||
       blankItem()
     );
   }
 
   /*
-   * IMPORTANTE:
-   * Aquí calculamos el resultado y la
-   * próxima revisión para cada elemento.
+   * Calculamos el resultado aquí también
+   * para poder utilizarlo en el filtro por
+   * resultado.
    */
-  function getCalculatedValues(
-    itemId: string,
-    x: any
+  function getCalculatedResult(
+    itemId: string
   ) {
     const item =
       getItem(itemId);
 
+    const catalogItem =
+      catalog.find(
+        (x: any) =>
+          x.id === itemId
+      ) as any;
+
+    if (!catalogItem) {
+      return "-";
+    }
+
     const nextReview =
       calculateNextReview(
         item.date,
-        x.frequency,
-        center.country
+        catalogItem.frequency,
+        currentCenter.country
       );
 
-    const result =
-      calculateResult(
-        item.status,
-        item.date,
-        item.secondReviewDate,
-        nextReview
-      );
-
-    return {
-      item,
+    return calculateResult(
+      item.status,
+      item.date,
       nextReview,
-      result,
-    };
+      item.secondReviewDate
+    );
   }
 
   const visible =
     activeItems.filter(
       (x: any) => {
-        const calculated =
-          getCalculatedValues(
-            x.id,
-            x
+        const item =
+          getItem(x.id);
+
+        const result =
+          getCalculatedResult(
+            x.id
           );
 
         const matchesCategory =
@@ -1069,24 +1002,24 @@ export default function CenterDetail() {
           x.action ===
             actionFilter;
 
+        const matchesResult =
+          resultFilter ===
+            "Todos" ||
+          result ===
+            resultFilter;
+
         const matchesSearch =
-          `${x.code} ${x.installation} ${x.action} ${x.category}`
+          `${x.code} ${x.installation} ${x.action} ${x.category} ${item.equipmentId} ${item.company}`
             .toLowerCase()
             .includes(
               q.toLowerCase()
             );
 
-        const matchesResult =
-          resultFilter ===
-            "Todos" ||
-          calculated.result ===
-            resultFilter;
-
         return (
           matchesCategory &&
           matchesAction &&
-          matchesSearch &&
-          matchesResult
+          matchesResult &&
+          matchesSearch
         );
       }
     );
@@ -1128,9 +1061,7 @@ export default function CenterDetail() {
 
           if (match) {
             const reviewYear =
-              Number(
-                match[1]
-              );
+              Number(match[1]);
 
             if (
               reviewYear <=
@@ -1162,12 +1093,9 @@ export default function CenterDetail() {
     saveState(next);
     setSaved(true);
 
-    window.setTimeout(
-      () => {
-        setSaved(false);
-      },
-      1500
-    );
+    setTimeout(() => {
+      setSaved(false);
+    }, 1500);
   }
 
   function updateCenter(
@@ -1190,7 +1118,7 @@ export default function CenterDetail() {
     itemId: string,
     active: boolean
   ) {
-    updateState({
+    const next = {
       ...state,
       activeItems: {
         ...state.activeItems,
@@ -1199,28 +1127,51 @@ export default function CenterDetail() {
           [itemId]: active,
         },
       },
-    });
+    };
+
+    updateState(next);
   }
 
   function updateItem(
     itemId: string,
     patch: Partial<
-      ReturnType<
-        typeof blankItem
-      >
+      ReturnType<typeof blankItem>
     >
   ) {
     const current =
       getItem(itemId);
 
+    /*
+     * Si se cambia a un estado distinto
+     * de APTO CONDICIONADO, eliminamos
+     * la segunda revisión para evitar
+     * datos residuales.
+     */
+    const nextItem = {
+      ...current,
+      ...patch,
+    };
+
+    if (
+      patch.status &&
+      patch.status !==
+        "APTO CONDICIONADO"
+    ) {
+      nextItem.secondReviewDate =
+        "";
+    }
+
+    /*
+     * Si cambia la fecha de ejecución,
+     * el resultado se recalcula automáticamente
+     * mediante el render.
+     */
     const nextReview = {
       ...review,
       items: {
         ...review.items,
-        [itemId]: {
-          ...current,
-          ...patch,
-        },
+        [itemId]:
+          nextItem,
       },
     };
 
@@ -1235,10 +1186,8 @@ export default function CenterDetail() {
 
   function confirmReview() {
     if (
-      state.role !==
-        "ADMIN" ||
-      summary.pendingConfirmation >
-        0
+      state.role !== "ADMIN" ||
+      summary.pendingConfirmation > 0
     ) {
       return;
     }
@@ -1252,26 +1201,20 @@ export default function CenterDetail() {
         "Administrador Demo",
       participants: [
         {
-          name:
-            "Gestor Demo",
+          name: "Gestor Demo",
           role: "GESTOR",
           signed: true,
         },
         {
-          name:
-            "Administrador Demo",
-          role:
-            "ADMINISTRADOR",
+          name: "Administrador Demo",
+          role: "ADMINISTRADOR",
           signed: true,
         },
-        ...(
-          review.participants ||
-          []
-        ).filter(
-          p =>
-            p.role ===
-            "OTRO"
-        ),
+        ...(review.participants ||
+          []).filter(
+            p =>
+              p.role === "OTRO"
+          ),
       ],
     };
 
@@ -1289,9 +1232,7 @@ export default function CenterDetail() {
       ...state,
     };
 
-    delete next.reviews[
-      key
-    ];
+    delete next.reviews[key];
 
     updateState(next);
   }
@@ -1314,20 +1255,16 @@ export default function CenterDetail() {
       );
     };
 
-    reader.readAsDataURL(
-      file
-    );
+    reader.readAsDataURL(file);
   }
 
   const readOnly =
-    state.role ===
-      "LECTURA" ||
-    center.status !==
+    state.role === "LECTURA" ||
+    currentCenter.status !==
       "Activo";
 
   const admin =
-    state.role ===
-    "ADMIN";
+    state.role === "ADMIN";
 
   function SectionToggle({
     open,
@@ -1378,6 +1315,7 @@ export default function CenterDetail() {
           <div className="flex items-center gap-5 p-6">
 
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
+
               {overrides.logoUrl ? (
                 <img
                   src={
@@ -1388,53 +1326,62 @@ export default function CenterDetail() {
                 />
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
-                  {center.shortCode ||
-                    center.code}
+                  {currentCenter.shortCode ||
+                    currentCenter.code}
                 </span>
               )}
+
             </div>
 
             <div>
+
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {center.country} ·{" "}
-                {center.stl}
+                {currentCenter.country} ·{" "}
+                {currentCenter.stl}
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
-                {center.name}
+                {currentCenter.name}
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
                 {overrides.address ||
-                  center.address ||
+                  currentCenter.address ||
                   "Dirección pendiente"}
               </p>
 
               <div className="mt-3 flex gap-2">
+
                 <Badge tone="success">
-                  {center.status}
+                  {currentCenter.status}
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Código{" "}
-                  {center.shortCode ||
+                  {currentCenter.shortCode ||
                     "—"}
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº {center.code}
+                  Nº {currentCenter.code}
                 </span>
+
               </div>
+
             </div>
+
           </div>
 
           <div className="flex items-center justify-center bg-white/5 p-4">
+
             {overrides.imageUrl ? (
               <img
                 src={
                   overrides.imageUrl
                 }
-                alt={center.name}
+                alt={
+                  currentCenter.name
+                }
                 className="h-32 w-full rounded-xl object-cover"
               />
             ) : (
@@ -1442,11 +1389,14 @@ export default function CenterDetail() {
                 Imagen del centro
               </div>
             )}
+
           </div>
+
         </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-5">
+
         {[
           [
             "Cumplimiento",
@@ -1472,29 +1422,22 @@ export default function CenterDetail() {
               "APTO CONDICIONADO"
             ],
           ],
-        ].map(
-          ([title, value]) => (
-            <Card
-              key={String(
-                title
-              )}
-              className="p-5"
-            >
-              <div className="text-2xl font-black">
-                {value}
-              </div>
+        ].map(([t, v]) => (
+          <Card
+            key={String(t)}
+            className="p-5"
+          >
+            <div className="text-2xl font-black">
+              {v}
+            </div>
 
-              <div className="mt-1 text-sm text-slate-500">
-                {title}
-              </div>
-            </Card>
-          )
-        )}
+            <div className="mt-1 text-sm text-slate-500">
+              {t}
+            </div>
+          </Card>
+        ))}
+
       </div>
-
-      {/* =====================================================
-          DATOS DEL CENTRO
-      ===================================================== */}
 
       <Card className="p-6">
 
@@ -1513,13 +1456,10 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openCenterData
-            }
+            open={openCenterData}
             onClick={() =>
               setOpenCenterData(
-                value =>
-                  !value
+                v => !v
               )
             }
           />
@@ -1537,12 +1477,10 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.property ??
-                    center.property ??
+                    currentCenter.property ??
                     ""
                   }
                   onChange={e =>
@@ -1561,12 +1499,10 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.address ??
-                    center.address ??
+                    currentCenter.address ??
                     ""
                   }
                   onChange={e =>
@@ -1585,9 +1521,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.city ??
                     ""
@@ -1608,9 +1542,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.province ??
                     ""
@@ -1631,12 +1563,10 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.manager ??
-                    center.manager ??
+                    currentCenter.manager ??
                     ""
                   }
                   onChange={e =>
@@ -1655,9 +1585,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.managerPhone ??
                     ""
@@ -1678,9 +1606,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   type="email"
                   value={
                     overrides.managerEmail ??
@@ -1704,9 +1630,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.technicalResponsible ??
                     ""
@@ -1727,9 +1651,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   value={
                     overrides.technicalResponsiblePhone ??
                     ""
@@ -1750,9 +1672,7 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={
-                    readOnly
-                  }
+                  disabled={readOnly}
                   type="email"
                   value={
                     overrides.technicalResponsibleEmail ??
@@ -1786,13 +1706,13 @@ export default function CenterDetail() {
                     accept="image/*"
                     className="hidden"
                     onChange={e => {
-                      const file =
+                      const f =
                         e.target.files?.[0];
 
-                      if (file) {
+                      if (f) {
                         uploadImage(
                           "logoUrl",
-                          file
+                          f
                         );
                       }
                     }}
@@ -1811,13 +1731,13 @@ export default function CenterDetail() {
                     accept="image/*"
                     className="hidden"
                     onChange={e => {
-                      const file =
+                      const f =
                         e.target.files?.[0];
 
-                      if (file) {
+                      if (f) {
                         uploadImage(
                           "imageUrl",
-                          file
+                          f
                         );
                       }
                     }}
@@ -1833,10 +1753,6 @@ export default function CenterDetail() {
 
       </Card>
 
-      {/* =====================================================
-          HISTÓRICO
-      ===================================================== */}
-
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -1847,13 +1763,10 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openHistory
-            }
+            open={openHistory}
             onClick={() =>
               setOpenHistory(
-                value =>
-                  !value
+                v => !v
               )
             }
           />
@@ -1863,8 +1776,7 @@ export default function CenterDetail() {
         {openHistory && (
           <>
 
-            {reviewYears.length ===
-            0 ? (
+            {reviewYears.length === 0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                 No hay revisiones históricas cargadas.
               </div>
@@ -1872,91 +1784,79 @@ export default function CenterDetail() {
               <div className="mt-5 grid gap-3 md:grid-cols-4">
 
                 {reviewYears.flatMap(
-                  historicalYear =>
+                  y =>
                     (
                       [
                         "S1",
                         "S2",
                       ] as Period[]
-                    ).map(
-                      historicalPeriod => {
+                    ).map(p => {
 
-                        const historicalReview =
-                          state.reviews[
-                            reviewKey(
-                              center.id,
-                              historicalYear,
-                              historicalPeriod
-                            )
-                          ];
+                      const r =
+                        state.reviews[
+                          reviewKey(
+                            currentCenter.id,
+                            y,
+                            p
+                          )
+                        ];
 
-                        const historicalActiveIds =
-                          catalog
-                            .filter(
-                              (x: any) =>
-                                activeMap[
-                                  x.id
-                                ] !==
-                                false
-                            )
-                            .map(
-                              (x: any) =>
+                      const historicalActiveIds =
+                        catalog
+                          .filter(
+                            (x: any) =>
+                              activeMap[
                                 x.id
-                            );
-
-                        const historicalSummary =
-                          reviewSummary(
-                            historicalReview,
-                            historicalActiveIds
+                              ] !== false
+                          )
+                          .map(
+                            (x: any) =>
+                              x.id
                           );
 
-                        return (
-                          <div
-                            key={`${historicalYear}-${historicalPeriod}`}
-                            className="rounded-xl border border-slate-200 p-4"
-                          >
+                      const sum =
+                        reviewSummary(
+                          r,
+                          historicalActiveIds
+                        );
 
-                            <div className="flex items-center justify-between">
+                      return (
+                        <div
+                          key={`${y}-${p}`}
+                          className="rounded-xl border border-slate-200 p-4"
+                        >
 
-                              <div className="text-xs font-semibold text-slate-400">
-                                {
-                                  historicalPeriod
-                                }{" "}
-                                {
-                                  historicalYear
-                                }
-                              </div>
+                          <div className="flex items-center justify-between">
 
-                              {historicalReview?.confirmed && (
-                                <Badge tone="success">
-                                  Confirmada
-                                </Badge>
-                              )}
-
+                            <div className="text-xs font-semibold text-slate-400">
+                              {p} {y}
                             </div>
 
-                            <div className="mt-2 text-xl font-black">
-                              {
-                                historicalReview
-                                  ? `${historicalSummary.score}%`
-                                  : "—"
-                              }
-                            </div>
-
-                            <div className="mt-1 text-xs text-slate-500">
-                              {
-                                historicalReview
-                                  ? historicalReview.confirmed
-                                    ? "Revisión confirmada"
-                                    : "Revisión cargada sin confirmar"
-                                  : "Sin revisión cargada"
-                              }
-                            </div>
+                            {r?.confirmed && (
+                              <Badge tone="success">
+                                Confirmada
+                              </Badge>
+                            )}
 
                           </div>
-                        );
-                      }
-                    )
+
+                          <div className="mt-2 text-xl font-black">
+                            {r
+                              ? `${sum.score}%`
+                              : "—"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-500">
+                            {r
+                              ? r.confirmed
+                                ? "Revisión confirmada"
+                                : "Revisión cargada sin confirmar"
+                              : "Sin revisión cargada"}
+                          </div>
+
+                        </div>
+                      );
+                    })
                 )}
 
               </div>
@@ -1975,10 +1875,6 @@ export default function CenterDetail() {
 
       </Card>
 
-      {/* =====================================================
-          REVISIÓN
-      ===================================================== */}
-
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -1989,13 +1885,10 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={
-              openReview
-            }
+            open={openReview}
             onClick={() =>
               setOpenReview(
-                value =>
-                  !value
+                v => !v
               )
             }
           />
@@ -2009,30 +1902,22 @@ export default function CenterDetail() {
 
               <Select
                 value={String(year)}
-                onChange={value =>
+                onChange={v =>
                   setYear(
-                    Number(value)
+                    Number(v)
                   )
                 }
               >
-                <option value="2026">
-                  2026
-                </option>
-
-                <option value="2027">
-                  2027
-                </option>
-
-                <option value="2028">
-                  2028
-                </option>
+                <option>2026</option>
+                <option>2027</option>
+                <option>2028</option>
               </Select>
 
               <Select
                 value={period}
-                onChange={value =>
+                onChange={v =>
                   setPeriod(
-                    value as Period
+                    v as Period
                   )
                 }
               >
@@ -2053,7 +1938,6 @@ export default function CenterDetail() {
                   }
                 >
                   <RotateCcw className="mr-2 inline h-4 w-4" />
-
                   Reiniciar demo
                 </Button>
               )}
@@ -2080,13 +1964,8 @@ export default function CenterDetail() {
                 </div>
 
                 <div className="mt-1 font-bold">
-                  {
-                    summary.confirmed
-                  }
-                  /
-                  {
-                    summary.total
-                  }
+                  {summary.confirmed}/
+                  {summary.total}
                 </div>
               </div>
 
@@ -2096,9 +1975,7 @@ export default function CenterDetail() {
                 </div>
 
                 <div className="mt-1 text-xl font-black text-amber-700">
-                  {
-                    summary.pendingConfirmation
-                  }
+                  {summary.pendingConfirmation}
                 </div>
               </div>
 
@@ -2108,9 +1985,7 @@ export default function CenterDetail() {
                 </div>
 
                 <div className="mt-1 text-xl font-black text-emerald-700">
-                  {
-                    summary.score
-                  }%
+                  {summary.score}%
                 </div>
               </div>
 
@@ -2118,31 +1993,22 @@ export default function CenterDetail() {
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
 
-              {STATUSES.map(
-                status => (
-                  <span
-                    key={status}
-                    className="rounded-full border border-slate-200 px-3 py-1"
-                  >
-                    <b>
-                      {
-                        summary
-                          .counts[
-                          status
-                        ]
-                      }
-                    </b>{" "}
-                    {status}
-                  </span>
-                )
-              )}
+              {STATUSES.map(s => (
+                <span
+                  key={s}
+                  className="rounded-full border border-slate-200 px-3 py-1"
+                >
+                  <b>
+                    {summary.counts[s]}
+                  </b>{" "}
+                  {s}
+                </span>
+              ))}
 
             </div>
 
-            {summary.pendingConfirmation ===
-              0 &&
-              summary.total >
-                0 &&
+            {summary.pendingConfirmation === 0 &&
+              summary.total > 0 &&
               !review.confirmed &&
               admin && (
                 <div className="mt-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
@@ -2166,8 +2032,7 @@ export default function CenterDetail() {
                   >
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
 
-                    Confirmar{" "}
-                    {period}{" "}
+                    Confirmar {period}{" "}
                     {year}
                   </Button>
 
@@ -2180,18 +2045,18 @@ export default function CenterDetail() {
                 <div>
 
                   <div className="font-bold text-emerald-800">
-                    Revisión{" "}
-                    {period}{" "}
-                    {year}{" "}
-                    confirmada
+                    Revisión {period}{" "}
+                    {year} confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
+
                     Administrador:{" "}
                     {
                       review.confirmedBy
                     }{" "}
                     ·{" "}
+
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
@@ -2199,17 +2064,19 @@ export default function CenterDetail() {
                           "es-ES"
                         )
                       : "—"}
+
                   </div>
 
                 </div>
 
                 <Link
-                  href={`/centers/${center.id}/certificate?year=${year}&period=${period}`}
+                  href={`/centers/${currentCenter.id}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
 
                   Ver / exportar certificado
+
                 </Link>
 
               </div>
@@ -2224,79 +2091,68 @@ export default function CenterDetail() {
               <div className="mt-2 space-y-2">
 
                 {(review.participants ||
-                  []
-                ).map(
-                  (
-                    participantItem,
-                    index
-                  ) => (
-                    <div
-                      key={
-                        index
-                      }
-                      className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
-                    >
+                  []).map(
+                    (p, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
+                      >
 
-                      <span>
-                        {
-                          participantItem.name
-                        }{" "}
-                        ·{" "}
-                        {
-                          participantItem.role
-                        }
-                      </span>
+                        <span>
+                          {p.name} ·{" "}
+                          {p.role}
+                        </span>
 
-                      {participantItem.signed ? (
-                        <Badge tone="success">
-                          Firmado
-                        </Badge>
-                      ) : admin &&
-                        !review.confirmed ? (
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
+                        {p.signed ? (
+                          <Badge tone="success">
+                            Firmado
+                          </Badge>
+                        ) : admin &&
+                          !review.confirmed ? (
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
 
-                            const participants =
-                              [
-                                ...(review.participants ||
-                                  []),
-                              ];
+                              const participants =
+                                [
+                                  ...(review.participants ||
+                                    []),
+                                ];
 
-                            participants[
-                              index
-                            ] = {
-                              ...participants[
-                                index
-                              ],
-                              signed:
-                                true,
-                            };
+                              participants[
+                                i
+                              ] = {
+                                ...participants[
+                                  i
+                                ],
+                                signed:
+                                  true,
+                              };
 
-                            updateState({
-                              ...state,
-                              reviews: {
-                                ...state.reviews,
-                                [key]: {
-                                  ...review,
-                                  participants,
+                              updateState({
+                                ...state,
+                                reviews: {
+                                  ...state.reviews,
+                                  [key]: {
+                                    ...review,
+                                    participants,
+                                  },
                                 },
-                              },
-                            });
+                              });
 
-                          }}
-                        >
-                          Firmar
-                        </Button>
-                      ) : (
-                        <Badge>
-                          Pendiente
-                        </Badge>
-                      )}
+                            }}
+                          >
+                            Firmar
+                          </Button>
+                        ) : (
+                          <Badge>
+                            Pendiente
+                          </Badge>
+                        )}
 
-                    </div>
-                  )
-                )}
+                      </div>
+                    )
+                  )}
 
               </div>
 
@@ -2337,8 +2193,7 @@ export default function CenterDetail() {
                                 {
                                   name:
                                     participant.trim(),
-                                  role:
-                                    "OTRO",
+                                  role: "OTRO",
                                   signed:
                                     false,
                                 },
@@ -2353,9 +2208,7 @@ export default function CenterDetail() {
                           },
                         });
 
-                        setParticipant(
-                          ""
-                        );
+                        setParticipant("");
 
                       }}
                     >
@@ -2372,10 +2225,6 @@ export default function CenterDetail() {
 
       </Card>
 
-      {/* =====================================================
-          INSTALACIONES
-      ===================================================== */}
-
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -2391,8 +2240,7 @@ export default function CenterDetail() {
             }
             onClick={() =>
               setOpenInstallations(
-                value =>
-                  !value
+                v => !v
               )
             }
           />
@@ -2435,11 +2283,9 @@ export default function CenterDetail() {
 
             </div>
 
-            {/* FILTROS */}
+            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
 
-            <div className="mb-4 mt-5 grid gap-3 xl:grid-cols-[1fr_auto_auto_auto]">
-
-              <div className="relative min-w-0">
+              <div className="relative min-w-0 flex-1">
 
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
@@ -2465,13 +2311,12 @@ export default function CenterDetail() {
                 }
               >
                 {categories.map(
-                  value => (
+                  c => (
                     <option
-                      key={value}
-                      value={value}
+                      key={c}
+                      value={c}
                     >
-                      Instalación:{" "}
-                      {value}
+                      {c}
                     </option>
                   )
                 )}
@@ -2485,14 +2330,17 @@ export default function CenterDetail() {
                   setActionFilter
                 }
               >
-                {actions.map(
-                  value => (
+                <option value="Todas">
+                  Todas las actuaciones
+                </option>
+
+                {actionTypes.map(
+                  action => (
                     <option
-                      key={value}
-                      value={value}
+                      key={action}
+                      value={action}
                     >
-                      Actuación:{" "}
-                      {value}
+                      {action}
                     </option>
                   )
                 )}
@@ -2506,25 +2354,33 @@ export default function CenterDetail() {
                   setResultFilter
                 }
               >
-                {[
-                  "Todos",
-                  "FAVORABLE",
-                  "CONDICIONADO",
-                  "DESFAVORABLE",
-                  "PTE.",
-                  "ERROR",
-                  "-",
-                ].map(
-                  value => (
-                    <option
-                      key={value}
-                      value={value}
-                    >
-                      Resultado:{" "}
-                      {value}
-                    </option>
-                  )
-                )}
+                <option value="Todos">
+                  Todos los resultados
+                </option>
+
+                <option value="FAVORABLE">
+                  FAVORABLE
+                </option>
+
+                <option value="CONDICIONADO">
+                  CONDICIONADO
+                </option>
+
+                <option value="DESFAVORABLE">
+                  DESFAVORABLE
+                </option>
+
+                <option value="PTE.">
+                  PTE.
+                </option>
+
+                <option value="ERROR">
+                  ERROR
+                </option>
+
+                <option value="-">
+                  SIN RESULTADO
+                </option>
               </Select>
 
             </div>
@@ -2533,7 +2389,7 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="min-w-[1900px] w-full text-sm">
+                <table className="min-w-[2000px] w-full text-sm">
 
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
 
@@ -2579,7 +2435,7 @@ export default function CenterDetail() {
                         Próxima revisión
                       </th>
 
-                      <th className="w-40 px-3 py-3">
+                      <th className="w-36 px-3 py-3">
                         2ª revisión
                       </th>
 
@@ -2602,15 +2458,8 @@ export default function CenterDetail() {
                     {visible.map(
                       (x: any) => {
 
-                        const {
-                          item,
-                          nextReview,
-                          result,
-                        } =
-                          getCalculatedValues(
-                            x.id,
-                            x
-                          );
+                        const item =
+                          getItem(x.id);
 
                         const locked =
                           readOnly ||
@@ -2620,6 +2469,40 @@ export default function CenterDetail() {
                           getInstallationVisual(
                             x.installation,
                             x.category
+                          );
+
+                        /*
+                         * IMPORTANTE:
+                         *
+                         * La próxima revisión se calcula
+                         * SIEMPRE a partir de:
+                         *
+                         * FECHA + FRECUENCIA
+                         *
+                         * y se ajusta al último día
+                         * laborable anterior cuando
+                         * cae en sábado, domingo o
+                         * festivo nacional.
+                         */
+                        const nextDate =
+                          calculateNextReview(
+                            item.date,
+                            x.frequency,
+                            currentCenter.country
+                          );
+
+                        /*
+                         * RESULTADO se calcula utilizando
+                         * la próxima revisión y, en caso
+                         * de condicionado, la segunda
+                         * revisión.
+                         */
+                        const result =
+                          calculateResult(
+                            item.status,
+                            item.date,
+                            nextDate,
+                            item.secondReviewDate
                           );
 
                         const resultVisual =
@@ -2632,16 +2515,12 @@ export default function CenterDetail() {
 
                         return (
                           <tr
-                            key={
-                              x.id
-                            }
+                            key={x.id}
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
                             <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
-                              {
-                                x.code
-                              }
+                              {x.code}
                             </td>
 
                             <td className="px-2 py-3 align-top">
@@ -2679,16 +2558,13 @@ export default function CenterDetail() {
                             </td>
 
                             <td className="px-3 py-3 align-top text-slate-600">
-                              {
-                                x.action
-                              }
+                              {x.action}
                             </td>
 
                             <td className="px-3 py-3 align-top">
 
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
                                 <CalendarDays className="h-3 w-3" />
-
                                 {
                                   x.frequency ||
                                   "—"
@@ -2745,10 +2621,14 @@ export default function CenterDetail() {
 
                             </td>
 
-                            {/* ESTADO DE REVISIÓN */}
-
                             <td className="px-3 py-3 align-top">
 
+                              {/*
+                               * Selector coloreado directamente.
+                               *
+                               * Ya no existe un Badge debajo
+                               * del selector.
+                               */}
                               <select
                                 disabled={
                                   locked
@@ -2761,37 +2641,28 @@ export default function CenterDetail() {
                                     x.id,
                                     {
                                       status:
-                                        e.target.value as V1Status,
+                                        e.target
+                                          .value as V1Status,
                                     }
                                   )
                                 }
-                                className={`w-44 rounded-lg border px-2 py-2 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
+                                className={`w-44 rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none ${getStatusClasses(
                                   item.status
-                                )}`}
+                                )} disabled:cursor-not-allowed disabled:opacity-70`}
                               >
-
                                 {STATUSES.map(
-                                  status => (
+                                  s => (
                                     <option
-                                      key={
-                                        status
-                                      }
-                                      value={
-                                        status
-                                      }
+                                      key={s}
+                                      value={s}
                                     >
-                                      {
-                                        status
-                                      }
+                                      {s}
                                     </option>
                                   )
                                 )}
-
                               </select>
 
                             </td>
-
-                            {/* FECHA DE EJECUCIÓN */}
 
                             <td className="px-3 py-3 align-top">
 
@@ -2817,33 +2688,25 @@ export default function CenterDetail() {
 
                             </td>
 
-                            {/* PRÓXIMA REVISIÓN */}
-
                             <td className="px-3 py-3 align-top">
 
-                              <div className="flex items-start gap-2">
+                              <div className="flex items-center gap-2">
 
-                                <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                                <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
 
                                 <div>
 
-                                  {nextReview ? (
-                                    <>
-                                      <div className="font-semibold text-slate-700">
-                                        {
-                                          formatDate(
-                                            nextReview
-                                          )
-                                        }
-                                      </div>
+                                  <div className="font-semibold text-slate-700">
+                                    {nextDate
+                                      ? formatDate(
+                                          nextDate
+                                        )
+                                      : "—"}
+                                  </div>
 
-                                      <div className="mt-1 text-[10px] text-slate-400">
-                                        Fecha calculada
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div className="text-xs text-slate-400">
-                                      —
+                                  {nextDate && (
+                                    <div className="text-[10px] text-slate-400">
+                                      Calculada automáticamente
                                     </div>
                                   )}
 
@@ -2853,71 +2716,33 @@ export default function CenterDetail() {
 
                             </td>
 
-                            {/* 2ª REVISIÓN */}
-
                             <td className="px-3 py-3 align-top">
 
                               {item.status ===
                               "APTO CONDICIONADO" ? (
-                                <div>
-
-                                  <input
-                                    disabled={
-                                      locked
-                                    }
-                                    type="date"
-                                    min={
-                                      item.date ||
-                                      undefined
-                                    }
-                                    value={
-                                      item.secondReviewDate
-                                    }
-                                    onChange={e => {
-
-                                      const value =
-                                        e.target.value;
-
-                                      if (
-                                        item.date &&
-                                        value
-                                      ) {
-                                        const firstDate =
-                                          parseLocalDate(
-                                            item.date
-                                          );
-
-                                        const secondDate =
-                                          parseLocalDate(
-                                            value
-                                          );
-
-                                        if (
-                                          firstDate &&
-                                          secondDate &&
-                                          secondDate <=
-                                            firstDate
-                                        ) {
-                                          return;
-                                        }
+                                <input
+                                  disabled={
+                                    locked
+                                  }
+                                  type="date"
+                                  min={
+                                    item.date ||
+                                    undefined
+                                  }
+                                  value={
+                                    item.secondReviewDate
+                                  }
+                                  onChange={e =>
+                                    updateItem(
+                                      x.id,
+                                      {
+                                        secondReviewDate:
+                                          e.target.value,
                                       }
-
-                                      updateItem(
-                                        x.id,
-                                        {
-                                          secondReviewDate:
-                                            value,
-                                        }
-                                      );
-                                    }}
-                                    className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
-                                  />
-
-                                  <div className="mt-1 text-[10px] text-slate-400">
-                                    Posterior a la 1ª revisión
-                                  </div>
-
-                                </div>
+                                    )
+                                  }
+                                  className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                />
                               ) : (
                                 <span className="text-xs text-slate-300">
                                   No aplica
@@ -2925,8 +2750,6 @@ export default function CenterDetail() {
                               )}
 
                             </td>
-
-                            {/* RESULTADO */}
 
                             <td className="px-3 py-3 align-top">
 
@@ -2938,15 +2761,11 @@ export default function CenterDetail() {
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {
-                                  result
-                                }
+                                {result}
 
                               </span>
 
                             </td>
-
-                            {/* COMENTARIO */}
 
                             <td className="px-3 py-3 align-top">
 
@@ -2972,8 +2791,6 @@ export default function CenterDetail() {
                               />
 
                             </td>
-
-                            {/* ELIMINAR */}
 
                             <td className="px-3 py-3 align-top">
 
@@ -3004,16 +2821,12 @@ export default function CenterDetail() {
                     {visible.length ===
                       0 && (
                       <tr>
-
                         <td
-                          colSpan={
-                            15
-                          }
+                          colSpan={15}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
-                          No hay elementos que coincidan con los filtros seleccionados.
+                          No hay elementos que coincidan con los filtros.
                         </td>
-
                       </tr>
                     )}
 
@@ -3030,14 +2843,10 @@ export default function CenterDetail() {
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                La próxima revisión se calcula automáticamente sumando la frecuencia a la fecha de ejecución. Si la fecha calculada cae en sábado, domingo o festivo nacional del país del centro, se retrocede hasta el primer día laborable anterior.
+                La próxima revisión se calcula automáticamente sumando la frecuencia a la fecha de ejecución. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el día laborable anterior. Se aplican los festivos nacionales correspondientes al país del centro: España o Portugal.
               </div>
 
             </div>
-
-            {/* =================================================
-                ELEMENTOS NO ACTIVOS
-            ================================================= */}
 
             <div className="mt-6 rounded-2xl border border-slate-200 p-5">
 
@@ -3052,14 +2861,14 @@ export default function CenterDetail() {
                         variant="secondary"
                         onClick={() =>
                           setShowAddElement(
-                            value =>
-                              !value
+                            v => !v
                           )
                         }
                       >
                         <Plus className="mr-2 inline h-4 w-4" />
 
                         Añadir elemento
+
                       </Button>
                     ) : undefined
                   }
@@ -3102,8 +2911,7 @@ export default function CenterDetail() {
                           const isActive =
                             activeMap[
                               x.id
-                            ] !==
-                            false;
+                            ] !== false;
 
                           const visual =
                             getInstallationVisual(
@@ -3116,9 +2924,7 @@ export default function CenterDetail() {
 
                           return (
                             <div
-                              key={
-                                x.id
-                              }
+                              key={x.id}
                               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
                             >
 
@@ -3135,20 +2941,14 @@ export default function CenterDetail() {
                                 <div className="min-w-0">
 
                                   <div className="truncate text-sm font-semibold">
-                                    {
-                                      x.code
-                                    }{" "}
-                                    ·{" "}
+                                    {x.code} ·{" "}
                                     {
                                       x.installation
                                     }
                                   </div>
 
                                   <div className="truncate text-xs text-slate-500">
-                                    {
-                                      x.action
-                                    }{" "}
-                                    ·{" "}
+                                    {x.action} ·{" "}
                                     {
                                       x.frequency
                                     }
@@ -3165,12 +2965,12 @@ export default function CenterDetail() {
                               ) : (
                                 <Button
                                   variant="secondary"
-                                  onClick={() =>
+                                  onClick={() => {
                                     setActive(
                                       x.id,
                                       true
-                                    )
-                                  }
+                                    );
+                                  }}
                                 >
                                   Activar
                                 </Button>
@@ -3191,9 +2991,11 @@ export default function CenterDetail() {
                 {inactiveItems.length ===
                 0 ? (
                   <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    No hay elementos no activos actualmente. Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
+                    No hay elementos no activos actualmente.
+                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
                   </div>
                 ) : (
+
                   <div className="grid gap-2 md:grid-cols-2">
 
                     {inactiveItems.map(
@@ -3210,9 +3012,7 @@ export default function CenterDetail() {
 
                         return (
                           <div
-                            key={
-                              x.id
-                            }
+                            key={x.id}
                             className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
                           >
 
@@ -3230,9 +3030,7 @@ export default function CenterDetail() {
 
                                 <div className="truncate">
                                   <b>
-                                    {
-                                      x.code
-                                    }
+                                    {x.code}
                                   </b>{" "}
                                   ·{" "}
                                   {
@@ -3270,6 +3068,7 @@ export default function CenterDetail() {
                     )}
 
                   </div>
+
                 )}
 
               </div>
