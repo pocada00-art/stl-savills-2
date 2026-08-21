@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -78,25 +78,15 @@ export default function CenterDetail() {
 
   useEffect(() => {
     const h = () => setState(loadState());
-
     window.addEventListener("stl-role-change", h);
-
-    return () => {
-      window.removeEventListener("stl-role-change", h);
-    };
+    return () => window.removeEventListener("stl-role-change", h);
   }, []);
 
   if (!center) {
     return (
       <Card className="p-8">
-        <h2 className="text-xl font-bold">
-          Centro no encontrado
-        </h2>
-
-        <Link
-          href="/centers"
-          className="mt-4 inline-block text-sm underline"
-        >
+        <h2 className="text-xl font-bold">Centro no encontrado</h2>
+        <Link href="/centers" className="mt-4 inline-block text-sm underline">
           Volver
         </Link>
       </Card>
@@ -156,57 +146,10 @@ export default function CenterDetail() {
         .includes(q.toLowerCase())
   );
 
-  /*
-   * HISTÓRICO DE CUMPLIMIENTO
-   *
-   * Se muestran siempre 2024, 2025 y el año actual.
-   * Además, si existen revisiones anteriores a 2024,
-   * también se incorporan automáticamente.
-   *
-   * Nunca se muestran años futuros.
-   */
-  const historyPeriods = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-
-    const years = new Set<number>([
-      2024,
-      2025,
-      currentYear,
-    ]);
-
-    Object.keys(state.reviews).forEach(reviewId => {
-      const parts = reviewId.split(":");
-
-      if (parts.length !== 3) return;
-
-      const centerId = parts[0];
-      const reviewYear = Number(parts[1]);
-
-      if (
-        centerId === center.id &&
-        Number.isInteger(reviewYear) &&
-        reviewYear <= currentYear
-      ) {
-        years.add(reviewYear);
-      }
-    });
-
-    return Array.from(years)
-      .filter(y => y <= currentYear)
-      .sort((a, b) => a - b)
-      .flatMap(y =>
-        (["S1", "S2"] as Period[]).map(p => ({
-          year: y,
-          period: p,
-        }))
-      );
-  }, [state.reviews, center.id]);
-
   function updateState(next: V1State) {
     setState(next);
     saveState(next);
     setSaved(true);
-
     setTimeout(() => setSaved(false), 1500);
   }
 
@@ -226,10 +169,7 @@ export default function CenterDetail() {
     });
   }
 
-  function setActive(
-    itemId: string,
-    active: boolean
-  ) {
+  function setActive(itemId: string, active: boolean) {
     const next = {
       ...state,
       activeItems: {
@@ -325,9 +265,7 @@ export default function CenterDetail() {
 
   function resetPeriod() {
     const next = { ...state };
-
     delete next.reviews[key];
-
     updateState(next);
   }
 
@@ -361,11 +299,7 @@ export default function CenterDetail() {
         type="button"
         onClick={onClick}
         className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
-        title={
-          open
-            ? "Ocultar información"
-            : "Mostrar información"
-        }
+        title={open ? "Ocultar información" : "Mostrar información"}
       >
         {open ? (
           <ChevronUp className="h-4 w-4" />
@@ -394,9 +328,7 @@ export default function CenterDetail() {
 
       <Card className="overflow-hidden">
         <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
-
           <div className="flex items-center gap-5 p-6">
-
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
               {overrides.logoUrl ? (
                 <img
@@ -461,28 +393,13 @@ export default function CenterDetail() {
       <div className="grid gap-4 md:grid-cols-5">
         {[
           ["Cumplimiento", `${summary.score}%`],
-          [
-            "Confirmados",
-            `${summary.confirmed}/${summary.total}`,
-          ],
-          [
-            "Pendientes",
-            summary.pendingConfirmation,
-          ],
-          [
-            "No aptos",
-            summary.counts["NO APTO"],
-          ],
-          [
-            "Condicionados",
-            summary.counts["APTO CONDICIONADO"],
-          ],
+          ["Confirmados", `${summary.confirmed}/${summary.total}`],
+          ["Pendientes", summary.pendingConfirmation],
+          ["No aptos", summary.counts["NO APTO"]],
+          ["Condicionados", summary.counts["APTO CONDICIONADO"]],
         ].map(([t, v]) => (
           <Card key={String(t)} className="p-5">
-            <div className="text-2xl font-black">
-              {v}
-            </div>
-
+            <div className="text-2xl font-black">{v}</div>
             <div className="mt-1 text-sm text-slate-500">
               {t}
             </div>
@@ -491,18 +408,14 @@ export default function CenterDetail() {
       </div>
 
       {/* DATOS DEL CENTRO */}
-
       <Card className="p-6">
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Datos del centro"
             subtitle="Edición disponible según perfil"
             action={
               saved ? (
-                <Badge tone="success">
-                  Guardado
-                </Badge>
+                <Badge tone="success">Guardado</Badge>
               ) : undefined
             }
           />
@@ -517,9 +430,10 @@ export default function CenterDetail() {
 
         {openCenterData && (
           <>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-6">
 
-              <label className="text-sm md:col-span-1">
+              {/* FILA 1: PROPIEDAD - DIRECCIÓN */}
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Propiedad
                 </span>
@@ -541,7 +455,7 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm md:col-span-3">
+              <label className="text-sm md:col-span-4">
                 <span className="text-xs text-slate-400">
                   Dirección
                 </span>
@@ -563,7 +477,8 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm md:col-span-2">
+              {/* FILA 2: CIUDAD - PROVINCIA */}
+              <label className="text-sm md:col-span-3">
                 <span className="text-xs text-slate-400">
                   Ciudad
                 </span>
@@ -581,7 +496,7 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm md:col-span-2">
+              <label className="text-sm md:col-span-3">
                 <span className="text-xs text-slate-400">
                   Provincia
                 </span>
@@ -599,7 +514,8 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm">
+              {/* FILA 3: GERENTE - TELÉFONO - EMAIL */}
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Gerente
                 </span>
@@ -617,7 +533,7 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm">
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Teléfono gerente
                 </span>
@@ -635,7 +551,7 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm">
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Email gerente
                 </span>
@@ -654,7 +570,8 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm">
+              {/* FILA 4: RESPONSABLE TÉCNICO - TELÉFONO - EMAIL */}
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Responsable técnico
                 </span>
@@ -675,7 +592,7 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm">
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Teléfono responsable técnico
                 </span>
@@ -696,7 +613,7 @@ export default function CenterDetail() {
                 />
               </label>
 
-              <label className="text-sm">
+              <label className="text-sm md:col-span-2">
                 <span className="text-xs text-slate-400">
                   Email responsable técnico
                 </span>
@@ -717,12 +634,10 @@ export default function CenterDetail() {
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
               </label>
-
             </div>
 
             {!readOnly && (
               <div className="mt-5 flex flex-wrap gap-3">
-
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
                   <ImagePlus className="mr-2 inline h-4 w-4" />
                   Logo
@@ -732,15 +647,8 @@ export default function CenterDetail() {
                     accept="image/*"
                     className="hidden"
                     onChange={e => {
-                      const f =
-                        e.target.files?.[0];
-
-                      if (f) {
-                        uploadImage(
-                          "logoUrl",
-                          f
-                        );
-                      }
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage("logoUrl", f);
                     }}
                   />
                 </label>
@@ -754,33 +662,23 @@ export default function CenterDetail() {
                     accept="image/*"
                     className="hidden"
                     onChange={e => {
-                      const f =
-                        e.target.files?.[0];
-
-                      if (f) {
-                        uploadImage(
-                          "imageUrl",
-                          f
-                        );
-                      }
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage("imageUrl", f);
                     }}
                   />
                 </label>
-
               </div>
             )}
           </>
         )}
       </Card>
 
-      {/* HISTÓRICO DE CUMPLIMIENTO */}
-
+      {/* HISTÓRICO */}
       <Card className="p-6">
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Histórico de cumplimiento"
-            subtitle="Revisiones históricas del centro hasta la fecha actual"
+            subtitle="Evolución S1 / S2 y siguientes años"
           />
 
           <SectionToggle
@@ -794,77 +692,59 @@ export default function CenterDetail() {
         {openHistory && (
           <>
             <div className="grid gap-3 md:grid-cols-4">
+              {[2026, 2027, 2028]
+                .flatMap(y =>
+                  (["S1", "S2"] as Period[]).map(p => {
+                    const r =
+                      state.reviews[
+                        reviewKey(center.id, y, p)
+                      ];
 
-              {historyPeriods.map(
-                ({ year: historyYear, period: historyPeriod }) => {
-                  const historyReview =
-                    state.reviews[
-                      reviewKey(
-                        center.id,
-                        historyYear,
-                        historyPeriod
-                      )
-                    ];
-
-                  const historyActiveIds =
-                    catalog
-                      .filter(
-                        (x: any) =>
-                          activeMap[x.id] !== false
-                      )
-                      .map((x: any) => x.id);
-
-                  const historySummary =
-                    reviewSummary(
-                      historyReview,
-                      historyActiveIds
+                    const sum = reviewSummary(
+                      r,
+                      catalog
+                        .filter(
+                          (x: any) =>
+                            activeMap[x.id] !== false
+                        )
+                        .map((x: any) => x.id)
                     );
 
-                  return (
-                    <div
-                      key={`${historyYear}-${historyPeriod}`}
-                      className="rounded-xl border border-slate-200 p-4"
-                    >
-                      <div className="text-xs text-slate-400">
-                        {historyPeriod} {historyYear}
-                      </div>
+                    return (
+                      <div
+                        key={`${y}-${p}`}
+                        className="rounded-xl border border-slate-200 p-4"
+                      >
+                        <div className="text-xs text-slate-400">
+                          {p} {y}
+                        </div>
 
-                      <div className="mt-2 text-xl font-black">
-                        {historyReview
-                          ? `${historySummary.score}%`
-                          : "—"}
-                      </div>
+                        <div className="mt-2 text-xl font-black">
+                          {r ? `${sum.score}%` : "—"}
+                        </div>
 
-                      <div className="mt-1 text-xs">
-                        {historyReview
-                          ? historyReview.confirmed
+                        <div className="mt-1 text-xs">
+                          {r?.confirmed
                             ? "Confirmada"
-                            : "Sin confirmar"
-                          : "Sin revisión cargada"}
+                            : "Sin confirmar"}
+                        </div>
                       </div>
-                    </div>
-                  );
-                }
-              )}
-
+                    );
+                  })
+                )}
             </div>
 
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
               <BarChart3 className="h-4 w-4" />
-
-              El histórico muestra las revisiones disponibles del centro
-              hasta el año actual. Las revisiones anteriores a 2024
-              aparecerán automáticamente cuando sean cargadas.
+              La evolución gráfica se alimentará de todas las revisiones confirmadas.
             </div>
           </>
         )}
       </Card>
 
-      {/* REVISIÓN TÉCNICO-LEGAL */}
-
+      {/* REVISION */}
       <Card className="p-6">
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Revisión técnico-legal"
             subtitle="Dos revisiones anuales con histórico independiente."
@@ -880,18 +760,14 @@ export default function CenterDetail() {
 
         {openReview && (
           <>
-
             <div className="mt-5 flex flex-wrap gap-2">
-
               <Select
                 value={String(year)}
-                onChange={v =>
-                  setYear(Number(v))
-                }
+                onChange={v => setYear(Number(v))}
               >
-                <option>2024</option>
-                <option>2025</option>
                 <option>2026</option>
+                <option>2027</option>
+                <option>2028</option>
               </Select>
 
               <Select
@@ -900,13 +776,8 @@ export default function CenterDetail() {
                   setPeriod(v as Period)
                 }
               >
-                <option value="S1">
-                  S1
-                </option>
-
-                <option value="S2">
-                  S2
-                </option>
+                <option value="S1">S1</option>
+                <option value="S2">S2</option>
               </Select>
 
               {admin && (
@@ -918,16 +789,13 @@ export default function CenterDetail() {
                   Reiniciar demo
                 </Button>
               )}
-
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-4">
-
               <div className="rounded-xl bg-slate-50 p-4">
                 <div className="text-xs text-slate-400">
                   Estado
                 </div>
-
                 <div className="mt-1 font-bold">
                   {review.confirmed
                     ? "CONFIRMADA"
@@ -939,10 +807,8 @@ export default function CenterDetail() {
                 <div className="text-xs text-slate-400">
                   Elementos
                 </div>
-
                 <div className="mt-1 font-bold">
-                  {summary.confirmed}/
-                  {summary.total}
+                  {summary.confirmed}/{summary.total}
                 </div>
               </div>
 
@@ -950,7 +816,6 @@ export default function CenterDetail() {
                 <div className="text-xs text-amber-700">
                   Pendientes confirmar
                 </div>
-
                 <div className="mt-1 text-xl font-black text-amber-700">
                   {summary.pendingConfirmation}
                 </div>
@@ -960,26 +825,21 @@ export default function CenterDetail() {
                 <div className="text-xs text-emerald-700">
                   Cumplimiento
                 </div>
-
                 <div className="mt-1 text-xl font-black text-emerald-700">
                   {summary.score}%
                 </div>
               </div>
-
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-
               {STATUSES.map(s => (
                 <span
                   key={s}
                   className="rounded-full border border-slate-200 px-3 py-1"
                 >
-                  <b>{summary.counts[s]}</b>{" "}
-                  {s}
+                  <b>{summary.counts[s]}</b> {s}
                 </span>
               ))}
-
             </div>
 
             {summary.pendingConfirmation === 0 &&
@@ -987,7 +847,6 @@ export default function CenterDetail() {
               !review.confirmed &&
               admin && (
                 <div className="mt-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
                   <div>
                     <div className="font-bold text-emerald-800">
                       Todos los elementos están confirmados
@@ -1002,21 +861,18 @@ export default function CenterDetail() {
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
                     Confirmar {period} {year}
                   </Button>
-
                 </div>
               )}
 
             {review.confirmed && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
                 <div>
                   <div className="font-bold text-emerald-800">
                     Revisión {period} {year} confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
-                    Administrador:{" "}
-                    {review.confirmedBy} ·{" "}
+                    Administrador: {review.confirmedBy} ·{" "}
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
@@ -1032,18 +888,15 @@ export default function CenterDetail() {
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
                   Ver / exportar certificado
                 </Link>
-
               </div>
             )}
 
             <div className="mt-5 rounded-xl border border-slate-200 p-4">
-
               <div className="text-sm font-bold">
                 Participantes de la revisión
               </div>
 
               <div className="mt-2 space-y-2">
-
                 {(review.participants || []).map(
                   (p, i) => (
                     <div
@@ -1087,82 +940,64 @@ export default function CenterDetail() {
                           Firmar
                         </Button>
                       ) : (
-                        <Badge>
-                          Pendiente
-                        </Badge>
+                        <Badge>Pendiente</Badge>
                       )}
                     </div>
                   )
                 )}
-
               </div>
 
-              {!readOnly &&
-                !review.confirmed && (
-                  <div className="mt-3 flex gap-2">
+              {!readOnly && !review.confirmed && (
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={participant}
+                    onChange={e =>
+                      setParticipant(e.target.value)
+                    }
+                    placeholder="Añadir participante"
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  />
 
-                    <input
-                      value={participant}
-                      onChange={e =>
-                        setParticipant(
-                          e.target.value
-                        )
-                      }
-                      placeholder="Añadir participante"
-                      className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (!participant.trim()) return;
 
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        if (
-                          !participant.trim()
-                        ) {
-                          return;
-                        }
-
-                        const nextReview = {
-                          ...review,
-                          participants: [
-                            ...(review.participants ||
-                              []),
-                            {
-                              name:
-                                participant.trim(),
-                              role: "OTRO",
-                              signed: false,
-                            },
-                          ],
-                        };
-
-                        updateState({
-                          ...state,
-                          reviews: {
-                            ...state.reviews,
-                            [key]: nextReview,
+                      const nextReview = {
+                        ...review,
+                        participants: [
+                          ...(review.participants || []),
+                          {
+                            name: participant.trim(),
+                            role: "OTRO",
+                            signed: false,
                           },
-                        });
+                        ],
+                      };
 
-                        setParticipant("");
-                      }}
-                    >
-                      Añadir
-                    </Button>
+                      updateState({
+                        ...state,
+                        reviews: {
+                          ...state.reviews,
+                          [key]: nextReview,
+                        },
+                      });
 
-                  </div>
-                )}
-
+                      setParticipant("");
+                    }}
+                  >
+                    Añadir
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}
       </Card>
 
-      {/* INSTALACIONES Y ACTUACIONES */}
-
+      {/* INSTALACIONES */}
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Instalaciones y actuaciones"
             subtitle={`${activeItems.length} elementos activos · ${inactiveItems.length} elementos no activos`}
@@ -1174,27 +1009,20 @@ export default function CenterDetail() {
               setOpenInstallations(v => !v)
             }
           />
-
         </div>
 
         {openInstallations && (
           <>
-
             <div className="mb-4 mt-5 flex flex-col gap-3 lg:flex-row">
-
               <div className="relative flex-1">
-
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                 <input
                   value={q}
-                  onChange={e =>
-                    setQ(e.target.value)
-                  }
+                  onChange={e => setQ(e.target.value)}
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
                 />
-
               </div>
 
               <Select
@@ -1202,18 +1030,13 @@ export default function CenterDetail() {
                 onChange={setCategory}
               >
                 {categories.map(c => (
-                  <option key={c}>
-                    {c}
-                  </option>
+                  <option key={c}>{c}</option>
                 ))}
               </Select>
-
             </div>
 
             <div className="table-wrap">
-
               <table className="table">
-
                 <thead>
                   <tr>
                     <th>Código</th>
@@ -1229,7 +1052,6 @@ export default function CenterDetail() {
                 </thead>
 
                 <tbody>
-
                   {visible.map((x: any) => {
                     const item = getItem(x.id);
 
@@ -1244,8 +1066,7 @@ export default function CenterDetail() {
                         className={
                           item.confirmed
                             ? "bg-emerald-50/40"
-                            : item.status ===
-                              "NO APTO"
+                            : item.status === "NO APTO"
                             ? "bg-red-50/40"
                             : item.status ===
                               "APTO CONDICIONADO"
@@ -1253,7 +1074,6 @@ export default function CenterDetail() {
                             : ""
                         }
                       >
-
                         <td className="font-mono text-xs">
                           {x.code}
                         </td>
@@ -1262,33 +1082,22 @@ export default function CenterDetail() {
                           {x.installation}
                         </td>
 
-                        <td>
-                          {x.action}
-                        </td>
+                        <td>{x.action}</td>
 
-                        <td>
-                          {x.frequency}
-                        </td>
+                        <td>{x.frequency}</td>
 
                         <td>
                           <Select
-                            value={
-                              item.status
-                            }
+                            value={item.status}
                             onChange={v =>
-                              updateItem(
-                                x.id,
-                                {
-                                  status:
-                                    v as V1Status,
-                                }
-                              )
+                              updateItem(x.id, {
+                                status:
+                                  v as V1Status,
+                              })
                             }
                           >
                             {STATUSES.map(s => (
-                              <option
-                                key={s}
-                              >
+                              <option key={s}>
                                 {s}
                               </option>
                             ))}
@@ -1301,13 +1110,9 @@ export default function CenterDetail() {
                             type="date"
                             value={item.date}
                             onChange={e =>
-                              updateItem(
-                                x.id,
-                                {
-                                  date:
-                                    e.target.value,
-                                }
-                              )
+                              updateItem(x.id, {
+                                date: e.target.value,
+                              })
                             }
                             className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
                           />
@@ -1316,17 +1121,12 @@ export default function CenterDetail() {
                         <td>
                           <input
                             disabled={locked}
-                            value={
-                              item.company
-                            }
+                            value={item.company}
                             onChange={e =>
-                              updateItem(
-                                x.id,
-                                {
-                                  company:
-                                    e.target.value,
-                                }
-                              )
+                              updateItem(x.id, {
+                                company:
+                                  e.target.value,
+                              })
                             }
                             placeholder="Empresa"
                             className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:bg-slate-50"
@@ -1334,7 +1134,6 @@ export default function CenterDetail() {
                         </td>
 
                         <td>
-
                           {item.confirmed ? (
                             <Badge tone="success">
                               Confirmado
@@ -1343,9 +1142,7 @@ export default function CenterDetail() {
                             <Button
                               variant="secondary"
                               onClick={() =>
-                                confirmItem(
-                                  x.id
-                                )
+                                confirmItem(x.id)
                               }
                             >
                               <CheckCircle2 className="mr-1 inline h-3 w-3" />
@@ -1356,11 +1153,9 @@ export default function CenterDetail() {
                               Pendiente
                             </Badge>
                           )}
-
                         </td>
 
                         <td>
-
                           {!readOnly && (
                             <button
                               onClick={() =>
@@ -1375,21 +1170,15 @@ export default function CenterDetail() {
                               <X className="h-4 w-4" />
                             </button>
                           )}
-
                         </td>
-
                       </tr>
                     );
                   })}
-
                 </tbody>
-
               </table>
-
             </div>
 
             <div className="mt-6 rounded-xl border border-slate-200 p-5">
-
               <SectionTitle
                 title="Elementos no activos"
                 subtitle="No computan, no generan vencimientos y conservan su histórico"
@@ -1398,12 +1187,9 @@ export default function CenterDetail() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-                        if (
-                          inactiveItems[0]
-                        ) {
+                        if (inactiveItems[0]) {
                           setActive(
-                            inactiveItems[0]
-                              .id,
+                            inactiveItems[0].id,
                             true
                           );
                         }
@@ -1416,55 +1202,40 @@ export default function CenterDetail() {
                 }
               />
 
-              {inactiveItems.length ===
-              0 ? (
+              {inactiveItems.length === 0 ? (
                 <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                   No hay elementos no activos.
                 </div>
               ) : (
                 <div className="grid gap-2 md:grid-cols-2">
-
-                  {inactiveItems.map(
-                    (x: any) => (
-                      <div
-                        key={x.id}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
-                      >
-
-                        <div>
-                          <b>{x.code}</b> ·{" "}
-                          {x.installation} —{" "}
-                          {x.action}
-                        </div>
-
-                        {!readOnly && (
-                          <Button
-                            variant="secondary"
-                            onClick={() =>
-                              setActive(
-                                x.id,
-                                true
-                              )
-                            }
-                          >
-                            Activar
-                          </Button>
-                        )}
-
+                  {inactiveItems.map((x: any) => (
+                    <div
+                      key={x.id}
+                      className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div>
+                        <b>{x.code}</b> ·{" "}
+                        {x.installation} — {x.action}
                       </div>
-                    )
-                  )}
 
+                      {!readOnly && (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            setActive(x.id, true)
+                          }
+                        >
+                          Activar
+                        </Button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
-
             </div>
-
           </>
         )}
-
       </Card>
-
     </div>
   );
 }
