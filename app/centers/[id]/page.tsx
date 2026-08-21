@@ -77,10 +77,6 @@ type IconComponent = React.ComponentType<{
   className?: string;
 }>;
 
-/* =========================================================
-   INSTALACIONES
-========================================================= */
-
 function getInstallationVisual(
   installation = "",
   category = ""
@@ -172,26 +168,22 @@ function getInstallationVisual(
   };
 }
 
-/* =========================================================
-   ESTADOS
-========================================================= */
-
 function getStatusClasses(status: V1Status) {
   switch (status) {
     case "APTO":
-      return "bg-emerald-50 text-emerald-700 border-emerald-300";
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
 
     case "APTO CONDICIONADO":
-      return "bg-amber-50 text-amber-700 border-amber-300";
+      return "bg-amber-50 text-amber-700 border-amber-200";
 
     case "NO APTO":
-      return "bg-red-50 text-red-700 border-red-300";
+      return "bg-red-50 text-red-700 border-red-200";
 
     case "PENDIENTE":
-      return "bg-orange-50 text-orange-700 border-orange-300";
+      return "bg-orange-50 text-orange-700 border-orange-200";
 
     default:
-      return "bg-slate-50 text-slate-600 border-slate-300";
+      return "bg-slate-50 text-slate-600 border-slate-200";
   }
 }
 
@@ -241,14 +233,32 @@ function getResultVisual(result: string) {
   }
 }
 
-/* =========================================================
-   FRECUENCIAS
-========================================================= */
-
+/**
+ * Convierte la frecuencia de la instalación en meses.
+ *
+ * Ejemplos:
+ * mensual       -> 1
+ * bimensual     -> 2
+ * trimestral    -> 3
+ * cuatrimestral -> 4
+ * semestral     -> 6
+ * anual         -> 12
+ * bienal        -> 24
+ *
+ * También admite formatos como:
+ * "3 meses"
+ * "6 meses"
+ * "1 año"
+ * "2 años"
+ */
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
     .trim()
     .toLowerCase();
+
+  if (!value) {
+    return null;
+  }
 
   if (value.includes("mensual")) {
     return { months: 1 };
@@ -270,12 +280,12 @@ function parseFrequency(frequency: string) {
     return { months: 6 };
   }
 
-  if (value.includes("anual")) {
-    return { months: 12 };
-  }
-
   if (value.includes("bienal")) {
     return { months: 24 };
+  }
+
+  if (value.includes("anual")) {
+    return { months: 12 };
   }
 
   const numeric = value.match(
@@ -285,7 +295,14 @@ function parseFrequency(frequency: string) {
   if (numeric) {
     const amount = Number(numeric[1]);
 
-    if (value.includes("año")) {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return null;
+    }
+
+    if (
+      value.includes("año") ||
+      value.includes("años")
+    ) {
       return {
         months: amount * 12,
       };
@@ -299,362 +316,194 @@ function parseFrequency(frequency: string) {
   return null;
 }
 
-/* =========================================================
-   FESTIVOS
-========================================================= */
-
-function dateKey(date: Date) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function easterSunday(year: number) {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h =
-    (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l =
-    (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor(
-    (a + 11 * h + 22 * l) / 451
-  );
-  const month = Math.floor(
-    (h + l - 7 * m + 114) / 31
-  );
-  const day =
-    ((h + l - 7 * m + 114) % 31) + 1;
-
-  return new Date(
-    year,
-    month - 1,
-    day
-  );
-}
-
-function addDays(
-  date: Date,
-  days: number
-) {
-  const result = new Date(date);
-  result.setDate(
-    result.getDate() + days
-  );
-  return result;
-}
-
-function getNationalHolidays(
-  year: number,
-  country: string
-): Set<string> {
-  const holidays = new Set<string>();
-
-  function add(
-    month: number,
-    day: number
-  ) {
-    holidays.add(
-      dateKey(
-        new Date(year, month - 1, day)
-      )
-    );
-  }
-
-  /*
-   * España:
-   * Se contemplan los festivos nacionales
-   * de carácter estatal que no dependen
-   * de la comunidad autónoma.
-   */
-  if (country === "España") {
-    add(1, 1); // Año Nuevo
-    add(1, 6); // Epifanía
-    add(5, 1); // Día del Trabajo
-    add(8, 15); // Asunción
-    add(10, 12); // Fiesta Nacional
-    add(11, 1); // Todos los Santos
-    add(12, 6); // Constitución
-    add(12, 8); // Inmaculada
-    add(12, 25); // Navidad
-
-    const easter = easterSunday(year);
-
-    holidays.add(
-      dateKey(addDays(easter, -3))
-    ); // Jueves Santo
-
-    holidays.add(
-      dateKey(addDays(easter, -2))
-    ); // Viernes Santo
-
-    /*
-     * Lunes de Pascua no es festivo nacional
-     * estatal en España y por tanto no se añade.
-     */
-  }
-
-  /*
-   * Portugal:
-   * Festivos nacionales obligatorios.
-   */
-  if (country === "Portugal") {
-    add(1, 1); // Ano Novo
-    add(4, 25); // Dia da Liberdade
-    add(5, 1); // Dia do Trabalhador
-    add(6, 10); // Dia de Portugal
-    add(8, 15); // Assunção
-    add(10, 5); // Implantação da República
-    add(11, 1); // Todos os Santos
-    add(12, 1); // Restauração da Independência
-    add(12, 8); // Imaculada Conceição
-    add(12, 25); // Natal
-
-    const easter = easterSunday(year);
-
-    /*
-     * Sexta-feira Santa
-     */
-    holidays.add(
-      dateKey(addDays(easter, -2))
-    );
-
-    /*
-     * Domingo de Páscoa siempre es domingo,
-     * por lo que no hace falta tratarlo aparte.
-     */
-  }
-
-  return holidays;
-}
-
-function isNonWorkingDay(
-  date: Date,
-  country: string
-) {
-  const day = date.getDay();
-
-  if (day === 0 || day === 6) {
-    return true;
-  }
-
-  const holidays =
-    getNationalHolidays(
-      date.getFullYear(),
-      country
-    );
-
-  return holidays.has(
-    dateKey(date)
-  );
-}
-
-function moveToPreviousWorkingDay(
-  date: Date,
-  country: string
-) {
-  const result = new Date(date);
-
-  while (
-    isNonWorkingDay(
-      result,
-      country
-    )
-  ) {
-    result.setDate(
-      result.getDate() - 1
-    );
-  }
-
-  return result;
-}
-
-/* =========================================================
-   CÁLCULO PRÓXIMA REVISIÓN
-========================================================= */
-
+/**
+ * Calcula exclusivamente la próxima revisión.
+ *
+ * En este paso NO se aplican:
+ * - festivos
+ * - sábados
+ * - domingos
+ *
+ * Solamente:
+ *
+ * fecha de revisión + frecuencia
+ *
+ * Devuelve una fecha en formato YYYY-MM-DD,
+ * compatible directamente con los inputs type="date".
+ */
 function calculateNextReview(
   date: string,
-  frequency: string,
-  country: string
-) {
-  if (!date) {
+  frequency: string
+): string {
+  if (!date || !frequency) {
     return "";
   }
 
-  const parsed =
-    parseFrequency(frequency);
+  const parsed = parseFrequency(frequency);
 
   if (!parsed) {
     return "";
   }
 
-  const baseDate = new Date(
-    `${date}T00:00:00`
+  const match = String(date).match(
+    /^(\d{4})-(\d{2})-(\d{2})$/
   );
 
+  if (!match) {
+    return "";
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
   if (
-    Number.isNaN(
-      baseDate.getTime()
-    )
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
   ) {
     return "";
   }
 
-  /*
-   * Se suma primero la frecuencia.
+  /**
+   * Trabajamos con Date local y no con
+   * new Date("YYYY-MM-DD"), para evitar
+   * desplazamientos de fecha provocados
+   * por UTC.
    */
-  const nextDate = new Date(
-    baseDate
+  const result = new Date(
+    year,
+    month - 1,
+    day
   );
 
-  nextDate.setMonth(
-    nextDate.getMonth() +
-      parsed.months
+  if (Number.isNaN(result.getTime())) {
+    return "";
+  }
+
+  result.setHours(0, 0, 0, 0);
+
+  /**
+   * Añadimos los meses correspondientes
+   * a la frecuencia.
+   */
+  result.setMonth(
+    result.getMonth() + parsed.months
   );
 
-  /*
-   * Si cae en sábado, domingo o festivo,
-   * se retrocede hasta el primer laborable.
+  /**
+   * Normalización del día.
+   *
+   * Por ejemplo, si la fecha original es
+   * el último día de un mes y el mes destino
+   * no tiene ese día, JavaScript puede saltar
+   * al mes siguiente.
+   *
+   * En esta primera fase dejamos que el
+   * comportamiento sea el natural del calendario.
    */
-  const adjusted =
-    moveToPreviousWorkingDay(
-      nextDate,
-      country
-    );
 
-  return dateKey(adjusted);
+  const resultYear =
+    result.getFullYear();
+
+  const resultMonth =
+    String(
+      result.getMonth() + 1
+    ).padStart(2, "0");
+
+  const resultDay =
+    String(
+      result.getDate()
+    ).padStart(2, "0");
+
+  return `${resultYear}-${resultMonth}-${resultDay}`;
 }
-
-/* =========================================================
-   LÓGICA DE RESULTADO
-========================================================= */
 
 function calculateResult(
   status: V1Status,
-  executionDate: string,
-  nextReviewDate: string,
-  secondReviewDate: string
+  date: string,
+  secondReviewDate: string,
+  nextReviewDate: string
 ) {
-  /*
-   * Estados que necesitan fecha de ejecución.
+  /**
+   * Si APTO, APTO CONDICIONADO o NO APTO
+   * no tienen fecha de revisión, el resultado
+   * es ERROR.
    */
   if (
-    status === "APTO" ||
-    status === "APTO CONDICIONADO" ||
-    status === "NO APTO"
-  ) {
-    if (!executionDate) {
-      return "ERROR";
-    }
-  }
-
-  /*
-   * APTO CONDICIONADO necesita además
-   * una segunda revisión.
-   */
-  if (
-    status ===
-      "APTO CONDICIONADO" &&
-    !secondReviewDate
+    (
+      status === "APTO" ||
+      status === "APTO CONDICIONADO" ||
+      status === "NO APTO"
+    ) &&
+    !date
   ) {
     return "ERROR";
   }
 
-  if (
-    status ===
-      "APTO CONDICIONADO" &&
-    secondReviewDate
-  ) {
-    const first =
-      new Date(
-        `${executionDate}T00:00:00`
-      );
-
-    const second =
-      new Date(
-        `${secondReviewDate}T00:00:00`
-      );
-
-    if (
-      Number.isNaN(
-        first.getTime()
-      ) ||
-      Number.isNaN(
-        second.getTime()
-      )
-    ) {
-      return "ERROR";
-    }
-
-    if (second <= first) {
-      return "ERROR";
-    }
-  }
-
-  /*
-   * Si todavía no existe próxima revisión
-   * no podemos calcular el resultado.
+  /**
+   * Sin fecha no podemos calcular resultado.
    */
-  if (!nextReviewDate) {
-    return "ERROR";
+  if (!date) {
+    return "-";
   }
 
-  const today = new Date();
-  today.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  /*
+  /**
    * APTO CONDICIONADO:
-   * la fecha que determina el resultado
-   * es la segunda revisión.
+   *
+   * La fecha que determina PTE. es la
+   * segunda revisión.
    */
   if (
-    status ===
-    "APTO CONDICIONADO"
+    status === "APTO CONDICIONADO"
   ) {
-    const secondDate =
-      new Date(
-        `${secondReviewDate}T00:00:00`
-      );
-
-    if (
-      Number.isNaN(
-        secondDate.getTime()
-      )
-    ) {
-      return "ERROR";
-    }
-
-    if (secondDate > today) {
+    if (!secondReviewDate) {
       return "CONDICIONADO";
     }
 
-    return "PTE.";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const secondDate = new Date(
+      `${secondReviewDate}T00:00:00`
+    );
+
+    if (
+      !Number.isNaN(
+        secondDate.getTime()
+      ) &&
+      secondDate < today
+    ) {
+      return "PTE.";
+    }
+
+    return "CONDICIONADO";
   }
 
-  /*
-   * APTO:
-   * la fecha que determina el resultado
-   * es la próxima revisión calculada.
+  /**
+   * APTO y NO APTO:
+   *
+   * La fecha que determina PTE. es la
+   * próxima revisión.
    */
-  if (status === "APTO") {
-    const nextDate =
-      new Date(
-        `${nextReviewDate}T00:00:00`
-      );
+  if (
+    status === "APTO" ||
+    status === "NO APTO"
+  ) {
+    if (!nextReviewDate) {
+      return "ERROR";
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const nextDate = new Date(
+      `${nextReviewDate}T00:00:00`
+    );
 
     if (
       Number.isNaN(
@@ -664,60 +513,23 @@ function calculateResult(
       return "ERROR";
     }
 
-    if (nextDate > today) {
+    if (nextDate < today) {
+      return "PTE.";
+    }
+
+    if (status === "APTO") {
       return "FAVORABLE";
     }
 
-    return "PTE.";
-  }
-
-  /*
-   * NO APTO:
-   * la fecha que determina el resultado
-   * es la próxima revisión calculada.
-   */
-  if (status === "NO APTO") {
-    const nextDate =
-      new Date(
-        `${nextReviewDate}T00:00:00`
-      );
-
-    if (
-      Number.isNaN(
-        nextDate.getTime()
-      )
-    ) {
-      return "ERROR";
-    }
-
-    if (nextDate > today) {
+    if (status === "NO APTO") {
       return "DESFAVORABLE";
     }
-
-    return "PTE.";
-  }
-
-  /*
-   * Estados que no requieren fecha.
-   */
-  if (
-    status === "PENDIENTE" ||
-    status ===
-      "SIN INFORMACIÓN"
-  ) {
-    return "-";
   }
 
   return "ERROR";
 }
 
-/* =========================================================
-   FECHAS
-========================================================= */
-
-function formatDate(
-  value: string
-) {
+function formatDate(value: string) {
   if (!value) {
     return "—";
   }
@@ -726,11 +538,7 @@ function formatDate(
     `${value}T00:00:00`
   );
 
-  if (
-    Number.isNaN(
-      d.getTime()
-    )
-  ) {
+  if (Number.isNaN(d.getTime())) {
     return "—";
   }
 
@@ -739,10 +547,6 @@ function formatDate(
   );
 }
 
-/* =========================================================
-   COMPONENTE
-========================================================= */
-
 export default function CenterDetail() {
   const params = useParams();
 
@@ -750,12 +554,6 @@ export default function CenterDetail() {
     params.id
   );
 
-  /*
-   * Se crea una referencia estable al centro
-   * para que TypeScript no considere center
-   * como posiblemente undefined dentro de
-   * las funciones/renderizados posteriores.
-   */
   const center =
     demo.centers.find(
       c => c.id === id
@@ -788,16 +586,6 @@ export default function CenterDetail() {
 
   const [category, setCategory] =
     useState("Todas");
-
-  const [
-    actionFilter,
-    setActionFilter,
-  ] = useState("Todas");
-
-  const [
-    resultFilter,
-    setResultFilter,
-  ] = useState("Todos");
 
   const [saved, setSaved] =
     useState(false);
@@ -841,7 +629,9 @@ export default function CenterDetail() {
 
   useEffect(() => {
     const h = () =>
-      setState(loadState());
+      setState(
+        loadState()
+      );
 
     window.addEventListener(
       "stl-role-change",
@@ -873,26 +663,27 @@ export default function CenterDetail() {
     );
   }
 
-  /*
-   * A partir de aquí TypeScript sabe que
-   * currentCenter siempre existe.
+  /**
+   * A partir de este punto TypeScript sabe
+   * que center existe.
    */
   const currentCenter =
     center;
 
   const catalog =
-    center.country === "España"
+    currentCenter.country ===
+    "España"
       ? demo.esCatalog
       : demo.ptCatalog;
 
   const overrides =
     (state.centers[
-      center.id
+      currentCenter.id
     ] || {}) as CenterFormValues;
 
   const activeMap =
     state.activeItems[
-      center.id
+      currentCenter.id
     ] || {};
 
   const activeItems =
@@ -908,7 +699,7 @@ export default function CenterDetail() {
     );
 
   const key = reviewKey(
-    center.id,
+    currentCenter.id,
     year,
     period
   );
@@ -944,89 +735,18 @@ export default function CenterDetail() {
     ),
   ];
 
-  const actions = [
-    "Todas",
-    ...Array.from(
-      new Set(
-        catalog
-          .map(
-            (x: any) =>
-              x.action
-          )
-          .filter(Boolean)
-      )
-    ),
-  ];
-
-  const resultOptions = [
-    "Todos",
-    "FAVORABLE",
-    "CONDICIONADO",
-    "DESFAVORABLE",
-    "PTE.",
-    "ERROR",
-    "-",
-  ];
-
-  const getCurrentResult =
-    (x: any) => {
-      const item =
-        review.items[
-          x.id
-        ] || blankItem();
-
-      const nextDate =
-        calculateNextReview(
-          item.date,
-          x.frequency,
-          center.country
-        );
-
-      return calculateResult(
-        item.status,
-        item.date,
-        nextDate,
-        item.secondReviewDate
-      );
-    };
-
   const visible =
     activeItems.filter(
-      (x: any) => {
-        const matchesCategory =
+      (x: any) =>
+        (
           category === "Todas" ||
-          x.category ===
-            category;
-
-        const matchesAction =
-          actionFilter ===
-            "Todas" ||
-          x.action ===
-            actionFilter;
-
-        const matchesSearch =
-          `${x.code} ${x.installation} ${x.action} ${x.category}`
-            .toLowerCase()
-            .includes(
-              q.toLowerCase()
-            );
-
-        const result =
-          getCurrentResult(x);
-
-        const matchesResult =
-          resultFilter ===
-            "Todos" ||
-          result ===
-            resultFilter;
-
-        return (
-          matchesCategory &&
-          matchesAction &&
-          matchesSearch &&
-          matchesResult
-        );
-      }
+          x.category === category
+        ) &&
+        `${x.code} ${x.installation} ${x.action} ${x.category}`
+          .toLowerCase()
+          .includes(
+            q.toLowerCase()
+          )
     );
 
   const selectableItems =
@@ -1066,7 +786,9 @@ export default function CenterDetail() {
 
           if (match) {
             const reviewYear =
-              Number(match[1]);
+              Number(
+                match[1]
+              );
 
             if (
               reviewYear <=
@@ -1094,7 +816,9 @@ export default function CenterDetail() {
     next: V1State
   ) {
     setState(next);
+
     saveState(next);
+
     setSaved(true);
 
     setTimeout(() => {
@@ -1133,7 +857,9 @@ export default function CenterDetail() {
       },
     };
 
-    updateState(next);
+    updateState(
+      next
+    );
   }
 
   function getItem(
@@ -1199,12 +925,16 @@ export default function CenterDetail() {
           signed: true,
         },
         {
-          name: "Administrador Demo",
-          role: "ADMINISTRADOR",
+          name:
+            "Administrador Demo",
+          role:
+            "ADMINISTRADOR",
           signed: true,
         },
-        ...(review.participants ||
-          []).filter(
+        ...(
+          review.participants ||
+          []
+        ).filter(
           p =>
             p.role ===
             "OTRO"
@@ -1228,7 +958,9 @@ export default function CenterDetail() {
 
     delete next.reviews[key];
 
-    updateState(next);
+    updateState(
+      next
+    );
   }
 
   function uploadImage(
@@ -1249,18 +981,18 @@ export default function CenterDetail() {
       );
     };
 
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(
+      file
+    );
   }
 
   const readOnly =
-    state.role ===
-      "LECTURA" ||
-    center.status !==
+    state.role === "LECTURA" ||
+    currentCenter.status !==
       "Activo";
 
   const admin =
-    state.role ===
-    "ADMIN";
+    state.role === "ADMIN";
 
   function SectionToggle({
     open,
@@ -1291,6 +1023,7 @@ export default function CenterDetail() {
 
   return (
     <div className="space-y-6">
+
       <div className="flex items-center gap-3">
         <Link
           href="/centers"
@@ -1306,8 +1039,11 @@ export default function CenterDetail() {
 
       <Card className="overflow-hidden">
         <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
+
           <div className="flex items-center gap-5 p-6">
+
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
+
               {overrides.logoUrl ? (
                 <img
                   src={
@@ -1318,54 +1054,68 @@ export default function CenterDetail() {
                 />
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
-                  {center.shortCode ||
-                    center.code}
+                  {currentCenter.shortCode ||
+                    currentCenter.code}
                 </span>
               )}
+
             </div>
 
             <div>
+
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {center.country} ·{" "}
-                {center.stl}
+                {
+                  currentCenter.country
+                }{" "}
+                ·{" "}
+                {currentCenter.stl}
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
-                {center.name}
+                {currentCenter.name}
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
                 {overrides.address ||
-                  center.address ||
+                  currentCenter.address ||
                   "Dirección pendiente"}
               </p>
 
               <div className="mt-3 flex gap-2">
+
                 <Badge tone="success">
-                  {center.status}
+                  {
+                    currentCenter.status
+                  }
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Código{" "}
-                  {center.shortCode ||
+                  {currentCenter.shortCode ||
                     "—"}
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Nº{" "}
-                  {center.code}
+                  {currentCenter.code}
                 </span>
+
               </div>
+
             </div>
+
           </div>
 
           <div className="flex items-center justify-center bg-white/5 p-4">
+
             {overrides.imageUrl ? (
               <img
                 src={
                   overrides.imageUrl
                 }
-                alt={center.name}
+                alt={
+                  currentCenter.name
+                }
                 className="h-32 w-full rounded-xl object-cover"
               />
             ) : (
@@ -1373,11 +1123,14 @@ export default function CenterDetail() {
                 Imagen del centro
               </div>
             )}
+
           </div>
+
         </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-5">
+
         {[
           [
             "Cumplimiento",
@@ -1419,10 +1172,13 @@ export default function CenterDetail() {
             </Card>
           )
         )}
+
       </div>
 
       <Card className="p-6">
+
         <div className="flex items-center justify-between gap-4">
+
           <SectionTitle
             title="Datos del centro"
             subtitle="Edición disponible según perfil"
@@ -1445,11 +1201,14 @@ export default function CenterDetail() {
               )
             }
           />
+
         </div>
 
         {openCenterData && (
           <>
+
             <div className="grid gap-4 md:grid-cols-4">
+
               <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Propiedad
@@ -1461,7 +1220,7 @@ export default function CenterDetail() {
                   }
                   value={
                     overrides.property ??
-                    center.property ??
+                    currentCenter.property ??
                     ""
                   }
                   onChange={e =>
@@ -1485,7 +1244,7 @@ export default function CenterDetail() {
                   }
                   value={
                     overrides.address ??
-                    center.address ??
+                    currentCenter.address ??
                     ""
                   }
                   onChange={e =>
@@ -1555,7 +1314,7 @@ export default function CenterDetail() {
                   }
                   value={
                     overrides.manager ??
-                    center.manager ??
+                    currentCenter.manager ??
                     ""
                   }
                   onChange={e =>
@@ -1688,12 +1447,16 @@ export default function CenterDetail() {
               </label>
 
               <div />
+
             </div>
 
             {!readOnly && (
               <div className="mt-5 flex flex-wrap gap-3">
+
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
+
                   <ImagePlus className="mr-2 inline h-4 w-4" />
+
                   Logo
 
                   <input
@@ -1712,10 +1475,13 @@ export default function CenterDetail() {
                       }
                     }}
                   />
+
                 </label>
 
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
+
                   <ImagePlus className="mr-2 inline h-4 w-4" />
+
                   Imagen centro
 
                   <input
@@ -1734,15 +1500,21 @@ export default function CenterDetail() {
                       }
                     }}
                   />
+
                 </label>
+
               </div>
             )}
+
           </>
         )}
+
       </Card>
 
       <Card className="p-6">
+
         <div className="flex items-center justify-between gap-4">
+
           <SectionTitle
             title="Histórico de cumplimiento"
             subtitle="Revisiones realizadas del centro hasta la fecha actual"
@@ -1758,10 +1530,12 @@ export default function CenterDetail() {
               )
             }
           />
+
         </div>
 
         {openHistory && (
           <>
+
             {reviewYears.length ===
             0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
@@ -1769,6 +1543,7 @@ export default function CenterDetail() {
               </div>
             ) : (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
+
                 {reviewYears.flatMap(
                   y =>
                     (
@@ -1781,7 +1556,7 @@ export default function CenterDetail() {
                         const r =
                           state.reviews[
                             reviewKey(
-                              center.id,
+                              currentCenter.id,
                               y,
                               p
                             )
@@ -1816,7 +1591,9 @@ export default function CenterDetail() {
                             key={`${y}-${p}`}
                             className="rounded-xl border border-slate-200 p-4"
                           >
+
                             <div className="flex items-center justify-between">
+
                               <div className="text-xs font-semibold text-slate-400">
                                 {p}{" "}
                                 {y}
@@ -1827,6 +1604,7 @@ export default function CenterDetail() {
                                   Confirmada
                                 </Badge>
                               )}
+
                             </div>
 
                             <div className="mt-2 text-xl font-black">
@@ -1842,24 +1620,33 @@ export default function CenterDetail() {
                                   : "Revisión cargada sin confirmar"
                                 : "Sin revisión cargada"}
                             </div>
+
                           </div>
                         );
                       }
                     )
                 )}
+
               </div>
             )}
 
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+
               <BarChart3 className="h-4 w-4" />
+
               El histórico muestra únicamente años hasta el año actual.
+
             </div>
+
           </>
         )}
+
       </Card>
 
       <Card className="p-6">
+
         <div className="flex items-center justify-between gap-4">
+
           <SectionTitle
             title="Revisión técnico-legal"
             subtitle="Dos revisiones anuales con histórico independiente."
@@ -1875,15 +1662,16 @@ export default function CenterDetail() {
               )
             }
           />
+
         </div>
 
         {openReview && (
           <>
+
             <div className="mt-5 flex flex-wrap gap-2">
+
               <Select
-                value={String(
-                  year
-                )}
+                value={String(year)}
                 onChange={v =>
                   setYear(
                     Number(v)
@@ -1893,9 +1681,11 @@ export default function CenterDetail() {
                 <option>
                   2026
                 </option>
+
                 <option>
                   2027
                 </option>
+
                 <option>
                   2028
                 </option>
@@ -1929,9 +1719,11 @@ export default function CenterDetail() {
                   Reiniciar demo
                 </Button>
               )}
+
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-4">
+
               <div className="rounded-xl bg-slate-50 p-4">
                 <div className="text-xs text-slate-400">
                   Estado
@@ -1957,11 +1749,13 @@ export default function CenterDetail() {
 
               <div className="rounded-xl bg-amber-50 p-4">
                 <div className="text-xs text-amber-700">
-                  Pendientes
+                  Pendientes confirmar
                 </div>
 
                 <div className="mt-1 text-xl font-black text-amber-700">
-                  {summary.pendingConfirmation}
+                  {
+                    summary.pendingConfirmation
+                  }
                 </div>
               </div>
 
@@ -1974,9 +1768,11 @@ export default function CenterDetail() {
                   {summary.score}%
                 </div>
               </div>
+
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+
               {STATUSES.map(
                 s => (
                   <span
@@ -1986,50 +1782,21 @@ export default function CenterDetail() {
                     <b>
                       {
                         summary
-                          .counts[
-                          s
-                        ]
+                          .counts[s]
                       }
                     </b>{" "}
                     {s}
                   </span>
                 )
               )}
+
             </div>
-
-            {summary.pendingConfirmation ===
-              0 &&
-              summary.total >
-                0 &&
-              !review.confirmed &&
-              admin && (
-                <div className="mt-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div>
-                    <div className="font-bold text-emerald-800">
-                      Todos los elementos están preparados
-                    </div>
-
-                    <div className="text-xs text-emerald-700">
-                      La revisión puede ser cerrada por el Administrador.
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={
-                      confirmReview
-                    }
-                  >
-                    <CheckCircle2 className="mr-2 inline h-4 w-4" />
-                    Confirmar{" "}
-                    {period}{" "}
-                    {year}
-                  </Button>
-                </div>
-              )}
 
             {review.confirmed && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+
                 <div>
+
                   <div className="font-bold text-emerald-800">
                     Revisión{" "}
                     {period}{" "}
@@ -2038,11 +1805,13 @@ export default function CenterDetail() {
                   </div>
 
                   <div className="text-xs text-emerald-700">
+
                     Administrador:{" "}
                     {
                       review.confirmedBy
                     }{" "}
                     ·{" "}
+
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
@@ -2050,45 +1819,46 @@ export default function CenterDetail() {
                           "es-ES"
                         )
                       : "—"}
+
                   </div>
+
                 </div>
 
                 <Link
-                  href={`/centers/${center.id}/certificate?year=${year}&period=${period}`}
+                  href={`/centers/${currentCenter.id}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
+
                   Ver / exportar certificado
+
                 </Link>
+
               </div>
             )}
 
             <div className="mt-5 rounded-xl border border-slate-200 p-4">
+
               <div className="text-sm font-bold">
                 Participantes de la revisión
               </div>
 
               <div className="mt-2 space-y-2">
+
                 {(
                   review.participants ||
                   []
                 ).map(
-                  (
-                    p,
-                    i
-                  ) => (
+                  (p, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
                     >
+
                       <span>
-                        {
-                          p.name
-                        }{" "}
+                        {p.name}{" "}
                         ·{" "}
-                        {
-                          p.role
-                        }
+                        {p.role}
                       </span>
 
                       {p.signed ? (
@@ -2135,14 +1905,17 @@ export default function CenterDetail() {
                           Pendiente
                         </Badge>
                       )}
+
                     </div>
                   )
                 )}
+
               </div>
 
               {!readOnly &&
                 !review.confirmed && (
                   <div className="mt-3 flex gap-2">
+
                     <input
                       value={
                         participant
@@ -2175,7 +1948,8 @@ export default function CenterDetail() {
                                 {
                                   name:
                                     participant.trim(),
-                                  role: "OTRO",
+                                  role:
+                                    "OTRO",
                                   signed:
                                     false,
                                 },
@@ -2197,15 +1971,21 @@ export default function CenterDetail() {
                     >
                       Añadir
                     </Button>
+
                   </div>
                 )}
+
             </div>
+
           </>
         )}
+
       </Card>
 
       <Card className="p-6">
+
         <div className="flex items-center justify-between gap-4">
+
           <SectionTitle
             title="Instalaciones y actuaciones"
             subtitle={`${activeItems.length} elementos activos · ${inactiveItems.length} elementos no activos`}
@@ -2221,53 +2001,49 @@ export default function CenterDetail() {
               )
             }
           />
+
         </div>
 
         {openInstallations && (
           <>
+
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+
               <div className="flex flex-wrap items-center gap-2">
+
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <ClipboardCheck className="h-4 w-4" />
                   Leyenda de resultados
                 </div>
 
-                {[
-                  [
-                    "FAVORABLE",
-                    "border-emerald-200 bg-emerald-50 text-emerald-700",
-                  ],
-                  [
-                    "CONDICIONADO",
-                    "border-amber-200 bg-amber-50 text-amber-700",
-                  ],
-                  [
-                    "DESFAVORABLE",
-                    "border-red-200 bg-red-50 text-red-700",
-                  ],
-                  [
-                    "PTE.",
-                    "border-orange-200 bg-orange-50 text-orange-700",
-                  ],
-                  [
-                    "ERROR",
-                    "border-slate-300 bg-slate-100 text-slate-700",
-                  ],
-                ].map(
-                  ([label, className]) => (
-                    <span
-                      key={label}
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${className}`}
-                    >
-                      {label}
-                    </span>
-                  )
-                )}
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  FAVORABLE
+                </span>
+
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                  CONDICIONADO
+                </span>
+
+                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                  DESFAVORABLE
+                </span>
+
+                <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                  PTE.
+                </span>
+
+                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  ERROR
+                </span>
+
               </div>
+
             </div>
 
-            <div className="mb-4 mt-5 grid gap-3 xl:grid-cols-4">
-              <div className="relative min-w-0">
+            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
+
+              <div className="relative min-w-0 flex-1">
+
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                 <input
@@ -2280,6 +2056,7 @@ export default function CenterDetail() {
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
                 />
+
               </div>
 
               <Select
@@ -2302,53 +2079,18 @@ export default function CenterDetail() {
                 )}
               </Select>
 
-              <Select
-                value={
-                  actionFilter
-                }
-                onChange={
-                  setActionFilter
-                }
-              >
-                {actions.map(
-                  a => (
-                    <option
-                      key={a}
-                      value={a}
-                    >
-                      {a}
-                    </option>
-                  )
-                )}
-              </Select>
-
-              <Select
-                value={
-                  resultFilter
-                }
-                onChange={
-                  setResultFilter
-                }
-              >
-                {resultOptions.map(
-                  r => (
-                    <option
-                      key={r}
-                      value={r}
-                    >
-                      Resultado:{" "}
-                      {r}
-                    </option>
-                  )
-                )}
-              </Select>
             </div>
 
             <div className="rounded-2xl border border-slate-200">
+
               <div className="overflow-x-auto">
-                <table className="min-w-[1900px] w-full text-sm">
+
+                <table className="min-w-[1700px] w-full text-sm">
+
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
+
                     <tr>
+
                       <th className="w-24 px-3 py-3">
                         Código
                       </th>
@@ -2402,14 +2144,20 @@ export default function CenterDetail() {
                       </th>
 
                       <th className="w-12 px-3 py-3" />
+
                     </tr>
+
                   </thead>
 
                   <tbody>
+
                     {visible.map(
                       (x: any) => {
+
                         const item =
-                          getItem(x.id);
+                          getItem(
+                            x.id
+                          );
 
                         const locked =
                           readOnly ||
@@ -2421,31 +2169,23 @@ export default function CenterDetail() {
                             x.category
                           );
 
-                        /*
-                         * ESTE ES EL CÁLCULO PRINCIPAL.
-                         *
-                         * Se ejecuta cada vez que:
-                         * - se introduce una fecha
-                         * - cambia la frecuencia
-                         * - cambia el país del centro
+                        /**
+                         * ESTE ES EL CÁLCULO
+                         * QUE QUEREMOS COMPROBAR
+                         * EN ESTA FASE.
                          */
                         const nextDate =
                           calculateNextReview(
                             item.date,
-                            x.frequency,
-                            center.country
+                            x.frequency
                           );
 
-                        /*
-                         * El resultado utiliza la fecha
-                         * calculada anterior.
-                         */
                         const result =
                           calculateResult(
                             item.status,
                             item.date,
-                            nextDate,
-                            item.secondReviewDate
+                            item.secondReviewDate,
+                            nextDate
                           );
 
                         const resultVisual =
@@ -2458,16 +2198,16 @@ export default function CenterDetail() {
 
                         return (
                           <tr
-                            key={
-                              x.id
-                            }
+                            key={x.id}
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
+
                             <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
                               {x.code}
                             </td>
 
                             <td className="px-2 py-3 align-top">
+
                               <div
                                 className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 title={
@@ -2479,9 +2219,11 @@ export default function CenterDetail() {
                                   className={`h-4 w-4 ${visual.icon}`}
                                 />
                               </div>
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <div className="font-semibold text-slate-800">
                                 {
                                   x.installation
@@ -2495,6 +2237,7 @@ export default function CenterDetail() {
                                   }
                                 </div>
                               )}
+
                             </td>
 
                             <td className="px-3 py-3 align-top text-slate-600">
@@ -2502,14 +2245,19 @@ export default function CenterDetail() {
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
                                 <CalendarDays className="h-3 w-3" />
-                                {x.frequency ||
-                                  "—"}
+                                {
+                                  x.frequency ||
+                                  "—"
+                                }
                               </span>
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <input
                                 disabled={
                                   locked
@@ -2529,9 +2277,11 @@ export default function CenterDetail() {
                                 placeholder="ID equipo"
                                 className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <input
                                 disabled={
                                   locked
@@ -2551,9 +2301,11 @@ export default function CenterDetail() {
                                 placeholder="Empresa"
                                 className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <select
                                 disabled={
                                   locked
@@ -2570,28 +2322,26 @@ export default function CenterDetail() {
                                     }
                                   )
                                 }
-                                className={`w-44 rounded-lg border px-2 py-2 text-xs font-semibold outline-none ${getStatusClasses(
+                                className={`w-44 rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
                                   item.status
                                 )}`}
                               >
                                 {STATUSES.map(
                                   s => (
                                     <option
-                                      key={
-                                        s
-                                      }
-                                      value={
-                                        s
-                                      }
+                                      key={s}
+                                      value={s}
                                     >
                                       {s}
                                     </option>
                                   )
                                 )}
                               </select>
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <input
                                 disabled={
                                   locked
@@ -2611,37 +2361,43 @@ export default function CenterDetail() {
                                 }
                                 className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs disabled:bg-slate-50"
                               />
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <div className="flex min-h-8 items-center gap-2">
+
                                 <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
 
                                 <div>
-                                  <div
-                                    className={`font-semibold ${
-                                      nextDate
-                                        ? "text-slate-700"
-                                        : "text-slate-300"
-                                    }`}
-                                  >
-                                    {nextDate
-                                      ? formatDate(
-                                          nextDate
-                                        )
-                                      : "—"}
-                                  </div>
 
-                                  {nextDate && (
-                                    <div className="text-[10px] text-slate-400">
-                                      Calculada automáticamente
+                                  {nextDate ? (
+                                    <>
+                                      <div className="font-semibold text-slate-700">
+                                        {formatDate(
+                                          nextDate
+                                        )}
+                                      </div>
+
+                                      <div className="text-[10px] text-slate-400">
+                                        Calculada automáticamente
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-xs text-slate-400">
+                                      —
                                     </div>
                                   )}
+
                                 </div>
+
                               </div>
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               {item.status ===
                               "APTO CONDICIONADO" ? (
                                 <input
@@ -2649,10 +2405,6 @@ export default function CenterDetail() {
                                     locked
                                   }
                                   type="date"
-                                  min={
-                                    item.date ||
-                                    undefined
-                                  }
                                   value={
                                     item.secondReviewDate
                                   }
@@ -2672,23 +2424,27 @@ export default function CenterDetail() {
                                   No aplica
                                 </span>
                               )}
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <span
                                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${resultVisual.className}`}
                               >
+
                                 <span
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {
-                                  result
-                                }
+                                {result}
+
                               </span>
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               <textarea
                                 disabled={
                                   locked
@@ -2709,9 +2465,11 @@ export default function CenterDetail() {
                                 rows={2}
                                 className="w-52 resize-y rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
+
                             </td>
 
                             <td className="px-3 py-3 align-top">
+
                               {!readOnly &&
                                 !review.confirmed && (
                                   <button
@@ -2728,7 +2486,9 @@ export default function CenterDetail() {
                                     <X className="h-4 w-4" />
                                   </button>
                                 )}
+
                             </td>
+
                           </tr>
                         );
                       }
@@ -2738,30 +2498,36 @@ export default function CenterDetail() {
                       0 && (
                       <tr>
                         <td
-                          colSpan={
-                            15
-                          }
+                          colSpan={15}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
-                          No hay elementos que coincidan con los filtros.
+                          No hay elementos que coincidan con la búsqueda.
                         </td>
                       </tr>
                     )}
+
                   </tbody>
+
                 </table>
+
               </div>
+
             </div>
 
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
+
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                La próxima revisión se calcula automáticamente sumando la frecuencia a la fecha de ejecución. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el último día laborable. El resultado se calcula utilizando la próxima revisión o, en APTO CONDICIONADO, la fecha de la segunda revisión.
+                En esta fase, la próxima revisión se calcula únicamente sumando a la fecha de ejecución el número de meses indicado por la frecuencia de la instalación. La lógica de fines de semana y festivos se añadirá posteriormente.
               </div>
+
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 p-5">
+
               <div className="flex items-center justify-between gap-4">
+
                 <SectionTitle
                   title="Elementos no activos"
                   subtitle="No computan, no generan vencimientos y conservan su histórico"
@@ -2776,21 +2542,25 @@ export default function CenterDetail() {
                         }
                       >
                         <Plus className="mr-2 inline h-4 w-4" />
+
                         Añadir elemento
                       </Button>
                     ) : undefined
                   }
                 />
+
               </div>
 
               {showAddElement &&
                 !readOnly && (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+
                     <div className="mb-3 text-sm font-bold">
                       Seleccionar elemento del catálogo
                     </div>
 
                     <div className="relative mb-3">
+
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                       <input
@@ -2805,16 +2575,18 @@ export default function CenterDetail() {
                         placeholder="Buscar cualquier elemento..."
                         className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
                       />
+
                     </div>
 
                     <div className="max-h-80 space-y-2 overflow-y-auto">
+
                       {selectableItems.map(
                         (x: any) => {
+
                           const isActive =
                             activeMap[
                               x.id
-                            ] !==
-                            false;
+                            ] !== false;
 
                           const visual =
                             getInstallationVisual(
@@ -2827,12 +2599,12 @@ export default function CenterDetail() {
 
                           return (
                             <div
-                              key={
-                                x.id
-                              }
+                              key={x.id}
                               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
                             >
+
                               <div className="flex min-w-0 items-center gap-3">
+
                                 <div
                                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 >
@@ -2842,6 +2614,7 @@ export default function CenterDetail() {
                                 </div>
 
                                 <div className="min-w-0">
+
                                   <div className="truncate text-sm font-semibold">
                                     {
                                       x.code
@@ -2861,7 +2634,9 @@ export default function CenterDetail() {
                                       x.frequency
                                     }
                                   </div>
+
                                 </div>
+
                               </div>
 
                               {isActive ? (
@@ -2871,34 +2646,41 @@ export default function CenterDetail() {
                               ) : (
                                 <Button
                                   variant="secondary"
-                                  onClick={() => {
+                                  onClick={() =>
                                     setActive(
                                       x.id,
                                       true
-                                    );
-                                  }}
+                                    )
+                                  }
                                 >
                                   Activar
                                 </Button>
                               )}
+
                             </div>
                           );
                         }
                       )}
+
                     </div>
+
                   </div>
                 )}
 
               <div className="mt-4">
+
                 {inactiveItems.length ===
                 0 ? (
                   <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    No hay elementos no activos actualmente. Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
+                    No hay elementos no activos actualmente.
+                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
                   </div>
                 ) : (
                   <div className="grid gap-2 md:grid-cols-2">
+
                     {inactiveItems.map(
                       (x: any) => {
+
                         const visual =
                           getInstallationVisual(
                             x.installation,
@@ -2910,12 +2692,12 @@ export default function CenterDetail() {
 
                         return (
                           <div
-                            key={
-                              x.id
-                            }
+                            key={x.id}
                             className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
                           >
+
                             <div className="flex min-w-0 items-center gap-3">
+
                               <div
                                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
                               >
@@ -2925,11 +2707,10 @@ export default function CenterDetail() {
                               </div>
 
                               <div className="min-w-0">
+
                                 <div className="truncate">
                                   <b>
-                                    {
-                                      x.code
-                                    }
+                                    {x.code}
                                   </b>{" "}
                                   ·{" "}
                                   {
@@ -2942,7 +2723,9 @@ export default function CenterDetail() {
                                     x.action
                                   }
                                 </div>
+
                               </div>
+
                             </div>
 
                             {!readOnly && (
@@ -2958,17 +2741,24 @@ export default function CenterDetail() {
                                 Activar
                               </Button>
                             )}
+
                           </div>
                         );
                       }
                     )}
+
                   </div>
                 )}
+
               </div>
+
             </div>
+
           </>
         )}
+
       </Card>
+
     </div>
   );
 }
