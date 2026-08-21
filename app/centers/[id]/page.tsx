@@ -12,17 +12,10 @@ import {
   Search,
   FileCheck2,
   BarChart3,
+  X,
 } from "lucide-react";
-
 import { demo } from "@/lib/data";
-import {
-  Card,
-  SectionTitle,
-  Badge,
-  Button,
-  Select,
-} from "@/components/ui";
-
+import { Card, SectionTitle, Badge, Button, Select } from "@/components/ui";
 import {
   loadState,
   saveState,
@@ -42,16 +35,26 @@ const STATUSES: V1Status[] = [
   "SIN INFORMACIÓN",
 ];
 
+const STATUS_TONE: Record<V1Status, string> = {
+  APTO: "success",
+  "APTO CONDICIONADO": "warning",
+  "NO APTO": "danger",
+  PENDIENTE: "default",
+  "SIN INFORMACIÓN": "default",
+};
+
 export default function CenterDetail() {
   const params = useParams();
   const id = String(params.id);
 
   const center =
-    demo.centers.find(c => c.id === id) ||
-    demo.centers.find(c => encodeURIComponent(c.id) === id);
+    demo.centers.find((c) => c.id === id) ||
+    demo.centers.find((c) => encodeURIComponent(c.id) === id);
 
   const [state, setState] = useState<V1State>({
     role: "ADMIN",
+    country: undefined,
+    centerId: undefined,
     centers: {},
     activeItems: {},
     reviews: {},
@@ -70,9 +73,7 @@ export default function CenterDetail() {
 
   useEffect(() => {
     const h = () => setState(loadState());
-
     window.addEventListener("stl-role-change", h);
-
     return () => window.removeEventListener("stl-role-change", h);
   }, []);
 
@@ -80,10 +81,7 @@ export default function CenterDetail() {
     return (
       <Card className="p-8">
         <h2 className="text-xl font-bold">Centro no encontrado</h2>
-        <Link
-          href="/centers"
-          className="mt-4 inline-block text-sm underline"
-        >
+        <Link href="/centers" className="mt-4 inline-block text-sm underline">
           Volver
         </Link>
       </Card>
@@ -91,11 +89,8 @@ export default function CenterDetail() {
   }
 
   const currentCenter = center;
-
   const catalog =
-    center.country === "España"
-      ? demo.esCatalog
-      : demo.ptCatalog;
+    center.country === "España" ? demo.esCatalog : demo.ptCatalog;
 
   const overrides = state.centers[center.id] || {};
   const activeMap = state.activeItems[center.id] || {};
@@ -127,11 +122,7 @@ export default function CenterDetail() {
   const categories = [
     "Todas",
     ...Array.from(
-      new Set(
-        catalog
-          .map((x: any) => x.category)
-          .filter(Boolean)
-      )
+      new Set(catalog.map((x: any) => x.category).filter(Boolean))
     ),
   ];
 
@@ -143,13 +134,10 @@ export default function CenterDetail() {
         .includes(q.toLowerCase())
   );
 
-  const centerData = currentCenter as any;
-
   function updateState(next: V1State) {
     setState(next);
     saveState(next);
     setSaved(true);
-
     setTimeout(() => setSaved(false), 1500);
   }
 
@@ -225,12 +213,7 @@ export default function CenterDetail() {
   }
 
   function confirmReview() {
-    if (
-      state.role !== "ADMIN" ||
-      summary.pendingConfirmation > 0
-    ) {
-      return;
-    }
+    if (state.role !== "ADMIN" || summary.pendingConfirmation > 0) return;
 
     const nextReview = {
       ...review,
@@ -249,7 +232,7 @@ export default function CenterDetail() {
           signed: true,
         },
         ...(review.participants || []).filter(
-          p => p.role === "OTRO"
+          (p) => p.role === "OTRO"
         ),
       ],
     };
@@ -282,10 +265,10 @@ export default function CenterDetail() {
   }
 
   const readOnly =
-    state.role === "LECTURA" ||
-    center.status !== "Activo";
+    state.role === "LECTURA" || center.status !== "Activo";
 
   const admin = state.role === "ADMIN";
+  const currentScore = summary.score;
 
   return (
     <div className="space-y-6">
@@ -335,9 +318,7 @@ export default function CenterDetail() {
               </p>
 
               <div className="mt-3 flex gap-2">
-                <Badge tone="success">
-                  {center.status}
-                </Badge>
+                <Badge tone="success">{center.status}</Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Código {center.shortCode || "—"}
@@ -368,23 +349,15 @@ export default function CenterDetail() {
 
       <div className="grid gap-4 md:grid-cols-5">
         {[
-          ["Cumplimiento", `${summary.score}%`],
-          [
-            "Confirmados",
-            `${summary.confirmed}/${summary.total}`,
-          ],
+          ["Cumplimiento", `${currentScore}%`],
+          ["Confirmados", `${summary.confirmed}/${summary.total}`],
           ["Pendientes", summary.pendingConfirmation],
           ["No aptos", summary.counts["NO APTO"]],
-          [
-            "Condicionados",
-            summary.counts["APTO CONDICIONADO"],
-          ],
+          ["Condicionados", summary.counts["APTO CONDICIONADO"]],
         ].map(([t, v]) => (
-          <Card key={String(t)} className="p-5">
+          <Card key={t} className="p-5">
             <div className="text-2xl font-black">{v}</div>
-            <div className="mt-1 text-sm text-slate-500">
-              {t}
-            </div>
+            <div className="mt-1 text-sm text-slate-500">{t}</div>
           </Card>
         ))}
       </div>
@@ -394,183 +367,81 @@ export default function CenterDetail() {
           title="Datos del centro"
           subtitle="Edición disponible según perfil"
           action={
-            saved ? (
-              <Badge tone="success">Guardado</Badge>
-            ) : undefined
+            saved ? <Badge tone="success">Guardado</Badge> : undefined
           }
         />
 
-        <div className="space-y-6">
-          <div>
-            <h3 className="mb-3 text-sm font-bold text-slate-700">
-              Datos generales
-            </h3>
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
+            {[
+              [
+                "property",
+                "Propiedad",
+                overrides.property ?? center.property ?? "",
+              ],
+              [
+                "address",
+                "Dirección",
+                overrides.address ?? center.address ?? "",
+              ],
+            ].map(([field, label, value]) => (
+              <label
+                key={field}
+                className="text-sm"
+              >
+                <span className="text-xs text-slate-400">
+                  {label}
+                </span>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              {(
-                [
-                  [
-                    "property",
-                    "Propiedad",
-                    overrides.property ??
-                      center.property ??
-                      "",
-                  ],
-                  [
-                    "address",
-                    "Dirección",
-                    overrides.address ??
-                      center.address ??
-                      "",
-                  ],
-                  [
-                    "city",
-                    "Ciudad",
-                    overrides.city ??
-                      centerData.city ??
-                      "",
-                  ],
-                  [
-                    "province",
-                    "Provincia",
-                    overrides.province ??
-                      centerData.province ??
-                      "",
-                  ],
-                ] as const
-              ).map(([field, label, value]) => (
-                <label
-                  key={field}
-                  className="text-sm"
-                >
-                  <span className="text-xs text-slate-400">
-                    {label}
-                  </span>
-
-                  <input
-                    disabled={readOnly}
-                    value={value}
-                    onChange={e =>
-                      updateCenter(
-                        field as keyof typeof overrides,
-                        e.target.value
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                  />
-                </label>
-              ))}
-            </div>
+                <input
+                  disabled={readOnly}
+                  value={value}
+                  onChange={(e) =>
+                    updateCenter(
+                      field as keyof typeof overrides,
+                      e.target.value
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
+                />
+              </label>
+            ))}
           </div>
 
-          <div>
-            <h3 className="mb-3 text-sm font-bold text-slate-700">
-              Gerente
-            </h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              [
+                "city",
+                "Ciudad",
+                (center as any).city ?? "",
+              ],
+              [
+                "province",
+                "Provincia",
+                (center as any).province ?? "",
+              ],
+            ].map(([field, label, value]) => (
+              <label
+                key={field}
+                className="text-sm"
+              >
+                <span className="text-xs text-slate-400">
+                  {label}
+                </span>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              {(
-                [
-                  [
-                    "manager",
-                    "Nombre",
-                    overrides.manager ??
-                      center.manager ??
-                      "",
-                  ],
-                  [
-                    "managerPhone",
-                    "Teléfono",
-                    overrides.managerPhone ?? "",
-                  ],
-                  [
-                    "managerEmail",
-                    "Email",
-                    overrides.managerEmail ?? "",
-                  ],
-                ] as const
-              ).map(([field, label, value]) => (
-                <label
-                  key={field}
-                  className="text-sm"
-                >
-                  <span className="text-xs text-slate-400">
-                    {label}
-                  </span>
-
-                  <input
-                    disabled={readOnly}
-                    type={
-                      field === "managerEmail"
-                        ? "email"
-                        : "text"
-                    }
-                    value={value}
-                    onChange={e =>
-                      updateCenter(
-                        field as keyof typeof overrides,
-                        e.target.value
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="mb-3 text-sm font-bold text-slate-700">
-              Responsable técnico
-            </h3>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              {(
-                [
-                  [
-                    "technicalResponsible",
-                    "Nombre",
-                    overrides.technicalResponsible ?? "",
-                  ],
-                  [
-                    "technicalPhone",
-                    "Teléfono",
-                    overrides.technicalPhone ?? "",
-                  ],
-                  [
-                    "technicalEmail",
-                    "Email",
-                    overrides.technicalEmail ?? "",
-                  ],
-                ] as const
-              ).map(([field, label, value]) => (
-                <label
-                  key={field}
-                  className="text-sm"
-                >
-                  <span className="text-xs text-slate-400">
-                    {label}
-                  </span>
-
-                  <input
-                    disabled={readOnly}
-                    type={
-                      field === "technicalEmail"
-                        ? "email"
-                        : "text"
-                    }
-                    value={value}
-                    onChange={e =>
-                      updateCenter(
-                        field as keyof typeof overrides,
-                        e.target.value
-                      )
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                  />
-                </label>
-              ))}
-            </div>
+                <input
+                  disabled={readOnly}
+                  value={value}
+                  onChange={(e) =>
+                    updateCenter(
+                      field as keyof typeof overrides,
+                      e.target.value
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
+                />
+              </label>
+            ))}
           </div>
         </div>
 
@@ -579,12 +450,11 @@ export default function CenterDetail() {
             <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
               <ImagePlus className="mr-2 inline h-4 w-4" />
               Logo
-
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={e => {
+                onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) uploadImage("logoUrl", f);
                 }}
@@ -594,12 +464,11 @@ export default function CenterDetail() {
             <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
               <ImagePlus className="mr-2 inline h-4 w-4" />
               Imagen centro
-
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={e => {
+                onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) uploadImage("imageUrl", f);
                 }}
@@ -615,7 +484,6 @@ export default function CenterDetail() {
             <h2 className="text-lg font-bold">
               Revisión técnico-legal
             </h2>
-
             <p className="mt-1 text-sm text-slate-500">
               Dos revisiones anuales con histórico independiente.
             </p>
@@ -624,7 +492,7 @@ export default function CenterDetail() {
           <div className="flex flex-wrap gap-2">
             <Select
               value={String(year)}
-              onChange={v => setYear(Number(v))}
+              onChange={(v) => setYear(Number(v))}
             >
               <option>2026</option>
               <option>2027</option>
@@ -633,7 +501,7 @@ export default function CenterDetail() {
 
             <Select
               value={period}
-              onChange={v => setPeriod(v as Period)}
+              onChange={(v) => setPeriod(v as Period)}
             >
               <option value="S1">S1</option>
               <option value="S2">S2</option>
@@ -657,9 +525,7 @@ export default function CenterDetail() {
               Estado
             </div>
             <div className="mt-1 font-bold">
-              {review.confirmed
-                ? "CONFIRMADA"
-                : "EN CURSO"}
+              {review.confirmed ? "CONFIRMADA" : "EN CURSO"}
             </div>
           </div>
 
@@ -692,7 +558,7 @@ export default function CenterDetail() {
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-          {STATUSES.map(s => (
+          {STATUSES.map((s) => (
             <span
               key={s}
               className="rounded-full border border-slate-200 px-3 py-1"
@@ -711,9 +577,9 @@ export default function CenterDetail() {
                 <div className="font-bold text-emerald-800">
                   Todos los elementos están confirmados
                 </div>
-
                 <div className="text-xs text-emerald-700">
-                  La revisión ya puede ser cerrada por el Administrador.
+                  La revisión ya puede ser cerrada por el
+                  Administrador.
                 </div>
               </div>
 
@@ -734,9 +600,9 @@ export default function CenterDetail() {
               <div className="text-xs text-emerald-700">
                 Administrador: {review.confirmedBy} ·{" "}
                 {review.confirmedAt
-                  ? new Date(
-                      review.confirmedAt
-                    ).toLocaleString("es-ES")
+                  ? new Date(review.confirmedAt).toLocaleString(
+                      "es-ES"
+                    )
                   : "—"}
               </div>
             </div>
@@ -767,9 +633,7 @@ export default function CenterDetail() {
                 </span>
 
                 {p.signed ? (
-                  <Badge tone="success">
-                    Firmado
-                  </Badge>
+                  <Badge tone="success">Firmado</Badge>
                 ) : admin && !review.confirmed ? (
                   <Button
                     variant="secondary"
@@ -808,7 +672,7 @@ export default function CenterDetail() {
             <div className="mt-3 flex gap-2">
               <input
                 value={participant}
-                onChange={e =>
+                onChange={(e) =>
                   setParticipant(e.target.value)
                 }
                 placeholder="Añadir participante"
@@ -862,7 +726,7 @@ export default function CenterDetail() {
 
             <input
               value={q}
-              onChange={e => setQ(e.target.value)}
+              onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar código, instalación, actuación..."
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
             />
@@ -872,7 +736,7 @@ export default function CenterDetail() {
             value={category}
             onChange={setCategory}
           >
-            {categories.map(c => (
+            {categories.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </Select>
@@ -897,7 +761,6 @@ export default function CenterDetail() {
             <tbody>
               {visible.map((x: any) => {
                 const item = getItem(x.id);
-
                 const locked =
                   readOnly ||
                   review.confirmed ||
@@ -926,19 +789,18 @@ export default function CenterDetail() {
                     </td>
 
                     <td>{x.action}</td>
-
                     <td>{x.frequency}</td>
 
                     <td>
                       <Select
                         value={item.status}
-                        onChange={v =>
+                        onChange={(v) =>
                           updateItem(x.id, {
                             status: v as V1Status,
                           })
                         }
                       >
-                        {STATUSES.map(s => (
+                        {STATUSES.map((s) => (
                           <option key={s}>{s}</option>
                         ))}
                       </Select>
@@ -949,7 +811,7 @@ export default function CenterDetail() {
                         disabled={locked}
                         type="date"
                         value={item.date}
-                        onChange={e =>
+                        onChange={(e) =>
                           updateItem(x.id, {
                             date: e.target.value,
                           })
@@ -962,7 +824,7 @@ export default function CenterDetail() {
                       <input
                         disabled={locked}
                         value={item.company}
-                        onChange={e =>
+                        onChange={(e) =>
                           updateItem(x.id, {
                             company: e.target.value,
                           })
@@ -1000,10 +862,10 @@ export default function CenterDetail() {
                           onClick={() =>
                             setActive(x.id, false)
                           }
-                          title="Pasar a no activo"
-                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
+                          title="Eliminar elemento del centro"
+                          className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-500"
                         >
-                          ×
+                          <X className="h-4 w-4" />
                         </button>
                       )}
                     </td>
@@ -1017,69 +879,13 @@ export default function CenterDetail() {
 
       <Card className="p-6">
         <SectionTitle
-          title="Elementos no activos"
-          subtitle="No computan, no generan vencimientos y conservan su histórico"
-          action={
-            !readOnly ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  if (inactiveItems[0]) {
-                    setActive(
-                      inactiveItems[0].id,
-                      true
-                    );
-                  }
-                }}
-              >
-                <Plus className="mr-2 inline h-4 w-4" />
-                Añadir elemento
-              </Button>
-            ) : undefined
-          }
-        />
-
-        {inactiveItems.length === 0 ? (
-          <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-            No hay elementos no activos.
-          </div>
-        ) : (
-          <div className="grid gap-2 md:grid-cols-2">
-            {inactiveItems.map((x: any) => (
-              <div
-                key={x.id}
-                className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
-              >
-                <div>
-                  <b>{x.code}</b> · {x.installation} —{" "}
-                  {x.action}
-                </div>
-
-                {!readOnly && (
-                  <Button
-                    variant="secondary"
-                    onClick={() =>
-                      setActive(x.id, true)
-                    }
-                  >
-                    Activar
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card className="p-6">
-        <SectionTitle
           title="Histórico de cumplimiento"
           subtitle="Evolución S1 / S2 y siguientes años"
         />
 
         <div className="grid gap-3 md:grid-cols-4">
-          {[2026, 2027, 2028].flatMap(y =>
-            (["S1", "S2"] as Period[]).map(p => {
+          {[2026, 2027, 2028].flatMap((y) =>
+            (["S1", "S2"] as Period[]).map((p) => {
               const r =
                 state.reviews[
                   reviewKey(center.id, y, p)
@@ -1087,12 +893,12 @@ export default function CenterDetail() {
 
               const sum = reviewSummary(
                 r,
-                catalog
-                  .filter(
+                (
+                  catalog.filter(
                     (x: any) =>
                       activeMap[x.id] !== false
-                  )
-                  .map((x: any) => x.id)
+                  ) as any[]
+                ).map((x: any) => x.id)
               );
 
               return (
@@ -1121,7 +927,8 @@ export default function CenterDetail() {
 
         <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
           <BarChart3 className="h-4 w-4" />
-          La evolución gráfica se alimentará de todas las revisiones confirmadas.
+          La evolución gráfica se alimentará de todas las
+          revisiones confirmadas.
         </div>
       </Card>
     </div>
