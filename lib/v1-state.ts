@@ -30,8 +30,8 @@ export type CenterOverride = {
   managerPhone?: string;
   managerEmail?: string;
   technicalResponsible?: string;
-  technicalPhone?: string;
-  technicalEmail?: string;
+  technicalResponsiblePhone?: string;
+  technicalResponsibleEmail?: string;
   property?: string;
   imageUrl?: string;
   logoUrl?: string;
@@ -109,8 +109,13 @@ export function scoreForV1Status(status: V1Status) {
   }[status];
 }
 
-export function reviewSummary(review: ReviewState | undefined, activeIds: string[]) {
-  const items = activeIds.map(id => review?.items[id] ?? blankItem());
+export function reviewSummary(
+  review: ReviewState | undefined,
+  activeIds: string[]
+) {
+  const items = activeIds.map(
+    id => review?.items[id] ?? blankItem()
+  );
 
   const counts = {
     "APTO": items.filter(i => i.status === "APTO").length,
@@ -121,7 +126,11 @@ export function reviewSummary(review: ReviewState | undefined, activeIds: string
   };
 
   const confirmed = items.filter(i => i.confirmed).length;
-  const points = items.reduce((sum, i) => sum + scoreForV1Status(i.status), 0);
+  const points = items.reduce(
+    (sum, i) => sum + scoreForV1Status(i.status),
+    0
+  );
+
   const max = activeIds.length * 3;
 
   return {
