@@ -55,16 +55,6 @@ const STATUSES: V1Status[] = [
   "SIN INFORMACIÓN",
 ];
 
-const RESULT_FILTERS = [
-  "Todos",
-  "FAVORABLE",
-  "CONDICIONADO",
-  "DESFAVORABLE",
-  "PTE.",
-  "ERROR",
-  "-",
-];
-
 type CenterFormValues = {
   address?: string;
   manager?: string;
@@ -192,6 +182,9 @@ function getStatusClasses(status: V1Status) {
     case "PENDIENTE":
       return "bg-orange-50 text-orange-700 border-orange-200";
 
+    case "SIN INFORMACIÓN":
+      return "bg-slate-50 text-slate-600 border-slate-200";
+
     default:
       return "bg-slate-50 text-slate-600 border-slate-200";
   }
@@ -245,8 +238,8 @@ function getResultVisual(result: string) {
 
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
-    .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
 
   if (value.includes("mensual")) {
     return { months: 1 };
@@ -268,18 +261,12 @@ function parseFrequency(frequency: string) {
     return { months: 6 };
   }
 
-  if (
-    value.includes("bienal") ||
-    value.includes("bianual")
-  ) {
-    return { months: 24 };
+  if (value.includes("anual")) {
+    return { months: 12 };
   }
 
-  if (
-    value.includes("anual") ||
-    value.includes("anuales")
-  ) {
-    return { months: 12 };
+  if (value.includes("bienal")) {
+    return { months: 24 };
   }
 
   const numeric = value.match(
@@ -289,10 +276,7 @@ function parseFrequency(frequency: string) {
   if (numeric) {
     const amount = Number(numeric[1]);
 
-    if (
-      value.includes("año") ||
-      value.includes("años")
-    ) {
+    if (value.includes("año")) {
       return {
         months: amount * 12,
       };
@@ -306,6 +290,10 @@ function parseFrequency(frequency: string) {
   return null;
 }
 
+/**
+ * Calcula el domingo de Pascua para un año.
+ * Algoritmo de Meeus/Jones/Butcher.
+ */
 function getEasterSunday(year: number) {
   const a = year % 19;
   const b = Math.floor(year / 100);
@@ -320,13 +308,15 @@ function getEasterSunday(year: number) {
   const k = c % 4;
   const l =
     (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor(
-    (a + 11 * h + 22 * l) / 451
-  );
+  const m =
+    Math.floor(
+      (a + 11 * h + 22 * l) / 451
+    );
 
-  const month = Math.floor(
-    (h + l - 7 * m + 114) / 31
-  );
+  const month =
+    Math.floor(
+      (h + l - 7 * m + 114) / 31
+    );
 
   const day =
     ((h + l - 7 * m + 114) % 31) + 1;
@@ -335,10 +325,7 @@ function getEasterSunday(year: number) {
     `${year}-${String(month).padStart(
       2,
       "0"
-    )}-${String(day).padStart(
-      2,
-      "0"
-    )}T00:00:00`
+    )}-${String(day).padStart(2, "0")}T00:00:00`
   );
 }
 
@@ -356,8 +343,39 @@ function dateToKey(date: Date) {
   ].join("-");
 }
 
-function getSpainNationalHolidays(
-  year: number
+/**
+ * Devuelve los festivos nacionales del país.
+ *
+ * España:
+ * - 1 enero
+ * - 6 enero
+ * - Viernes Santo
+ * - 1 mayo
+ * - 15 agosto
+ * - 12 octubre
+ * - 1 noviembre
+ * - 6 diciembre
+ * - 8 diciembre
+ * - 25 diciembre
+ *
+ * Portugal:
+ * - 1 enero
+ * - Viernes Santo
+ * - Domingo de Pascua
+ * - 25 abril
+ * - 1 mayo
+ * - 10 junio
+ * - Corpus Christi
+ * - 15 agosto
+ * - 5 octubre
+ * - 1 noviembre
+ * - 1 diciembre
+ * - 8 diciembre
+ * - 25 diciembre
+ */
+function getNationalHolidays(
+  year: number,
+  country?: string
 ) {
   const holidays = new Set<string>();
 
@@ -376,90 +394,66 @@ function getSpainNationalHolidays(
     );
   };
 
-  add(1, 1);
-  add(1, 6);
-  add(5, 1);
-  add(8, 15);
-  add(10, 12);
-  add(11, 1);
-  add(12, 6);
-  add(12, 8);
-  add(12, 25);
-
   const easter = getEasterSunday(year);
 
   const goodFriday = new Date(easter);
-
   goodFriday.setDate(
     goodFriday.getDate() - 2
   );
 
-  holidays.add(
-    dateToKey(goodFriday)
-  );
+  if (country === "Portugal") {
+    add(1, 1);
+    add(4, 25);
+    add(5, 1);
+    add(6, 10);
+    add(8, 15);
+    add(10, 5);
+    add(11, 1);
+    add(12, 1);
+    add(12, 8);
+    add(12, 25);
 
-  return holidays;
-}
-
-function getPortugalNationalHolidays(
-  year: number
-) {
-  const holidays = new Set<string>();
-
-  const add = (
-    month: number,
-    day: number
-  ) => {
     holidays.add(
-      `${year}-${String(month).padStart(
-        2,
-        "0"
-      )}-${String(day).padStart(
-        2,
-        "0"
-      )}`
+      dateToKey(goodFriday)
     );
-  };
 
-  add(1, 1);
-  add(4, 25);
-  add(5, 1);
-  add(6, 10);
-  add(8, 15);
-  add(10, 5);
-  add(11, 1);
-  add(12, 1);
-  add(12, 8);
-  add(12, 25);
+    holidays.add(
+      dateToKey(easter)
+    );
 
-  const easter = getEasterSunday(year);
+    const corpusChristi = new Date(
+      easter
+    );
 
-  const goodFriday = new Date(easter);
+    corpusChristi.setDate(
+      corpusChristi.getDate() + 60
+    );
 
-  goodFriday.setDate(
-    goodFriday.getDate() - 2
-  );
+    holidays.add(
+      dateToKey(corpusChristi)
+    );
+  } else {
+    add(1, 1);
+    add(1, 6);
+    add(5, 1);
+    add(8, 15);
+    add(10, 12);
+    add(11, 1);
+    add(12, 6);
+    add(12, 8);
+    add(12, 25);
 
-  holidays.add(
-    dateToKey(goodFriday)
-  );
-
-  const corpusChristi = new Date(easter);
-
-  corpusChristi.setDate(
-    corpusChristi.getDate() + 60
-  );
-
-  holidays.add(
-    dateToKey(corpusChristi)
-  );
+    holidays.add(
+      dateToKey(goodFriday)
+    );
+  }
 
   return holidays;
 }
 
 function isNonWorkingDay(
   date: Date,
-  country: string
+  country?: string
 ) {
   const day = date.getDay();
 
@@ -467,26 +461,24 @@ function isNonWorkingDay(
     return true;
   }
 
-  const key = dateToKey(date);
+  const holidays = getNationalHolidays(
+    date.getFullYear(),
+    country
+  );
 
-  if (country === "España") {
-    return getSpainNationalHolidays(
-      date.getFullYear()
-    ).has(key);
-  }
-
-  if (country === "Portugal") {
-    return getPortugalNationalHolidays(
-      date.getFullYear()
-    ).has(key);
-  }
-
-  return false;
+  return holidays.has(
+    dateToKey(date)
+  );
 }
 
+/**
+ * Si la fecha calculada cae en sábado, domingo
+ * o festivo nacional, retrocede hasta el primer
+ * día laborable anterior.
+ */
 function adjustToPreviousWorkingDay(
   date: Date,
-  country: string
+  country?: string
 ) {
   const adjusted = new Date(date);
 
@@ -507,87 +499,106 @@ function adjustToPreviousWorkingDay(
 function calculateNextReview(
   date: string,
   frequency: string,
-  country: string
+  country?: string
 ) {
   if (!date) {
     return "";
   }
 
-  const parsed =
-    parseFrequency(frequency);
+  const parsed = parseFrequency(
+    frequency
+  );
 
   if (!parsed) {
     return "";
   }
 
-  const baseDate = new Date(
+  const d = new Date(
     `${date}T00:00:00`
   );
 
-  if (
-    Number.isNaN(
-      baseDate.getTime()
-    )
-  ) {
+  if (Number.isNaN(d.getTime())) {
     return "";
   }
 
-  const nextDate = new Date(baseDate);
-
-  nextDate.setMonth(
-    nextDate.getMonth() +
-      parsed.months
+  d.setMonth(
+    d.getMonth() + parsed.months
   );
 
-  const adjustedDate =
+  const adjusted =
     adjustToPreviousWorkingDay(
-      nextDate,
+      d,
       country
     );
 
-  return dateToKey(adjustedDate);
+  return dateToKey(adjusted);
 }
 
+/**
+ * Nueva lógica de RESULTADO:
+ *
+ * APTO:
+ *   sin fecha -> ERROR
+ *   con fecha y próxima revisión > hoy -> FAVORABLE
+ *   con fecha y próxima revisión < hoy -> PTE.
+ *
+ * APTO CONDICIONADO:
+ *   sin primera fecha -> ERROR
+ *   sin segunda fecha -> ERROR
+ *   segunda fecha > hoy -> CONDICIONADO
+ *   segunda fecha < hoy -> PTE.
+ *
+ * NO APTO:
+ *   sin fecha -> ERROR
+ *   próxima revisión > hoy -> DESFAVORABLE
+ *   próxima revisión < hoy -> PTE.
+ *
+ * La fecha de ejecución de la primera revisión
+ * nunca provoca PTE. directamente.
+ */
 function calculateResult(
   status: V1Status,
   date: string,
   secondReviewDate: string,
-  nextReviewDate: string
+  frequency: string,
+  country?: string
 ) {
   if (
-    (
-      status === "APTO" ||
-      status ===
-        "APTO CONDICIONADO" ||
-      status === "NO APTO"
-    ) &&
-    !date
-  ) {
-    return "ERROR";
-  }
-
-  if (
-    status === "SIN INFORMACIÓN" ||
-    status === "PENDIENTE"
-  ) {
-    return "-";
-  }
-
-  if (
-    status ===
-    "APTO CONDICIONADO"
+    status === "APTO" ||
+    status === "APTO CONDICIONADO" ||
+    status === "NO APTO"
   ) {
     if (!date) {
       return "ERROR";
     }
+  }
 
+  if (
+    status === "PENDIENTE" ||
+    status === "SIN INFORMACIÓN"
+  ) {
+    return "-";
+  }
+
+  const nextReview = calculateNextReview(
+    date,
+    frequency,
+    country
+  );
+
+  if (!nextReview) {
+    return "ERROR";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (
+    status === "APTO CONDICIONADO"
+  ) {
     if (!secondReviewDate) {
       return "ERROR";
     }
-
-    const firstDate = new Date(
-      `${date}T00:00:00`
-    );
 
     const secondDate = new Date(
       `${secondReviewDate}T00:00:00`
@@ -595,73 +606,55 @@ function calculateResult(
 
     if (
       Number.isNaN(
-        firstDate.getTime()
-      ) ||
-      Number.isNaN(
         secondDate.getTime()
       )
     ) {
       return "ERROR";
     }
 
-    if (
-      secondDate <= firstDate
-    ) {
-      return "ERROR";
-    }
-
-    const today = new Date();
-
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
     if (secondDate > today) {
       return "CONDICIONADO";
     }
 
+    if (secondDate < today) {
+      return "PTE.";
+    }
+
+    return "CONDICIONADO";
+  }
+
+  const nextDate = new Date(
+    `${nextReview}T00:00:00`
+  );
+
+  if (
+    Number.isNaN(
+      nextDate.getTime()
+    )
+  ) {
+    return "ERROR";
+  }
+
+  if (nextDate > today) {
+    if (status === "APTO") {
+      return "FAVORABLE";
+    }
+
+    if (status === "NO APTO") {
+      return "DESFAVORABLE";
+    }
+  }
+
+  if (nextDate < today) {
     return "PTE.";
   }
 
-  if (
-    status === "APTO" ||
-    status === "NO APTO"
-  ) {
-    if (!nextReviewDate) {
-      return "ERROR";
-    }
+  if (status === "APTO") {
+    return "FAVORABLE";
+  }
 
-    const nextDate = new Date(
-      `${nextReviewDate}T00:00:00`
-    );
-
-    if (
-      Number.isNaN(
-        nextDate.getTime()
-      )
-    ) {
-      return "ERROR";
-    }
-
-    const today = new Date();
-
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
-    if (nextDate > today) {
-      return status === "APTO"
-        ? "FAVORABLE"
-        : "DESFAVORABLE";
-    }
-
-    return "PTE.";
+  if (status === "NO APTO") {
+    return "DESFAVORABLE";
   }
 
   return "ERROR";
@@ -676,17 +669,37 @@ function formatDate(value: string) {
     `${value}T00:00:00`
   );
 
-  if (
-    Number.isNaN(
-      d.getTime()
-    )
-  ) {
+  if (Number.isNaN(d.getTime())) {
     return "—";
   }
 
   return d.toLocaleDateString(
     "es-ES"
   );
+}
+
+function getNativeStatusClasses(
+  status: V1Status
+) {
+  switch (status) {
+    case "APTO":
+      return "border-emerald-300 bg-emerald-50 text-emerald-700";
+
+    case "APTO CONDICIONADO":
+      return "border-amber-300 bg-amber-50 text-amber-700";
+
+    case "NO APTO":
+      return "border-red-300 bg-red-50 text-red-700";
+
+    case "PENDIENTE":
+      return "border-orange-300 bg-orange-50 text-orange-700";
+
+    case "SIN INFORMACIÓN":
+      return "border-slate-300 bg-slate-50 text-slate-600";
+
+    default:
+      return "border-slate-200 bg-white text-slate-700";
+  }
 }
 
 export default function CenterDetail() {
@@ -699,7 +712,8 @@ export default function CenterDetail() {
     ) ||
     demo.centers.find(
       c =>
-        encodeURIComponent(c.id) === id
+        encodeURIComponent(c.id) ===
+        id
     );
 
   const [state, setState] =
@@ -724,9 +738,6 @@ export default function CenterDetail() {
   const [category, setCategory] =
     useState("Todas");
 
-  const [installationFilter, setInstallationFilter] =
-    useState("Todas");
-
   const [actionFilter, setActionFilter] =
     useState("Todas");
 
@@ -742,8 +753,10 @@ export default function CenterDetail() {
   const [showAddElement, setShowAddElement] =
     useState(false);
 
-  const [addElementSearch, setAddElementSearch] =
-    useState("");
+  const [
+    addElementSearch,
+    setAddElementSearch,
+  ] = useState("");
 
   const [
     openCenterData,
@@ -785,6 +798,50 @@ export default function CenterDetail() {
       );
     };
   }, []);
+
+  const currentYear =
+    new Date().getFullYear();
+
+  const reviewYears = useMemo(() => {
+    const years = new Set<number>();
+
+    for (
+      let y = 2024;
+      y <= currentYear;
+      y++
+    ) {
+      years.add(y);
+    }
+
+    Object.keys(
+      state.reviews
+    ).forEach(reviewId => {
+      const match =
+        reviewId.match(
+          /:(\d{4}):(S1|S2)$/
+        );
+
+      if (match) {
+        const reviewYear =
+          Number(match[1]);
+
+        if (
+          reviewYear <= currentYear
+        ) {
+          years.add(reviewYear);
+        }
+      }
+    });
+
+    return Array.from(
+      years
+    ).sort(
+      (a, b) => a - b
+    );
+  }, [
+    state.reviews,
+    currentYear,
+  ]);
 
   if (!center) {
     return (
@@ -869,21 +926,7 @@ export default function CenterDetail() {
     ),
   ];
 
-  const installationTypes = [
-    "Todas",
-    ...Array.from(
-      new Set(
-        catalog
-          .map(
-            (x: any) =>
-              x.installation
-          )
-          .filter(Boolean)
-      )
-    ),
-  ];
-
-  const actions = [
+  const actionTypes = [
     "Todas",
     ...Array.from(
       new Set(
@@ -897,21 +940,11 @@ export default function CenterDetail() {
     ),
   ];
 
-  function getItem(
+  const getItem = (
     itemId: string
-  ) {
-    return (
-      review.items[itemId] ||
-      blankItem()
-    );
-  }
-
-  const readOnly =
-    state.role === "LECTURA" ||
-    center.status !== "Activo";
-
-  const admin =
-    state.role === "ADMIN";
+  ) =>
+    review.items[itemId] ||
+    blankItem();
 
   const visible =
     activeItems.filter(
@@ -919,53 +952,41 @@ export default function CenterDetail() {
         const item =
           getItem(x.id);
 
-        const nextDate =
-          calculateNextReview(
-            item.date,
-            x.frequency,
-            center.country
-          );
-
         const result =
           calculateResult(
             item.status,
             item.date,
             item.secondReviewDate,
-            nextDate
+            x.frequency,
+            center.country
           );
-
-        const matchesSearch =
-          `${x.code} ${x.installation} ${x.action} ${x.category}`
-            .toLowerCase()
-            .includes(
-              q.toLowerCase()
-            );
 
         const matchesCategory =
           category === "Todas" ||
           x.category === category;
 
-        const matchesInstallation =
-          installationFilter ===
-            "Todas" ||
-          x.installation ===
-            installationFilter;
-
         const matchesAction =
-          actionFilter ===
-            "Todas" ||
+          actionFilter === "Todas" ||
           x.action === actionFilter;
 
         const matchesResult =
           resultFilter === "Todos" ||
           result === resultFilter;
 
+        const searchText =
+          `${x.code} ${x.installation} ${x.action} ${x.category}`
+            .toLowerCase();
+
+        const matchesSearch =
+          searchText.includes(
+            q.toLowerCase()
+          );
+
         return (
-          matchesSearch &&
           matchesCategory &&
-          matchesInstallation &&
           matchesAction &&
-          matchesResult
+          matchesResult &&
+          matchesSearch
         );
       }
     );
@@ -980,54 +1001,6 @@ export default function CenterDetail() {
           )
     );
 
-  const currentYear =
-    new Date().getFullYear();
-
-  const reviewYears = useMemo(() => {
-    const years =
-      new Set<number>();
-
-    for (
-      let y = 2024;
-      y <= currentYear;
-      y++
-    ) {
-      years.add(y);
-    }
-
-    Object.keys(
-      state.reviews
-    ).forEach(reviewId => {
-      const match =
-        reviewId.match(
-          /:(\d{4}):(S1|S2)$/
-        );
-
-      if (match) {
-        const reviewYear =
-          Number(match[1]);
-
-        if (
-          reviewYear <=
-          currentYear
-        ) {
-          years.add(
-            reviewYear
-          );
-        }
-      }
-    });
-
-    return Array.from(
-      years
-    ).sort(
-      (a, b) => a - b
-    );
-  }, [
-    state.reviews,
-    currentYear,
-  ]);
-
   function updateState(
     next: V1State
   ) {
@@ -1035,7 +1008,7 @@ export default function CenterDetail() {
     saveState(next);
     setSaved(true);
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       setSaved(false);
     }, 1500);
   }
@@ -1131,8 +1104,8 @@ export default function CenterDetail() {
         },
         ...(review.participants ||
           []).filter(
-            p => p.role === "OTRO"
-          ),
+          p => p.role === "OTRO"
+        ),
       ],
     };
 
@@ -1175,6 +1148,13 @@ export default function CenterDetail() {
 
     reader.readAsDataURL(file);
   }
+
+  const readOnly =
+    state.role === "LECTURA" ||
+    center.status !== "Activo";
+
+  const admin =
+    state.role === "ADMIN";
 
   function SectionToggle({
     open,
@@ -1224,9 +1204,7 @@ export default function CenterDetail() {
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
               {overrides.logoUrl ? (
                 <img
-                  src={
-                    overrides.logoUrl
-                  }
+                  src={overrides.logoUrl}
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1275,9 +1253,7 @@ export default function CenterDetail() {
           <div className="flex items-center justify-center bg-white/5 p-4">
             {overrides.imageUrl ? (
               <img
-                src={
-                  overrides.imageUrl
-                }
+                src={overrides.imageUrl}
                 alt={center.name}
                 className="h-32 w-full rounded-xl object-cover"
               />
@@ -1411,8 +1387,7 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.city ??
-                    ""
+                    overrides.city ?? ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1583,7 +1558,6 @@ export default function CenterDetail() {
               <div className="mt-5 flex flex-wrap gap-3">
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
                   <ImagePlus className="mr-2 inline h-4 w-4" />
-
                   Logo
 
                   <input
@@ -1606,7 +1580,6 @@ export default function CenterDetail() {
 
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
                   <ImagePlus className="mr-2 inline h-4 w-4" />
-
                   Imagen centro
 
                   <input
@@ -1651,8 +1624,7 @@ export default function CenterDetail() {
 
         {openHistory && (
           <>
-            {reviewYears.length ===
-            0 ? (
+            {reviewYears.length === 0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                 No hay revisiones históricas cargadas.
               </div>
@@ -1661,10 +1633,7 @@ export default function CenterDetail() {
                 {reviewYears.flatMap(
                   y =>
                     (
-                      [
-                        "S1",
-                        "S2",
-                      ] as Period[]
+                      ["S1", "S2"] as Period[]
                     ).map(p => {
                       const r =
                         state.reviews[
@@ -1726,14 +1695,13 @@ export default function CenterDetail() {
                           </div>
                         </div>
                       );
-                    }
+                    })
                 )}
               </div>
             )}
 
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
               <BarChart3 className="h-4 w-4" />
-
               El histórico muestra únicamente años hasta el año actual.
             </div>
           </>
@@ -1882,7 +1850,6 @@ export default function CenterDetail() {
                     }
                   >
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
-
                     Confirmar {period}{" "}
                     {year}
                   </Button>
@@ -1918,7 +1885,6 @@ export default function CenterDetail() {
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
-
                   Ver / exportar certificado
                 </Link>
               </div>
@@ -1930,10 +1896,8 @@ export default function CenterDetail() {
               </div>
 
               <div className="mt-2 space-y-2">
-                {(
-                  review.participants ||
-                  []
-                ).map(
+                {(review.participants ||
+                  []).map(
                   (p, i) => (
                     <div
                       key={i}
@@ -2080,7 +2044,6 @@ export default function CenterDetail() {
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <ClipboardCheck className="h-4 w-4" />
-
                   Leyenda de resultados
                 </div>
 
@@ -2106,8 +2069,8 @@ export default function CenterDetail() {
               </div>
             </div>
 
-            <div className="mb-4 mt-5 grid gap-3 xl:grid-cols-5">
-              <div className="relative min-w-0 xl:col-span-2">
+            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
+              <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                 <input
@@ -2123,41 +2086,30 @@ export default function CenterDetail() {
               </div>
 
               <Select
-                value={
-                  installationFilter
-                }
+                value={category}
                 onChange={
-                  setInstallationFilter
+                  setCategory
                 }
               >
-                {installationTypes.map(
-                  installation => (
+                {categories.map(
+                  c => (
                     <option
-                      key={
-                        installation
-                      }
-                      value={
-                        installation
-                      }
+                      key={c}
+                      value={c}
                     >
-                      {installation ===
-                      "Todas"
-                        ? "Todas las instalaciones"
-                        : installation}
+                      {c}
                     </option>
                   )
                 )}
               </Select>
 
               <Select
-                value={
-                  actionFilter
-                }
+                value={actionFilter}
                 onChange={
                   setActionFilter
                 }
               >
-                {actions.map(
+                {actionTypes.map(
                   action => (
                     <option
                       key={action}
@@ -2172,93 +2124,41 @@ export default function CenterDetail() {
                 )}
               </Select>
 
-              <select
-                value={
-                  resultFilter
-                }
-                onChange={e =>
-                  setResultFilter(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#002A54]"
-              >
-                {RESULT_FILTERS.map(
-                  result => (
-                    <option
-                      key={result}
-                      value={result}
-                    >
-                      {result ===
-                      "Todos"
-                        ? "Todos los resultados"
-                        : result}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-
-            <div className="mb-4 flex flex-wrap gap-2">
               <Select
-                value={
-                  category
-                }
+                value={resultFilter}
                 onChange={
-                  setCategory
+                  setResultFilter
                 }
               >
-                {categories.map(
-                  c => (
-                    <option
-                      key={c}
-                      value={c}
-                    >
-                      {c ===
-                      "Todas"
-                        ? "Todas las categorías"
-                        : c}
-                    </option>
-                  )
-                )}
-              </Select>
+                <option value="Todos">
+                  Todos los resultados
+                </option>
 
-              {(installationFilter !==
-                "Todas" ||
-                actionFilter !==
-                  "Todas" ||
-                resultFilter !==
-                  "Todos" ||
-                category !==
-                  "Todas" ||
-                q) && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setQ("");
-                    setCategory(
-                      "Todas"
-                    );
-                    setInstallationFilter(
-                      "Todas"
-                    );
-                    setActionFilter(
-                      "Todas"
-                    );
-                    setResultFilter(
-                      "Todos"
-                    );
-                  }}
-                >
-                  <RotateCcw className="mr-2 inline h-4 w-4" />
-                  Limpiar filtros
-                </Button>
-              )}
+                <option value="FAVORABLE">
+                  FAVORABLE
+                </option>
+
+                <option value="CONDICIONADO">
+                  CONDICIONADO
+                </option>
+
+                <option value="DESFAVORABLE">
+                  DESFAVORABLE
+                </option>
+
+                <option value="PTE.">
+                  PTE.
+                </option>
+
+                <option value="ERROR">
+                  ERROR
+                </option>
+              </Select>
             </div>
 
             <div className="rounded-2xl border border-slate-200">
               <div className="overflow-x-auto">
-                <table className="min-w-[1800px] w-full text-sm">
+                <table className="min-w-[1850px] w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
                     <tr>
                       <th className="w-24 px-3 py-3">
@@ -2297,11 +2197,11 @@ export default function CenterDetail() {
                         Fecha
                       </th>
 
-                      <th className="w-36 px-3 py-3">
+                      <th className="w-40 px-3 py-3">
                         Próxima revisión
                       </th>
 
-                      <th className="w-36 px-3 py-3">
+                      <th className="w-40 px-3 py-3">
                         2ª revisión
                       </th>
 
@@ -2323,6 +2223,16 @@ export default function CenterDetail() {
                         const item =
                           getItem(x.id);
 
+                        const locked =
+                          readOnly ||
+                          review.confirmed;
+
+                        const visual =
+                          getInstallationVisual(
+                            x.installation,
+                            x.category
+                          );
+
                         const nextDate =
                           calculateNextReview(
                             item.date,
@@ -2335,7 +2245,8 @@ export default function CenterDetail() {
                             item.status,
                             item.date,
                             item.secondReviewDate,
-                            nextDate
+                            x.frequency,
+                            center.country
                           );
 
                         const resultVisual =
@@ -2343,23 +2254,8 @@ export default function CenterDetail() {
                             result
                           );
 
-                        const visual =
-                          getInstallationVisual(
-                            x.installation,
-                            x.category
-                          );
-
                         const Icon =
                           visual.Icon;
-
-                        const locked =
-                          readOnly ||
-                          review.confirmed;
-
-                        const statusClasses =
-                          getStatusClasses(
-                            item.status
-                          );
 
                         return (
                           <tr
@@ -2407,7 +2303,6 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
                                 <CalendarDays className="h-3 w-3" />
-
                                 {x.frequency ||
                                   "—"}
                               </span>
@@ -2471,10 +2366,19 @@ export default function CenterDetail() {
                                     {
                                       status:
                                         e.target.value as V1Status,
+                                      ...(e.target.value !==
+                                      "APTO CONDICIONADO"
+                                        ? {
+                                            secondReviewDate:
+                                              "",
+                                          }
+                                        : {}),
                                     }
                                   )
                                 }
-                                className={`w-44 rounded-lg border px-2 py-2 text-xs font-bold outline-none transition disabled:cursor-not-allowed disabled:opacity-70 ${statusClasses}`}
+                                className={`w-44 rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getNativeStatusClasses(
+                                  item.status
+                                )}`}
                               >
                                 {STATUSES.map(
                                   s => (
@@ -2548,15 +2452,28 @@ export default function CenterDetail() {
                                   value={
                                     item.secondReviewDate
                                   }
-                                  onChange={e =>
+                                  onChange={e => {
+                                    const value =
+                                      e.target
+                                        .value;
+
+                                    if (
+                                      item.date &&
+                                      value &&
+                                      value <
+                                        item.date
+                                    ) {
+                                      return;
+                                    }
+
                                     updateItem(
                                       x.id,
                                       {
                                         secondReviewDate:
-                                          e.target.value,
+                                          value,
                                       }
-                                    )
-                                  }
+                                    );
+                                  }}
                                   className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
                                 />
                               ) : (
@@ -2644,7 +2561,7 @@ export default function CenterDetail() {
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                La próxima revisión se calcula automáticamente utilizando la fecha de ejecución y la periodicidad definida para la instalación. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el día laborable anterior. Los festivos se calculan según el país del centro: España o Portugal.
+                La próxima revisión se calcula sumando la frecuencia a la fecha de ejecución de la revisión. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede automáticamente hasta el primer día laborable anterior. Se utilizan los festivos nacionales de España o Portugal según el país del centro.
               </div>
             </div>
 
@@ -2664,7 +2581,6 @@ export default function CenterDetail() {
                         }
                       >
                         <Plus className="mr-2 inline h-4 w-4" />
-
                         Añadir elemento
                       </Button>
                     ) : undefined
@@ -2751,12 +2667,12 @@ export default function CenterDetail() {
                               ) : (
                                 <Button
                                   variant="secondary"
-                                  onClick={() => {
+                                  onClick={() =>
                                     setActive(
                                       x.id,
                                       true
-                                    );
-                                  }}
+                                    )
+                                  }
                                 >
                                   Activar
                                 </Button>
