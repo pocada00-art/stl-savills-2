@@ -24,11 +24,14 @@ export type ReviewState = {
 
 export type CenterOverride = {
   address?: string;
+  city?: string;
+  province?: string;
   manager?: string;
+  managerPhone?: string;
+  managerEmail?: string;
   technicalResponsible?: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
+  technicalPhone?: string;
+  technicalEmail?: string;
   property?: string;
   imageUrl?: string;
   logoUrl?: string;
@@ -50,7 +53,13 @@ export const CURRENT_YEAR = 2026;
 export const CURRENT_PERIOD: Period = "S2";
 
 export function blankItem(): ItemReview {
-  return { status: "SIN INFORMACIÓN", date: "", company: "", observations: "", confirmed: false };
+  return {
+    status: "SIN INFORMACIÓN",
+    date: "",
+    company: "",
+    observations: "",
+    confirmed: false,
+  };
 }
 
 export function reviewKey(centerId: string, year: number, period: Period) {
@@ -58,24 +67,51 @@ export function reviewKey(centerId: string, year: number, period: Period) {
 }
 
 export function loadState(): V1State {
-  if (typeof window === "undefined") return { role: "ADMIN", country: undefined, centerId: undefined, centers: {}, activeItems: {}, reviews: {} };
+  if (typeof window === "undefined") {
+    return {
+      role: "ADMIN",
+      country: undefined,
+      centerId: undefined,
+      centers: {},
+      activeItems: {},
+      reviews: {},
+    };
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { role: "ADMIN", country: undefined, centerId: undefined, centers: {}, activeItems: {}, reviews: {} };
+
+  return {
+    role: "ADMIN",
+    country: undefined,
+    centerId: undefined,
+    centers: {},
+    activeItems: {},
+    reviews: {},
+  };
 }
 
 export function saveState(state: V1State) {
-  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
 }
 
 export function scoreForV1Status(status: V1Status) {
-  return { "APTO": 3, "APTO CONDICIONADO": 2, "NO APTO": 1, "PENDIENTE": 0, "SIN INFORMACIÓN": 0 }[status];
+  return {
+    "APTO": 3,
+    "APTO CONDICIONADO": 2,
+    "NO APTO": 1,
+    "PENDIENTE": 0,
+    "SIN INFORMACIÓN": 0,
+  }[status];
 }
 
 export function reviewSummary(review: ReviewState | undefined, activeIds: string[]) {
   const items = activeIds.map(id => review?.items[id] ?? blankItem());
+
   const counts = {
     "APTO": items.filter(i => i.status === "APTO").length,
     "APTO CONDICIONADO": items.filter(i => i.status === "APTO CONDICIONADO").length,
@@ -83,8 +119,18 @@ export function reviewSummary(review: ReviewState | undefined, activeIds: string
     "PENDIENTE": items.filter(i => i.status === "PENDIENTE").length,
     "SIN INFORMACIÓN": items.filter(i => i.status === "SIN INFORMACIÓN").length,
   };
+
   const confirmed = items.filter(i => i.confirmed).length;
   const points = items.reduce((sum, i) => sum + scoreForV1Status(i.status), 0);
   const max = activeIds.length * 3;
-  return { counts, confirmed, total: items.length, pendingConfirmation: items.length - confirmed, points, max, score: max ? Math.round(points / max * 100) : 0 };
+
+  return {
+    counts,
+    confirmed,
+    total: items.length,
+    pendingConfirmation: items.length - confirmed,
+    points,
+    max,
+    score: max ? Math.round((points / max) * 100) : 0,
+  };
 }
