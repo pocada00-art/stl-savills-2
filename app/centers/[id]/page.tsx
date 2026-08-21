@@ -241,7 +241,7 @@ function getResultVisual(result: string) {
  * que "bimensual" sea interpretado como
  * "mensual".
  */
-function parseFrequency(frequency: string): number | null {
+function parseFrequency(frequency: string) {
   const value = String(frequency || "")
     .trim()
     .toLowerCase();
@@ -250,43 +250,51 @@ function parseFrequency(frequency: string): number | null {
     return null;
   }
 
-  if (
-    value.includes("bimensual") ||
-    value.includes("bimestral")
-  ) {
-    return 2;
+  // Frecuencias expresadas mediante texto
+  if (value.includes("mensual")) {
+    return { months: 1 };
+  }
+
+  if (value.includes("bimensual")) {
+    return { months: 2 };
   }
 
   if (value.includes("trimestral")) {
-    return 3;
+    return { months: 3 };
   }
 
   if (value.includes("cuatrimestral")) {
-    return 4;
+    return { months: 4 };
   }
 
   if (value.includes("semestral")) {
-    return 6;
+    return { months: 6 };
   }
 
   if (value.includes("bienal")) {
-    return 24;
-  }
-
-  if (value.includes("mensual")) {
-    return 1;
+    return { months: 24 };
   }
 
   if (value.includes("anual")) {
-    return 12;
+    return { months: 12 };
   }
 
-  const numeric = value.match(
-    /(\d+)\s*(mes|meses|año|años)/
+  /*
+   * Frecuencias expresadas como:
+   *
+   * "3 meses" -> 3 meses
+   * "6 meses" -> 6 meses
+   * "1 año"   -> 12 meses
+   * "2 años"  -> 24 meses
+   */
+  const numericWithUnit = value.match(
+    /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)$/
   );
 
-  if (numeric) {
-    const amount = Number(numeric[1]);
+  if (numericWithUnit) {
+    const amount = Number(
+      numericWithUnit[1].replace(",", ".")
+    );
 
     if (!Number.isFinite(amount) || amount <= 0) {
       return null;
@@ -296,10 +304,46 @@ function parseFrequency(frequency: string): number | null {
       value.includes("año") ||
       value.includes("años")
     ) {
-      return amount * 12;
+      return {
+        months: Math.round(amount * 12),
+      };
     }
 
-    return amount;
+    return {
+      months: Math.round(amount),
+    };
+  }
+
+  /*
+   * NUEVO:
+   *
+   * Si la frecuencia contiene únicamente un número,
+   * se interpreta como AÑOS.
+   *
+   * 1 -> 1 año  -> 12 meses
+   * 2 -> 2 años -> 24 meses
+   * 3 -> 3 años -> 36 meses
+   * 4 -> 4 años -> 48 meses
+   */
+  const numericOnly = value.match(
+    /^\d+(?:[.,]\d+)?$/
+  );
+
+  if (numericOnly) {
+    const years = Number(
+      value.replace(",", ".")
+    );
+
+    if (
+      !Number.isFinite(years) ||
+      years <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      months: Math.round(years * 12),
+    };
   }
 
   return null;
