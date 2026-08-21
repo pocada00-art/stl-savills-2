@@ -77,6 +77,10 @@ type IconComponent = React.ComponentType<{
   className?: string;
 }>;
 
+/* =========================================================
+   INSTALACIONES
+========================================================= */
+
 function getInstallationVisual(
   installation = "",
   category = ""
@@ -168,22 +172,26 @@ function getInstallationVisual(
   };
 }
 
+/* =========================================================
+   ESTADOS
+========================================================= */
+
 function getStatusClasses(status: V1Status) {
   switch (status) {
     case "APTO":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      return "bg-emerald-50 text-emerald-700 border-emerald-300";
 
     case "APTO CONDICIONADO":
-      return "bg-amber-50 text-amber-700 border-amber-200";
+      return "bg-amber-50 text-amber-700 border-amber-300";
 
     case "NO APTO":
-      return "bg-red-50 text-red-700 border-red-200";
+      return "bg-red-50 text-red-700 border-red-300";
 
     case "PENDIENTE":
-      return "bg-orange-50 text-orange-700 border-orange-200";
+      return "bg-orange-50 text-orange-700 border-orange-300";
 
     default:
-      return "bg-slate-50 text-slate-600 border-slate-200";
+      return "bg-slate-50 text-slate-600 border-slate-300";
   }
 }
 
@@ -233,18 +241,42 @@ function getResultVisual(result: string) {
   }
 }
 
+/* =========================================================
+   FRECUENCIAS
+========================================================= */
+
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
-    .toLowerCase()
-    .trim();
+    .trim()
+    .toLowerCase();
 
-  if (value.includes("mensual")) return { months: 1 };
-  if (value.includes("bimensual")) return { months: 2 };
-  if (value.includes("trimestral")) return { months: 3 };
-  if (value.includes("cuatrimestral")) return { months: 4 };
-  if (value.includes("semestral")) return { months: 6 };
-  if (value.includes("anual")) return { months: 12 };
-  if (value.includes("bienal")) return { months: 24 };
+  if (value.includes("mensual")) {
+    return { months: 1 };
+  }
+
+  if (value.includes("bimensual")) {
+    return { months: 2 };
+  }
+
+  if (value.includes("trimestral")) {
+    return { months: 3 };
+  }
+
+  if (value.includes("cuatrimestral")) {
+    return { months: 4 };
+  }
+
+  if (value.includes("semestral")) {
+    return { months: 6 };
+  }
+
+  if (value.includes("anual")) {
+    return { months: 12 };
+  }
+
+  if (value.includes("bienal")) {
+    return { months: 24 };
+  }
 
   const numeric = value.match(
     /(\d+)\s*(mes|meses|año|años)/
@@ -254,25 +286,32 @@ function parseFrequency(frequency: string) {
     const amount = Number(numeric[1]);
 
     if (value.includes("año")) {
-      return { months: amount * 12 };
+      return {
+        months: amount * 12,
+      };
     }
 
-    return { months: amount };
+    return {
+      months: amount,
+    };
   }
 
   return null;
 }
 
-/**
- * Festivos nacionales.
- *
- * Se incluyen los festivos nacionales fijos y los festivos
- * nacionales móviles principales de España y Portugal.
- *
- * El cálculo se realiza con la fecha local, sin depender de
- * UTC, para evitar desplazamientos de día.
- */
-function getEasterSunday(year: number) {
+/* =========================================================
+   FESTIVOS
+========================================================= */
+
+function dateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function easterSunday(year: number) {
   const a = year % 19;
   const b = Math.floor(year / 100);
   const c = year % 100;
@@ -286,15 +325,12 @@ function getEasterSunday(year: number) {
   const k = c % 4;
   const l =
     (32 + 2 * e + 2 * i - h - k) % 7;
-  const m =
-    Math.floor(
-      (a + 11 * h + 22 * l) / 451
-    );
-
+  const m = Math.floor(
+    (a + 11 * h + 22 * l) / 451
+  );
   const month = Math.floor(
     (h + l - 7 * m + 114) / 31
   );
-
   const day =
     ((h + l - 7 * m + 114) % 31) + 1;
 
@@ -307,135 +343,107 @@ function getEasterSunday(year: number) {
 
 function addDays(
   date: Date,
-  amount: number
+  days: number
 ) {
   const result = new Date(date);
-
   result.setDate(
-    result.getDate() + amount
+    result.getDate() + days
   );
-
   return result;
-}
-
-function dateToKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 }
 
 function getNationalHolidays(
   year: number,
   country: string
-) {
+): Set<string> {
   const holidays = new Set<string>();
 
-  if (country === "España") {
-    [
-      [1, 1],
-      [1, 6],
-      [5, 1],
-      [8, 15],
-      [10, 12],
-      [11, 1],
-      [12, 6],
-      [12, 8],
-      [12, 25],
-    ].forEach(([month, day]) => {
-      holidays.add(
-        dateToKey(
-          new Date(
-            year,
-            month - 1,
-            day
-          )
-        )
-      );
-    });
-
-    const easter =
-      getEasterSunday(year);
-
+  function add(
+    month: number,
+    day: number
+  ) {
     holidays.add(
-      dateToKey(
-        addDays(easter, -2)
-      )
-    );
-
-    holidays.add(
-      dateToKey(
-        addDays(easter, 39)
+      dateKey(
+        new Date(year, month - 1, day)
       )
     );
   }
 
+  /*
+   * España:
+   * Se contemplan los festivos nacionales
+   * de carácter estatal que no dependen
+   * de la comunidad autónoma.
+   */
+  if (country === "España") {
+    add(1, 1); // Año Nuevo
+    add(1, 6); // Epifanía
+    add(5, 1); // Día del Trabajo
+    add(8, 15); // Asunción
+    add(10, 12); // Fiesta Nacional
+    add(11, 1); // Todos los Santos
+    add(12, 6); // Constitución
+    add(12, 8); // Inmaculada
+    add(12, 25); // Navidad
+
+    const easter = easterSunday(year);
+
+    holidays.add(
+      dateKey(addDays(easter, -3))
+    ); // Jueves Santo
+
+    holidays.add(
+      dateKey(addDays(easter, -2))
+    ); // Viernes Santo
+
+    /*
+     * Lunes de Pascua no es festivo nacional
+     * estatal en España y por tanto no se añade.
+     */
+  }
+
+  /*
+   * Portugal:
+   * Festivos nacionales obligatorios.
+   */
   if (country === "Portugal") {
-    [
-      [1, 1],
-      [4, 25],
-      [5, 1],
-      [6, 10],
-      [8, 15],
-      [10, 5],
-      [11, 1],
-      [12, 1],
-      [12, 8],
-      [12, 25],
-    ].forEach(([month, day]) => {
-      holidays.add(
-        dateToKey(
-          new Date(
-            year,
-            month - 1,
-            day
-          )
-        )
-      );
-    });
+    add(1, 1); // Ano Novo
+    add(4, 25); // Dia da Liberdade
+    add(5, 1); // Dia do Trabalhador
+    add(6, 10); // Dia de Portugal
+    add(8, 15); // Assunção
+    add(10, 5); // Implantação da República
+    add(11, 1); // Todos os Santos
+    add(12, 1); // Restauração da Independência
+    add(12, 8); // Imaculada Conceição
+    add(12, 25); // Natal
 
-    const easter =
-      getEasterSunday(year);
+    const easter = easterSunday(year);
 
+    /*
+     * Sexta-feira Santa
+     */
     holidays.add(
-      dateToKey(
-        addDays(easter, -47)
-      )
+      dateKey(addDays(easter, -2))
     );
 
-    holidays.add(
-      dateToKey(
-        addDays(easter, -2)
-      )
-    );
-
-    holidays.add(
-      dateToKey(
-        addDays(easter, 60)
-      )
-    );
+    /*
+     * Domingo de Páscoa siempre es domingo,
+     * por lo que no hace falta tratarlo aparte.
+     */
   }
 
   return holidays;
 }
 
-function isWorkingDay(
+function isNonWorkingDay(
   date: Date,
   country: string
 ) {
-  const day =
-    date.getDay();
+  const day = date.getDay();
 
-  if (
-    day === 0 ||
-    day === 6
-  ) {
-    return false;
+  if (day === 0 || day === 6) {
+    return true;
   }
 
   const holidays =
@@ -444,8 +452,8 @@ function isWorkingDay(
       country
     );
 
-  return !holidays.has(
-    dateToKey(date)
+  return holidays.has(
+    dateKey(date)
   );
 }
 
@@ -456,7 +464,7 @@ function moveToPreviousWorkingDay(
   const result = new Date(date);
 
   while (
-    !isWorkingDay(
+    isNonWorkingDay(
       result,
       country
     )
@@ -469,253 +477,260 @@ function moveToPreviousWorkingDay(
   return result;
 }
 
+/* =========================================================
+   CÁLCULO PRÓXIMA REVISIÓN
+========================================================= */
+
 function calculateNextReview(
   date: string,
   frequency: string,
   country: string
 ) {
-  if (!date) return "";
+  if (!date) {
+    return "";
+  }
 
   const parsed =
     parseFrequency(frequency);
 
-  if (!parsed) return "";
-
-  const parts =
-    date.split("-");
-
-  if (parts.length !== 3) {
+  if (!parsed) {
     return "";
   }
 
-  const year =
-    Number(parts[0]);
-  const month =
-    Number(parts[1]);
-  const day =
-    Number(parts[2]);
-
-  const d = new Date(
-    year,
-    month - 1,
-    day
-  );
-
-  if (
-    Number.isNaN(d.getTime())
-  ) {
-    return "";
-  }
-
-  d.setMonth(
-    d.getMonth() +
-      parsed.months
-  );
-
-  const adjusted =
-    moveToPreviousWorkingDay(
-      d,
-      country
-    );
-
-  return dateToKey(
-    adjusted
-  );
-}
-
-function parseLocalDate(
-  value: string
-) {
-  if (!value) {
-    return null;
-  }
-
-  const parts =
-    value.split("-");
-
-  if (parts.length !== 3) {
-    return null;
-  }
-
-  const year =
-    Number(parts[0]);
-  const month =
-    Number(parts[1]);
-  const day =
-    Number(parts[2]);
-
-  const date = new Date(
-    year,
-    month - 1,
-    day
+  const baseDate = new Date(
+    `${date}T00:00:00`
   );
 
   if (
     Number.isNaN(
-      date.getTime()
+      baseDate.getTime()
     )
   ) {
-    return null;
+    return "";
   }
 
-  return date;
-}
-
-function getTodayLocal() {
-  const now =
-    new Date();
-
-  return new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
+  /*
+   * Se suma primero la frecuencia.
+   */
+  const nextDate = new Date(
+    baseDate
   );
+
+  nextDate.setMonth(
+    nextDate.getMonth() +
+      parsed.months
+  );
+
+  /*
+   * Si cae en sábado, domingo o festivo,
+   * se retrocede hasta el primer laborable.
+   */
+  const adjusted =
+    moveToPreviousWorkingDay(
+      nextDate,
+      country
+    );
+
+  return dateKey(adjusted);
 }
+
+/* =========================================================
+   LÓGICA DE RESULTADO
+========================================================= */
 
 function calculateResult(
   status: V1Status,
-  date: string,
+  executionDate: string,
   nextReviewDate: string,
   secondReviewDate: string
 ) {
   /*
-   * APTO / APTO CONDICIONADO / NO APTO sin fecha:
-   * ERROR
+   * Estados que necesitan fecha de ejecución.
    */
   if (
-    !date &&
-    (
-      status === "APTO" ||
-      status ===
-        "APTO CONDICIONADO" ||
-      status === "NO APTO"
-    )
+    status === "APTO" ||
+    status === "APTO CONDICIONADO" ||
+    status === "NO APTO"
+  ) {
+    if (!executionDate) {
+      return "ERROR";
+    }
+  }
+
+  /*
+   * APTO CONDICIONADO necesita además
+   * una segunda revisión.
+   */
+  if (
+    status ===
+      "APTO CONDICIONADO" &&
+    !secondReviewDate
   ) {
     return "ERROR";
   }
 
-  /*
-   * Estados que no requieren todavía una fecha
-   * de ejecución no generan error.
-   */
   if (
-    !date &&
-    (
-      status === "PENDIENTE" ||
-      status ===
-        "SIN INFORMACIÓN"
-    )
+    status ===
+      "APTO CONDICIONADO" &&
+    secondReviewDate
   ) {
-    return "-";
-  }
-
-  const today =
-    getTodayLocal();
-
-  /*
-   * APTO:
-   * La fecha de ejecución puede ser hoy
-   * o anterior. Nunca genera PTE por la
-   * antigüedad de esa fecha.
-   *
-   * Se comprueba exclusivamente la próxima
-   * revisión.
-   */
-  if (status === "APTO") {
-    if (!nextReviewDate) {
-      return "ERROR";
-    }
-
-    const nextDate =
-      parseLocalDate(
-        nextReviewDate
+    const first =
+      new Date(
+        `${executionDate}T00:00:00`
       );
 
-    if (!nextDate) {
+    const second =
+      new Date(
+        `${secondReviewDate}T00:00:00`
+      );
+
+    if (
+      Number.isNaN(
+        first.getTime()
+      ) ||
+      Number.isNaN(
+        second.getTime()
+      )
+    ) {
       return "ERROR";
     }
 
-    if (nextDate < today) {
-      return "PTE.";
+    if (second <= first) {
+      return "ERROR";
     }
-
-    return "FAVORABLE";
   }
+
+  /*
+   * Si todavía no existe próxima revisión
+   * no podemos calcular el resultado.
+   */
+  if (!nextReviewDate) {
+    return "ERROR";
+  }
+
+  const today = new Date();
+  today.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   /*
    * APTO CONDICIONADO:
-   * Debe existir fecha de primera revisión
-   * y fecha de segunda revisión.
-   *
-   * La segunda revisión es la que determina
-   * si el estado está condicionado o pendiente.
+   * la fecha que determina el resultado
+   * es la segunda revisión.
    */
   if (
     status ===
     "APTO CONDICIONADO"
   ) {
-    if (!nextReviewDate) {
-      return "ERROR";
-    }
-
-    if (!secondReviewDate) {
-      return "ERROR";
-    }
-
     const secondDate =
-      parseLocalDate(
-        secondReviewDate
+      new Date(
+        `${secondReviewDate}T00:00:00`
       );
 
-    if (!secondDate) {
+    if (
+      Number.isNaN(
+        secondDate.getTime()
+      )
+    ) {
       return "ERROR";
     }
 
-    if (secondDate < today) {
-      return "PTE.";
+    if (secondDate > today) {
+      return "CONDICIONADO";
     }
 
-    return "CONDICIONADO";
+    return "PTE.";
+  }
+
+  /*
+   * APTO:
+   * la fecha que determina el resultado
+   * es la próxima revisión calculada.
+   */
+  if (status === "APTO") {
+    const nextDate =
+      new Date(
+        `${nextReviewDate}T00:00:00`
+      );
+
+    if (
+      Number.isNaN(
+        nextDate.getTime()
+      )
+    ) {
+      return "ERROR";
+    }
+
+    if (nextDate > today) {
+      return "FAVORABLE";
+    }
+
+    return "PTE.";
   }
 
   /*
    * NO APTO:
-   * Igual que APTO, la fecha de ejecución
-   * no determina PTE.
-   *
-   * Se comprueba la próxima revisión.
+   * la fecha que determina el resultado
+   * es la próxima revisión calculada.
    */
   if (status === "NO APTO") {
-    if (!nextReviewDate) {
-      return "ERROR";
-    }
-
     const nextDate =
-      parseLocalDate(
-        nextReviewDate
+      new Date(
+        `${nextReviewDate}T00:00:00`
       );
 
-    if (!nextDate) {
+    if (
+      Number.isNaN(
+        nextDate.getTime()
+      )
+    ) {
       return "ERROR";
     }
 
-    if (nextDate < today) {
-      return "PTE.";
+    if (nextDate > today) {
+      return "DESFAVORABLE";
     }
 
-    return "DESFAVORABLE";
+    return "PTE.";
   }
 
-  return "-";
+  /*
+   * Estados que no requieren fecha.
+   */
+  if (
+    status === "PENDIENTE" ||
+    status ===
+      "SIN INFORMACIÓN"
+  ) {
+    return "-";
+  }
+
+  return "ERROR";
 }
 
-function formatDate(value: string) {
-  if (!value) return "—";
+/* =========================================================
+   FECHAS
+========================================================= */
 
-  const d =
-    parseLocalDate(value);
+function formatDate(
+  value: string
+) {
+  if (!value) {
+    return "—";
+  }
 
-  if (!d) {
+  const d = new Date(
+    `${value}T00:00:00`
+  );
+
+  if (
+    Number.isNaN(
+      d.getTime()
+    )
+  ) {
     return "—";
   }
 
@@ -724,13 +739,23 @@ function formatDate(value: string) {
   );
 }
 
+/* =========================================================
+   COMPONENTE
+========================================================= */
+
 export default function CenterDetail() {
-  const params =
-    useParams();
+  const params = useParams();
 
-  const id =
-    String(params.id);
+  const id = String(
+    params.id
+  );
 
+  /*
+   * Se crea una referencia estable al centro
+   * para que TypeScript no considere center
+   * como posiblemente undefined dentro de
+   * las funciones/renderizados posteriores.
+   */
   const center =
     demo.centers.find(
       c => c.id === id
@@ -764,11 +789,15 @@ export default function CenterDetail() {
   const [category, setCategory] =
     useState("Todas");
 
-  const [actionFilter, setActionFilter] =
-    useState("Todas");
+  const [
+    actionFilter,
+    setActionFilter,
+  ] = useState("Todas");
 
-  const [resultFilter, setResultFilter] =
-    useState("Todos");
+  const [
+    resultFilter,
+    setResultFilter,
+  ] = useState("Todos");
 
   const [saved, setSaved] =
     useState(false);
@@ -846,30 +875,24 @@ export default function CenterDetail() {
 
   /*
    * A partir de aquí TypeScript sabe que
-   * currentCenter existe.
-   *
-   * Se utiliza esta referencia en todo el
-   * componente para evitar el error:
-   *
-   * "center is possibly undefined"
+   * currentCenter siempre existe.
    */
   const currentCenter =
     center;
 
   const catalog =
-    currentCenter.country ===
-    "España"
+    center.country === "España"
       ? demo.esCatalog
       : demo.ptCatalog;
 
   const overrides =
     (state.centers[
-      currentCenter.id
+      center.id
     ] || {}) as CenterFormValues;
 
   const activeMap =
     state.activeItems[
-      currentCenter.id
+      center.id
     ] || {};
 
   const activeItems =
@@ -884,12 +907,11 @@ export default function CenterDetail() {
         activeMap[x.id] === false
     );
 
-  const key =
-    reviewKey(
-      currentCenter.id,
-      year,
-      period
-    );
+  const key = reviewKey(
+    center.id,
+    year,
+    period
+  );
 
   const review =
     state.reviews[key] || {
@@ -922,8 +944,9 @@ export default function CenterDetail() {
     ),
   ];
 
-  const actionTypes =
-    Array.from(
+  const actions = [
+    "Todas",
+    ...Array.from(
       new Set(
         catalog
           .map(
@@ -932,67 +955,46 @@ export default function CenterDetail() {
           )
           .filter(Boolean)
       )
-    ).sort();
+    ),
+  ];
 
-  function getItem(
-    itemId: string
-  ) {
-    return (
-      review.items[itemId] ||
-      blankItem()
-    );
-  }
+  const resultOptions = [
+    "Todos",
+    "FAVORABLE",
+    "CONDICIONADO",
+    "DESFAVORABLE",
+    "PTE.",
+    "ERROR",
+    "-",
+  ];
 
-  /*
-   * Calculamos el resultado aquí también
-   * para poder utilizarlo en el filtro por
-   * resultado.
-   */
-  function getCalculatedResult(
-    itemId: string
-  ) {
-    const item =
-      getItem(itemId);
+  const getCurrentResult =
+    (x: any) => {
+      const item =
+        review.items[
+          x.id
+        ] || blankItem();
 
-    const catalogItem =
-      catalog.find(
-        (x: any) =>
-          x.id === itemId
-      ) as any;
+      const nextDate =
+        calculateNextReview(
+          item.date,
+          x.frequency,
+          center.country
+        );
 
-    if (!catalogItem) {
-      return "-";
-    }
-
-    const nextReview =
-      calculateNextReview(
+      return calculateResult(
+        item.status,
         item.date,
-        catalogItem.frequency,
-        currentCenter.country
+        nextDate,
+        item.secondReviewDate
       );
-
-    return calculateResult(
-      item.status,
-      item.date,
-      nextReview,
-      item.secondReviewDate
-    );
-  }
+    };
 
   const visible =
     activeItems.filter(
       (x: any) => {
-        const item =
-          getItem(x.id);
-
-        const result =
-          getCalculatedResult(
-            x.id
-          );
-
         const matchesCategory =
-          category ===
-            "Todas" ||
+          category === "Todas" ||
           x.category ===
             category;
 
@@ -1002,24 +1004,27 @@ export default function CenterDetail() {
           x.action ===
             actionFilter;
 
+        const matchesSearch =
+          `${x.code} ${x.installation} ${x.action} ${x.category}`
+            .toLowerCase()
+            .includes(
+              q.toLowerCase()
+            );
+
+        const result =
+          getCurrentResult(x);
+
         const matchesResult =
           resultFilter ===
             "Todos" ||
           result ===
             resultFilter;
 
-        const matchesSearch =
-          `${x.code} ${x.installation} ${x.action} ${x.category} ${item.equipmentId} ${item.company}`
-            .toLowerCase()
-            .includes(
-              q.toLowerCase()
-            );
-
         return (
           matchesCategory &&
           matchesAction &&
-          matchesResult &&
-          matchesSearch
+          matchesSearch &&
+          matchesResult
         );
       }
     );
@@ -1078,8 +1083,7 @@ export default function CenterDetail() {
       return Array.from(
         years
       ).sort(
-        (a, b) =>
-          a - b
+        (a, b) => a - b
       );
     }, [
       state.reviews,
@@ -1132,46 +1136,34 @@ export default function CenterDetail() {
     updateState(next);
   }
 
+  function getItem(
+    itemId: string
+  ) {
+    return (
+      review.items[itemId] ||
+      blankItem()
+    );
+  }
+
   function updateItem(
     itemId: string,
     patch: Partial<
-      ReturnType<typeof blankItem>
+      ReturnType<
+        typeof blankItem
+      >
     >
   ) {
     const current =
       getItem(itemId);
 
-    /*
-     * Si se cambia a un estado distinto
-     * de APTO CONDICIONADO, eliminamos
-     * la segunda revisión para evitar
-     * datos residuales.
-     */
-    const nextItem = {
-      ...current,
-      ...patch,
-    };
-
-    if (
-      patch.status &&
-      patch.status !==
-        "APTO CONDICIONADO"
-    ) {
-      nextItem.secondReviewDate =
-        "";
-    }
-
-    /*
-     * Si cambia la fecha de ejecución,
-     * el resultado se recalcula automáticamente
-     * mediante el render.
-     */
     const nextReview = {
       ...review,
       items: {
         ...review.items,
-        [itemId]:
-          nextItem,
+        [itemId]: {
+          ...current,
+          ...patch,
+        },
       },
     };
 
@@ -1187,7 +1179,8 @@ export default function CenterDetail() {
   function confirmReview() {
     if (
       state.role !== "ADMIN" ||
-      summary.pendingConfirmation > 0
+      summary.pendingConfirmation >
+        0
     ) {
       return;
     }
@@ -1212,9 +1205,10 @@ export default function CenterDetail() {
         },
         ...(review.participants ||
           []).filter(
-            p =>
-              p.role === "OTRO"
-          ),
+          p =>
+            p.role ===
+            "OTRO"
+        ),
       ],
     };
 
@@ -1259,12 +1253,14 @@ export default function CenterDetail() {
   }
 
   const readOnly =
-    state.role === "LECTURA" ||
-    currentCenter.status !==
+    state.role ===
+      "LECTURA" ||
+    center.status !==
       "Activo";
 
   const admin =
-    state.role === "ADMIN";
+    state.role ===
+    "ADMIN";
 
   function SectionToggle({
     open,
@@ -1295,7 +1291,6 @@ export default function CenterDetail() {
 
   return (
     <div className="space-y-6">
-
       <div className="flex items-center gap-3">
         <Link
           href="/centers"
@@ -1311,11 +1306,8 @@ export default function CenterDetail() {
 
       <Card className="overflow-hidden">
         <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
-
           <div className="flex items-center gap-5 p-6">
-
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
-
               {overrides.logoUrl ? (
                 <img
                   src={
@@ -1326,62 +1318,54 @@ export default function CenterDetail() {
                 />
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
-                  {currentCenter.shortCode ||
-                    currentCenter.code}
+                  {center.shortCode ||
+                    center.code}
                 </span>
               )}
-
             </div>
 
             <div>
-
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {currentCenter.country} ·{" "}
-                {currentCenter.stl}
+                {center.country} ·{" "}
+                {center.stl}
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
-                {currentCenter.name}
+                {center.name}
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
                 {overrides.address ||
-                  currentCenter.address ||
+                  center.address ||
                   "Dirección pendiente"}
               </p>
 
               <div className="mt-3 flex gap-2">
-
                 <Badge tone="success">
-                  {currentCenter.status}
+                  {center.status}
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Código{" "}
-                  {currentCenter.shortCode ||
+                  {center.shortCode ||
                     "—"}
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº {currentCenter.code}
+                  Nº{" "}
+                  {center.code}
                 </span>
-
               </div>
-
             </div>
-
           </div>
 
           <div className="flex items-center justify-center bg-white/5 p-4">
-
             {overrides.imageUrl ? (
               <img
                 src={
                   overrides.imageUrl
                 }
-                alt={
-                  currentCenter.name
-                }
+                alt={center.name}
                 className="h-32 w-full rounded-xl object-cover"
               />
             ) : (
@@ -1389,14 +1373,11 @@ export default function CenterDetail() {
                 Imagen del centro
               </div>
             )}
-
           </div>
-
         </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-5">
-
         {[
           [
             "Cumplimiento",
@@ -1422,27 +1403,26 @@ export default function CenterDetail() {
               "APTO CONDICIONADO"
             ],
           ],
-        ].map(([t, v]) => (
-          <Card
-            key={String(t)}
-            className="p-5"
-          >
-            <div className="text-2xl font-black">
-              {v}
-            </div>
+        ].map(
+          ([t, v]) => (
+            <Card
+              key={String(t)}
+              className="p-5"
+            >
+              <div className="text-2xl font-black">
+                {v}
+              </div>
 
-            <div className="mt-1 text-sm text-slate-500">
-              {t}
-            </div>
-          </Card>
-        ))}
-
+              <div className="mt-1 text-sm text-slate-500">
+                {t}
+              </div>
+            </Card>
+          )
+        )}
       </div>
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Datos del centro"
             subtitle="Edición disponible según perfil"
@@ -1456,31 +1436,32 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={openCenterData}
+            open={
+              openCenterData
+            }
             onClick={() =>
               setOpenCenterData(
                 v => !v
               )
             }
           />
-
         </div>
 
         {openCenterData && (
           <>
-
             <div className="grid gap-4 md:grid-cols-4">
-
               <label className="text-sm">
                 <span className="text-xs text-slate-400">
                   Propiedad
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.property ??
-                    currentCenter.property ??
+                    center.property ??
                     ""
                   }
                   onChange={e =>
@@ -1499,10 +1480,12 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.address ??
-                    currentCenter.address ??
+                    center.address ??
                     ""
                   }
                   onChange={e =>
@@ -1521,7 +1504,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.city ??
                     ""
@@ -1542,7 +1527,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.province ??
                     ""
@@ -1563,10 +1550,12 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.manager ??
-                    currentCenter.manager ??
+                    center.manager ??
                     ""
                   }
                   onChange={e =>
@@ -1585,7 +1574,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.managerPhone ??
                     ""
@@ -1606,7 +1597,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   type="email"
                   value={
                     overrides.managerEmail ??
@@ -1630,7 +1623,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.technicalResponsible ??
                     ""
@@ -1651,7 +1646,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     overrides.technicalResponsiblePhone ??
                     ""
@@ -1672,7 +1669,9 @@ export default function CenterDetail() {
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   type="email"
                   value={
                     overrides.technicalResponsibleEmail ??
@@ -1689,16 +1688,12 @@ export default function CenterDetail() {
               </label>
 
               <div />
-
             </div>
 
             {!readOnly && (
               <div className="mt-5 flex flex-wrap gap-3">
-
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
                   <ImagePlus className="mr-2 inline h-4 w-4" />
-
                   Logo
 
                   <input
@@ -1717,13 +1712,10 @@ export default function CenterDetail() {
                       }
                     }}
                   />
-
                 </label>
 
                 <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
                   <ImagePlus className="mr-2 inline h-4 w-4" />
-
                   Imagen centro
 
                   <input
@@ -1742,47 +1734,41 @@ export default function CenterDetail() {
                       }
                     }}
                   />
-
                 </label>
-
               </div>
             )}
-
           </>
         )}
-
       </Card>
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Histórico de cumplimiento"
             subtitle="Revisiones realizadas del centro hasta la fecha actual"
           />
 
           <SectionToggle
-            open={openHistory}
+            open={
+              openHistory
+            }
             onClick={() =>
               setOpenHistory(
                 v => !v
               )
             }
           />
-
         </div>
 
         {openHistory && (
           <>
-
-            {reviewYears.length === 0 ? (
+            {reviewYears.length ===
+            0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                 No hay revisiones históricas cargadas.
               </div>
             ) : (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
-
                 {reviewYears.flatMap(
                   y =>
                     (
@@ -1790,127 +1776,129 @@ export default function CenterDetail() {
                         "S1",
                         "S2",
                       ] as Period[]
-                    ).map(p => {
+                    ).map(
+                      p => {
+                        const r =
+                          state.reviews[
+                            reviewKey(
+                              center.id,
+                              y,
+                              p
+                            )
+                          ];
 
-                      const r =
-                        state.reviews[
-                          reviewKey(
-                            currentCenter.id,
-                            y,
-                            p
-                          )
-                        ];
-
-                      const historicalActiveIds =
-                        catalog
-                          .filter(
-                            (x: any) =>
-                              activeMap[
+                        const historicalActiveIds =
+                          catalog
+                            .filter(
+                              (
+                                x: any
+                              ) =>
+                                activeMap[
+                                  x.id
+                                ] !==
+                                false
+                            )
+                            .map(
+                              (
+                                x: any
+                              ) =>
                                 x.id
-                              ] !== false
-                          )
-                          .map(
-                            (x: any) =>
-                              x.id
+                            );
+
+                        const sum =
+                          reviewSummary(
+                            r,
+                            historicalActiveIds
                           );
 
-                      const sum =
-                        reviewSummary(
-                          r,
-                          historicalActiveIds
-                        );
+                        return (
+                          <div
+                            key={`${y}-${p}`}
+                            className="rounded-xl border border-slate-200 p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs font-semibold text-slate-400">
+                                {p}{" "}
+                                {y}
+                              </div>
 
-                      return (
-                        <div
-                          key={`${y}-${p}`}
-                          className="rounded-xl border border-slate-200 p-4"
-                        >
-
-                          <div className="flex items-center justify-between">
-
-                            <div className="text-xs font-semibold text-slate-400">
-                              {p} {y}
+                              {r?.confirmed && (
+                                <Badge tone="success">
+                                  Confirmada
+                                </Badge>
+                              )}
                             </div>
 
-                            {r?.confirmed && (
-                              <Badge tone="success">
-                                Confirmada
-                              </Badge>
-                            )}
+                            <div className="mt-2 text-xl font-black">
+                              {r
+                                ? `${sum.score}%`
+                                : "—"}
+                            </div>
 
+                            <div className="mt-1 text-xs text-slate-500">
+                              {r
+                                ? r.confirmed
+                                  ? "Revisión confirmada"
+                                  : "Revisión cargada sin confirmar"
+                                : "Sin revisión cargada"}
+                            </div>
                           </div>
-
-                          <div className="mt-2 text-xl font-black">
-                            {r
-                              ? `${sum.score}%`
-                              : "—"}
-                          </div>
-
-                          <div className="mt-1 text-xs text-slate-500">
-                            {r
-                              ? r.confirmed
-                                ? "Revisión confirmada"
-                                : "Revisión cargada sin confirmar"
-                              : "Sin revisión cargada"}
-                          </div>
-
-                        </div>
-                      );
-                    })
+                        );
+                      }
+                    )
                 )}
-
               </div>
             )}
 
             <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-
               <BarChart3 className="h-4 w-4" />
-
               El histórico muestra únicamente años hasta el año actual.
-
             </div>
-
           </>
         )}
-
       </Card>
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Revisión técnico-legal"
             subtitle="Dos revisiones anuales con histórico independiente."
           />
 
           <SectionToggle
-            open={openReview}
+            open={
+              openReview
+            }
             onClick={() =>
               setOpenReview(
                 v => !v
               )
             }
           />
-
         </div>
 
         {openReview && (
           <>
-
             <div className="mt-5 flex flex-wrap gap-2">
-
               <Select
-                value={String(year)}
+                value={String(
+                  year
+                )}
                 onChange={v =>
                   setYear(
                     Number(v)
                   )
                 }
               >
-                <option>2026</option>
-                <option>2027</option>
-                <option>2028</option>
+                <option>
+                  2026
+                </option>
+                <option>
+                  2027
+                </option>
+                <option>
+                  2028
+                </option>
               </Select>
 
               <Select
@@ -1941,11 +1929,9 @@ export default function CenterDetail() {
                   Reiniciar demo
                 </Button>
               )}
-
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-4">
-
               <div className="rounded-xl bg-slate-50 p-4">
                 <div className="text-xs text-slate-400">
                   Estado
@@ -1971,7 +1957,7 @@ export default function CenterDetail() {
 
               <div className="rounded-xl bg-amber-50 p-4">
                 <div className="text-xs text-amber-700">
-                  Pendientes confirmar
+                  Pendientes
                 </div>
 
                 <div className="mt-1 text-xl font-black text-amber-700">
@@ -1988,41 +1974,44 @@ export default function CenterDetail() {
                   {summary.score}%
                 </div>
               </div>
-
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-
-              {STATUSES.map(s => (
-                <span
-                  key={s}
-                  className="rounded-full border border-slate-200 px-3 py-1"
-                >
-                  <b>
-                    {summary.counts[s]}
-                  </b>{" "}
-                  {s}
-                </span>
-              ))}
-
+              {STATUSES.map(
+                s => (
+                  <span
+                    key={s}
+                    className="rounded-full border border-slate-200 px-3 py-1"
+                  >
+                    <b>
+                      {
+                        summary
+                          .counts[
+                          s
+                        ]
+                      }
+                    </b>{" "}
+                    {s}
+                  </span>
+                )
+              )}
             </div>
 
-            {summary.pendingConfirmation === 0 &&
-              summary.total > 0 &&
+            {summary.pendingConfirmation ===
+              0 &&
+              summary.total >
+                0 &&
               !review.confirmed &&
               admin && (
                 <div className="mt-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
                   <div>
-
                     <div className="font-bold text-emerald-800">
-                      Todos los elementos están confirmados
+                      Todos los elementos están preparados
                     </div>
 
                     <div className="text-xs text-emerald-700">
-                      La revisión ya puede ser cerrada por el Administrador.
+                      La revisión puede ser cerrada por el Administrador.
                     </div>
-
                   </div>
 
                   <Button
@@ -2031,32 +2020,29 @@ export default function CenterDetail() {
                     }
                   >
                     <CheckCircle2 className="mr-2 inline h-4 w-4" />
-
-                    Confirmar {period}{" "}
+                    Confirmar{" "}
+                    {period}{" "}
                     {year}
                   </Button>
-
                 </div>
               )}
 
             {review.confirmed && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-
                 <div>
-
                   <div className="font-bold text-emerald-800">
-                    Revisión {period}{" "}
-                    {year} confirmada
+                    Revisión{" "}
+                    {period}{" "}
+                    {year}{" "}
+                    confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
-
                     Administrador:{" "}
                     {
                       review.confirmedBy
                     }{" "}
                     ·{" "}
-
                     {review.confirmedAt
                       ? new Date(
                           review.confirmedAt
@@ -2064,102 +2050,99 @@ export default function CenterDetail() {
                           "es-ES"
                         )
                       : "—"}
-
                   </div>
-
                 </div>
 
                 <Link
-                  href={`/centers/${currentCenter.id}/certificate?year=${year}&period=${period}`}
+                  href={`/centers/${center.id}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
-
                   Ver / exportar certificado
-
                 </Link>
-
               </div>
             )}
 
             <div className="mt-5 rounded-xl border border-slate-200 p-4">
-
               <div className="text-sm font-bold">
                 Participantes de la revisión
               </div>
 
               <div className="mt-2 space-y-2">
+                {(
+                  review.participants ||
+                  []
+                ).map(
+                  (
+                    p,
+                    i
+                  ) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
+                    >
+                      <span>
+                        {
+                          p.name
+                        }{" "}
+                        ·{" "}
+                        {
+                          p.role
+                        }
+                      </span>
 
-                {(review.participants ||
-                  []).map(
-                    (p, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
-                      >
+                      {p.signed ? (
+                        <Badge tone="success">
+                          Firmado
+                        </Badge>
+                      ) : admin &&
+                        !review.confirmed ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            const participants =
+                              [
+                                ...(review.participants ||
+                                  []),
+                              ];
 
-                        <span>
-                          {p.name} ·{" "}
-                          {p.role}
-                        </span>
-
-                        {p.signed ? (
-                          <Badge tone="success">
-                            Firmado
-                          </Badge>
-                        ) : admin &&
-                          !review.confirmed ? (
-                          <Button
-                            variant="secondary"
-                            onClick={() => {
-
-                              const participants =
-                                [
-                                  ...(review.participants ||
-                                    []),
-                                ];
-
-                              participants[
+                            participants[
+                              i
+                            ] = {
+                              ...participants[
                                 i
-                              ] = {
-                                ...participants[
-                                  i
-                                ],
-                                signed:
-                                  true,
-                              };
+                              ],
+                              signed:
+                                true,
+                            };
 
-                              updateState({
-                                ...state,
-                                reviews: {
-                                  ...state.reviews,
-                                  [key]: {
-                                    ...review,
-                                    participants,
-                                  },
+                            updateState({
+                              ...state,
+                              reviews: {
+                                ...state.reviews,
+                                [key]: {
+                                  ...review,
+                                  participants,
                                 },
-                              });
-
-                            }}
-                          >
-                            Firmar
-                          </Button>
-                        ) : (
-                          <Badge>
-                            Pendiente
-                          </Badge>
-                        )}
-
-                      </div>
-                    )
-                  )}
-
+                              },
+                            });
+                          }}
+                        >
+                          Firmar
+                        </Button>
+                      ) : (
+                        <Badge>
+                          Pendiente
+                        </Badge>
+                      )}
+                    </div>
+                  )
+                )}
               </div>
 
               {!readOnly &&
                 !review.confirmed && (
                   <div className="mt-3 flex gap-2">
-
                     <input
                       value={
                         participant
@@ -2176,7 +2159,6 @@ export default function CenterDetail() {
                     <Button
                       variant="secondary"
                       onClick={() => {
-
                         if (
                           !participant.trim()
                         ) {
@@ -2208,27 +2190,22 @@ export default function CenterDetail() {
                           },
                         });
 
-                        setParticipant("");
-
+                        setParticipant(
+                          ""
+                        );
                       }}
                     >
                       Añadir
                     </Button>
-
                   </div>
                 )}
-
             </div>
-
           </>
         )}
-
       </Card>
 
       <Card className="p-6">
-
         <div className="flex items-center justify-between gap-4">
-
           <SectionTitle
             title="Instalaciones y actuaciones"
             subtitle={`${activeItems.length} elementos activos · ${inactiveItems.length} elementos no activos`}
@@ -2244,49 +2221,53 @@ export default function CenterDetail() {
               )
             }
           />
-
         </div>
 
         {openInstallations && (
           <>
-
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-
               <div className="flex flex-wrap items-center gap-2">
-
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <ClipboardCheck className="h-4 w-4" />
                   Leyenda de resultados
                 </div>
 
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  FAVORABLE
-                </span>
-
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                  CONDICIONADO
-                </span>
-
-                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                  DESFAVORABLE
-                </span>
-
-                <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                  PTE.
-                </span>
-
-                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  ERROR
-                </span>
-
+                {[
+                  [
+                    "FAVORABLE",
+                    "border-emerald-200 bg-emerald-50 text-emerald-700",
+                  ],
+                  [
+                    "CONDICIONADO",
+                    "border-amber-200 bg-amber-50 text-amber-700",
+                  ],
+                  [
+                    "DESFAVORABLE",
+                    "border-red-200 bg-red-50 text-red-700",
+                  ],
+                  [
+                    "PTE.",
+                    "border-orange-200 bg-orange-50 text-orange-700",
+                  ],
+                  [
+                    "ERROR",
+                    "border-slate-300 bg-slate-100 text-slate-700",
+                  ],
+                ].map(
+                  ([label, className]) => (
+                    <span
+                      key={label}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${className}`}
+                    >
+                      {label}
+                    </span>
+                  )
+                )}
               </div>
-
             </div>
 
-            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
-
-              <div className="relative min-w-0 flex-1">
-
+            <div className="mb-4 mt-5 grid gap-3 xl:grid-cols-4">
+              <div className="relative min-w-0">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                 <input
@@ -2299,7 +2280,6 @@ export default function CenterDetail() {
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
                 />
-
               </div>
 
               <Select
@@ -2330,17 +2310,13 @@ export default function CenterDetail() {
                   setActionFilter
                 }
               >
-                <option value="Todas">
-                  Todas las actuaciones
-                </option>
-
-                {actionTypes.map(
-                  action => (
+                {actions.map(
+                  a => (
                     <option
-                      key={action}
-                      value={action}
+                      key={a}
+                      value={a}
                     >
-                      {action}
+                      {a}
                     </option>
                   )
                 )}
@@ -2354,47 +2330,25 @@ export default function CenterDetail() {
                   setResultFilter
                 }
               >
-                <option value="Todos">
-                  Todos los resultados
-                </option>
-
-                <option value="FAVORABLE">
-                  FAVORABLE
-                </option>
-
-                <option value="CONDICIONADO">
-                  CONDICIONADO
-                </option>
-
-                <option value="DESFAVORABLE">
-                  DESFAVORABLE
-                </option>
-
-                <option value="PTE.">
-                  PTE.
-                </option>
-
-                <option value="ERROR">
-                  ERROR
-                </option>
-
-                <option value="-">
-                  SIN RESULTADO
-                </option>
+                {resultOptions.map(
+                  r => (
+                    <option
+                      key={r}
+                      value={r}
+                    >
+                      Resultado:{" "}
+                      {r}
+                    </option>
+                  )
+                )}
               </Select>
-
             </div>
 
             <div className="rounded-2xl border border-slate-200">
-
               <div className="overflow-x-auto">
-
-                <table className="min-w-[2000px] w-full text-sm">
-
+                <table className="min-w-[1900px] w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
-
                     <tr>
-
                       <th className="w-24 px-3 py-3">
                         Código
                       </th>
@@ -2448,16 +2402,12 @@ export default function CenterDetail() {
                       </th>
 
                       <th className="w-12 px-3 py-3" />
-
                     </tr>
-
                   </thead>
 
                   <tbody>
-
                     {visible.map(
                       (x: any) => {
-
                         const item =
                           getItem(x.id);
 
@@ -2472,30 +2422,23 @@ export default function CenterDetail() {
                           );
 
                         /*
-                         * IMPORTANTE:
+                         * ESTE ES EL CÁLCULO PRINCIPAL.
                          *
-                         * La próxima revisión se calcula
-                         * SIEMPRE a partir de:
-                         *
-                         * FECHA + FRECUENCIA
-                         *
-                         * y se ajusta al último día
-                         * laborable anterior cuando
-                         * cae en sábado, domingo o
-                         * festivo nacional.
+                         * Se ejecuta cada vez que:
+                         * - se introduce una fecha
+                         * - cambia la frecuencia
+                         * - cambia el país del centro
                          */
                         const nextDate =
                           calculateNextReview(
                             item.date,
                             x.frequency,
-                            currentCenter.country
+                            center.country
                           );
 
                         /*
-                         * RESULTADO se calcula utilizando
-                         * la próxima revisión y, en caso
-                         * de condicionado, la segunda
-                         * revisión.
+                         * El resultado utiliza la fecha
+                         * calculada anterior.
                          */
                         const result =
                           calculateResult(
@@ -2515,16 +2458,16 @@ export default function CenterDetail() {
 
                         return (
                           <tr
-                            key={x.id}
+                            key={
+                              x.id
+                            }
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
-
                             <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
                               {x.code}
                             </td>
 
                             <td className="px-2 py-3 align-top">
-
                               <div
                                 className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 title={
@@ -2536,11 +2479,9 @@ export default function CenterDetail() {
                                   className={`h-4 w-4 ${visual.icon}`}
                                 />
                               </div>
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <div className="font-semibold text-slate-800">
                                 {
                                   x.installation
@@ -2554,7 +2495,6 @@ export default function CenterDetail() {
                                   }
                                 </div>
                               )}
-
                             </td>
 
                             <td className="px-3 py-3 align-top text-slate-600">
@@ -2562,19 +2502,14 @@ export default function CenterDetail() {
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
                                 <CalendarDays className="h-3 w-3" />
-                                {
-                                  x.frequency ||
-                                  "—"
-                                }
+                                {x.frequency ||
+                                  "—"}
                               </span>
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <input
                                 disabled={
                                   locked
@@ -2594,11 +2529,9 @@ export default function CenterDetail() {
                                 placeholder="ID equipo"
                                 className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <input
                                 disabled={
                                   locked
@@ -2618,17 +2551,9 @@ export default function CenterDetail() {
                                 placeholder="Empresa"
                                 className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
-                              {/*
-                               * Selector coloreado directamente.
-                               *
-                               * Ya no existe un Badge debajo
-                               * del selector.
-                               */}
                               <select
                                 disabled={
                                   locked
@@ -2641,31 +2566,32 @@ export default function CenterDetail() {
                                     x.id,
                                     {
                                       status:
-                                        e.target
-                                          .value as V1Status,
+                                        e.target.value as V1Status,
                                     }
                                   )
                                 }
-                                className={`w-44 rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none ${getStatusClasses(
+                                className={`w-44 rounded-lg border px-2 py-2 text-xs font-semibold outline-none ${getStatusClasses(
                                   item.status
-                                )} disabled:cursor-not-allowed disabled:opacity-70`}
+                                )}`}
                               >
                                 {STATUSES.map(
                                   s => (
                                     <option
-                                      key={s}
-                                      value={s}
+                                      key={
+                                        s
+                                      }
+                                      value={
+                                        s
+                                      }
                                     >
                                       {s}
                                     </option>
                                   )
                                 )}
                               </select>
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <input
                                 disabled={
                                   locked
@@ -2685,18 +2611,20 @@ export default function CenterDetail() {
                                 }
                                 className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs disabled:bg-slate-50"
                               />
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
-                              <div className="flex items-center gap-2">
-
+                              <div className="flex min-h-8 items-center gap-2">
                                 <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
 
                                 <div>
-
-                                  <div className="font-semibold text-slate-700">
+                                  <div
+                                    className={`font-semibold ${
+                                      nextDate
+                                        ? "text-slate-700"
+                                        : "text-slate-300"
+                                    }`}
+                                  >
                                     {nextDate
                                       ? formatDate(
                                           nextDate
@@ -2709,15 +2637,11 @@ export default function CenterDetail() {
                                       Calculada automáticamente
                                     </div>
                                   )}
-
                                 </div>
-
                               </div>
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               {item.status ===
                               "APTO CONDICIONADO" ? (
                                 <input
@@ -2748,27 +2672,23 @@ export default function CenterDetail() {
                                   No aplica
                                 </span>
                               )}
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <span
                                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${resultVisual.className}`}
                               >
-
                                 <span
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {result}
-
+                                {
+                                  result
+                                }
                               </span>
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               <textarea
                                 disabled={
                                   locked
@@ -2789,11 +2709,9 @@ export default function CenterDetail() {
                                 rows={2}
                                 className="w-52 resize-y rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
-
                             </td>
 
                             <td className="px-3 py-3 align-top">
-
                               {!readOnly &&
                                 !review.confirmed && (
                                   <button
@@ -2810,9 +2728,7 @@ export default function CenterDetail() {
                                     <X className="h-4 w-4" />
                                   </button>
                                 )}
-
                             </td>
-
                           </tr>
                         );
                       }
@@ -2822,36 +2738,30 @@ export default function CenterDetail() {
                       0 && (
                       <tr>
                         <td
-                          colSpan={15}
+                          colSpan={
+                            15
+                          }
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con los filtros.
                         </td>
                       </tr>
                     )}
-
                   </tbody>
-
                 </table>
-
               </div>
-
             </div>
 
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
-
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
 
               <div>
-                La próxima revisión se calcula automáticamente sumando la frecuencia a la fecha de ejecución. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el día laborable anterior. Se aplican los festivos nacionales correspondientes al país del centro: España o Portugal.
+                La próxima revisión se calcula automáticamente sumando la frecuencia a la fecha de ejecución. Si la fecha calculada cae en sábado, domingo o festivo nacional, se retrocede hasta el último día laborable. El resultado se calcula utilizando la próxima revisión o, en APTO CONDICIONADO, la fecha de la segunda revisión.
               </div>
-
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 p-5">
-
               <div className="flex items-center justify-between gap-4">
-
                 <SectionTitle
                   title="Elementos no activos"
                   subtitle="No computan, no generan vencimientos y conservan su histórico"
@@ -2866,26 +2776,21 @@ export default function CenterDetail() {
                         }
                       >
                         <Plus className="mr-2 inline h-4 w-4" />
-
                         Añadir elemento
-
                       </Button>
                     ) : undefined
                   }
                 />
-
               </div>
 
               {showAddElement &&
                 !readOnly && (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-
                     <div className="mb-3 text-sm font-bold">
                       Seleccionar elemento del catálogo
                     </div>
 
                     <div className="relative mb-3">
-
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
 
                       <input
@@ -2900,18 +2805,16 @@ export default function CenterDetail() {
                         placeholder="Buscar cualquier elemento..."
                         className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
                       />
-
                     </div>
 
                     <div className="max-h-80 space-y-2 overflow-y-auto">
-
                       {selectableItems.map(
                         (x: any) => {
-
                           const isActive =
                             activeMap[
                               x.id
-                            ] !== false;
+                            ] !==
+                            false;
 
                           const visual =
                             getInstallationVisual(
@@ -2924,12 +2827,12 @@ export default function CenterDetail() {
 
                           return (
                             <div
-                              key={x.id}
+                              key={
+                                x.id
+                              }
                               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
                             >
-
                               <div className="flex min-w-0 items-center gap-3">
-
                                 <div
                                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 >
@@ -2939,23 +2842,26 @@ export default function CenterDetail() {
                                 </div>
 
                                 <div className="min-w-0">
-
                                   <div className="truncate text-sm font-semibold">
-                                    {x.code} ·{" "}
+                                    {
+                                      x.code
+                                    }{" "}
+                                    ·{" "}
                                     {
                                       x.installation
                                     }
                                   </div>
 
                                   <div className="truncate text-xs text-slate-500">
-                                    {x.action} ·{" "}
+                                    {
+                                      x.action
+                                    }{" "}
+                                    ·{" "}
                                     {
                                       x.frequency
                                     }
                                   </div>
-
                                 </div>
-
                               </div>
 
                               {isActive ? (
@@ -2975,32 +2881,24 @@ export default function CenterDetail() {
                                   Activar
                                 </Button>
                               )}
-
                             </div>
                           );
                         }
                       )}
-
                     </div>
-
                   </div>
                 )}
 
               <div className="mt-4">
-
                 {inactiveItems.length ===
                 0 ? (
                   <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    No hay elementos no activos actualmente.
-                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
+                    No hay elementos no activos actualmente. Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
                   </div>
                 ) : (
-
                   <div className="grid gap-2 md:grid-cols-2">
-
                     {inactiveItems.map(
                       (x: any) => {
-
                         const visual =
                           getInstallationVisual(
                             x.installation,
@@ -3012,12 +2910,12 @@ export default function CenterDetail() {
 
                         return (
                           <div
-                            key={x.id}
+                            key={
+                              x.id
+                            }
                             className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
                           >
-
                             <div className="flex min-w-0 items-center gap-3">
-
                               <div
                                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
                               >
@@ -3027,10 +2925,11 @@ export default function CenterDetail() {
                               </div>
 
                               <div className="min-w-0">
-
                                 <div className="truncate">
                                   <b>
-                                    {x.code}
+                                    {
+                                      x.code
+                                    }
                                   </b>{" "}
                                   ·{" "}
                                   {
@@ -3043,9 +2942,7 @@ export default function CenterDetail() {
                                     x.action
                                   }
                                 </div>
-
                               </div>
-
                             </div>
 
                             {!readOnly && (
@@ -3061,25 +2958,17 @@ export default function CenterDetail() {
                                 Activar
                               </Button>
                             )}
-
                           </div>
                         );
                       }
                     )}
-
                   </div>
-
                 )}
-
               </div>
-
             </div>
-
           </>
         )}
-
       </Card>
-
     </div>
   );
 }
