@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -13,8 +13,16 @@ import {
   FileCheck2,
   BarChart3,
 } from "lucide-react";
+
 import { demo } from "@/lib/data";
-import { Card, SectionTitle, Badge, Button, Select } from "@/components/ui";
+import {
+  Card,
+  SectionTitle,
+  Badge,
+  Button,
+  Select,
+} from "@/components/ui";
+
 import {
   loadState,
   saveState,
@@ -39,8 +47,8 @@ export default function CenterDetail() {
   const id = String(params.id);
 
   const center =
-    demo.centers.find((c) => c.id === id) ||
-    demo.centers.find((c) => encodeURIComponent(c.id) === id);
+    demo.centers.find(c => c.id === id) ||
+    demo.centers.find(c => encodeURIComponent(c.id) === id);
 
   const [state, setState] = useState<V1State>({
     role: "ADMIN",
@@ -65,17 +73,13 @@ export default function CenterDetail() {
 
     window.addEventListener("stl-role-change", h);
 
-    return () =>
-      window.removeEventListener("stl-role-change", h);
+    return () => window.removeEventListener("stl-role-change", h);
   }, []);
 
   if (!center) {
     return (
       <Card className="p-8">
-        <h2 className="text-xl font-bold">
-          Centro no encontrado
-        </h2>
-
+        <h2 className="text-xl font-bold">Centro no encontrado</h2>
         <Link
           href="/centers"
           className="mt-4 inline-block text-sm underline"
@@ -104,11 +108,7 @@ export default function CenterDetail() {
     (x: any) => activeMap[x.id] === false
   );
 
-  const key = reviewKey(
-    center.id,
-    year,
-    period
-  );
+  const key = reviewKey(center.id, year, period);
 
   const review =
     state.reviews[key] || {
@@ -137,12 +137,13 @@ export default function CenterDetail() {
 
   const visible = activeItems.filter(
     (x: any) =>
-      (category === "Todas" ||
-        x.category === category) &&
+      (category === "Todas" || x.category === category) &&
       `${x.code} ${x.installation} ${x.action} ${x.category}`
         .toLowerCase()
         .includes(q.toLowerCase())
   );
+
+  const centerData = currentCenter as any;
 
   function updateState(next: V1State) {
     setState(next);
@@ -168,10 +169,7 @@ export default function CenterDetail() {
     });
   }
 
-  function setActive(
-    itemId: string,
-    active: boolean
-  ) {
+  function setActive(itemId: string, active: boolean) {
     const next = {
       ...state,
       activeItems: {
@@ -187,10 +185,7 @@ export default function CenterDetail() {
   }
 
   function getItem(itemId: string) {
-    return (
-      review.items[itemId] ||
-      blankItem()
-    );
+    return review.items[itemId] || blankItem();
   }
 
   function updateItem(
@@ -254,7 +249,7 @@ export default function CenterDetail() {
           signed: true,
         },
         ...(review.participants || []).filter(
-          (p) => p.role === "OTRO"
+          p => p.role === "OTRO"
         ),
       ],
     };
@@ -270,9 +265,7 @@ export default function CenterDetail() {
 
   function resetPeriod() {
     const next = { ...state };
-
     delete next.reviews[key];
-
     updateState(next);
   }
 
@@ -283,10 +276,7 @@ export default function CenterDetail() {
     const reader = new FileReader();
 
     reader.onload = () =>
-      updateCenter(
-        field,
-        String(reader.result)
-      );
+      updateCenter(field, String(reader.result));
 
     reader.readAsDataURL(file);
   }
@@ -296,17 +286,6 @@ export default function CenterDetail() {
     center.status !== "Activo";
 
   const admin = state.role === "ADMIN";
-  const currentScore = summary.score;
-
-  const city =
-    overrides.city ??
-    (currentCenter as any).city ??
-    "";
-
-  const province =
-    overrides.province ??
-    (currentCenter as any).province ??
-    "";
 
   return (
     <div className="space-y-6">
@@ -389,7 +368,7 @@ export default function CenterDetail() {
 
       <div className="grid gap-4 md:grid-cols-5">
         {[
-          ["Cumplimiento", `${currentScore}%`],
+          ["Cumplimiento", `${summary.score}%`],
           [
             "Confirmados",
             `${summary.confirmed}/${summary.total}`,
@@ -402,10 +381,7 @@ export default function CenterDetail() {
           ],
         ].map(([t, v]) => (
           <Card key={String(t)} className="p-5">
-            <div className="text-2xl font-black">
-              {v}
-            </div>
-
+            <div className="text-2xl font-black">{v}</div>
             <div className="mt-1 text-sm text-slate-500">
               {t}
             </div>
@@ -419,212 +395,183 @@ export default function CenterDetail() {
           subtitle="Edición disponible según perfil"
           action={
             saved ? (
-              <Badge tone="success">
-                Guardado
-              </Badge>
+              <Badge tone="success">Guardado</Badge>
             ) : undefined
           }
         />
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Propiedad
-            </span>
+        <div className="space-y-6">
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-slate-700">
+              Datos generales
+            </h3>
 
-            <input
-              disabled={readOnly}
-              value={
-                overrides.property ??
-                center.property ??
-                ""
-              }
-              onChange={(e) =>
-                updateCenter(
-                  "property",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
+            <div className="grid gap-4 md:grid-cols-3">
+              {(
+                [
+                  [
+                    "property",
+                    "Propiedad",
+                    overrides.property ??
+                      center.property ??
+                      "",
+                  ],
+                  [
+                    "address",
+                    "Dirección",
+                    overrides.address ??
+                      center.address ??
+                      "",
+                  ],
+                  [
+                    "city",
+                    "Ciudad",
+                    overrides.city ??
+                      centerData.city ??
+                      "",
+                  ],
+                  [
+                    "province",
+                    "Provincia",
+                    overrides.province ??
+                      centerData.province ??
+                      "",
+                  ],
+                ] as const
+              ).map(([field, label, value]) => (
+                <label
+                  key={field}
+                  className="text-sm"
+                >
+                  <span className="text-xs text-slate-400">
+                    {label}
+                  </span>
 
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Dirección
-            </span>
+                  <input
+                    disabled={readOnly}
+                    value={value}
+                    onChange={e =>
+                      updateCenter(
+                        field as keyof typeof overrides,
+                        e.target.value
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
 
-            <input
-              disabled={readOnly}
-              value={
-                overrides.address ??
-                center.address ??
-                ""
-              }
-              onChange={(e) =>
-                updateCenter(
-                  "address",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Ciudad
-            </span>
-
-            <input
-              disabled={readOnly}
-              value={city}
-              onChange={(e) =>
-                updateCenter(
-                  "city",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Provincia
-            </span>
-
-            <input
-              disabled={readOnly}
-              value={province}
-              onChange={(e) =>
-                updateCenter(
-                  "province",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-slate-700">
               Gerente
-            </span>
+            </h3>
 
-            <input
-              disabled={readOnly}
-              value={overrides.manager ?? ""}
-              onChange={(e) =>
-                updateCenter(
-                  "manager",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
+            <div className="grid gap-4 md:grid-cols-3">
+              {(
+                [
+                  [
+                    "manager",
+                    "Nombre",
+                    overrides.manager ??
+                      center.manager ??
+                      "",
+                  ],
+                  [
+                    "managerPhone",
+                    "Teléfono",
+                    overrides.managerPhone ?? "",
+                  ],
+                  [
+                    "managerEmail",
+                    "Email",
+                    overrides.managerEmail ?? "",
+                  ],
+                ] as const
+              ).map(([field, label, value]) => (
+                <label
+                  key={field}
+                  className="text-sm"
+                >
+                  <span className="text-xs text-slate-400">
+                    {label}
+                  </span>
 
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Teléfono gerente
-            </span>
+                  <input
+                    disabled={readOnly}
+                    type={
+                      field === "managerEmail"
+                        ? "email"
+                        : "text"
+                    }
+                    value={value}
+                    onChange={e =>
+                      updateCenter(
+                        field as keyof typeof overrides,
+                        e.target.value
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
 
-            <input
-              disabled={readOnly}
-              value={overrides.managerPhone ?? ""}
-              onChange={(e) =>
-                updateCenter(
-                  "managerPhone",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Email gerente
-            </span>
-
-            <input
-              disabled={readOnly}
-              type="email"
-              value={overrides.managerEmail ?? ""}
-              onChange={(e) =>
-                updateCenter(
-                  "managerEmail",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-slate-700">
               Responsable técnico
-            </span>
+            </h3>
 
-            <input
-              disabled={readOnly}
-              value={
-                overrides.technicalResponsible ??
-                ""
-              }
-              onChange={(e) =>
-                updateCenter(
-                  "technicalResponsible",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
+            <div className="grid gap-4 md:grid-cols-3">
+              {(
+                [
+                  [
+                    "technicalResponsible",
+                    "Nombre",
+                    overrides.technicalResponsible ?? "",
+                  ],
+                  [
+                    "technicalPhone",
+                    "Teléfono",
+                    overrides.technicalPhone ?? "",
+                  ],
+                  [
+                    "technicalEmail",
+                    "Email",
+                    overrides.technicalEmail ?? "",
+                  ],
+                ] as const
+              ).map(([field, label, value]) => (
+                <label
+                  key={field}
+                  className="text-sm"
+                >
+                  <span className="text-xs text-slate-400">
+                    {label}
+                  </span>
 
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Teléfono responsable técnico
-            </span>
-
-            <input
-              disabled={readOnly}
-              value={
-                overrides.technicalResponsiblePhone ??
-                ""
-              }
-              onChange={(e) =>
-                updateCenter(
-                  "technicalResponsiblePhone",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
-
-          <label className="text-sm">
-            <span className="text-xs text-slate-400">
-              Email responsable técnico
-            </span>
-
-            <input
-              disabled={readOnly}
-              type="email"
-              value={
-                overrides.technicalResponsibleEmail ??
-                ""
-              }
-              onChange={(e) =>
-                updateCenter(
-                  "technicalResponsibleEmail",
-                  e.target.value
-                )
-              }
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-            />
-          </label>
+                  <input
+                    disabled={readOnly}
+                    type={
+                      field === "technicalEmail"
+                        ? "email"
+                        : "text"
+                    }
+                    value={value}
+                    onChange={e =>
+                      updateCenter(
+                        field as keyof typeof overrides,
+                        e.target.value
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
 
         {!readOnly && (
@@ -637,7 +584,7 @@ export default function CenterDetail() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
+                onChange={e => {
                   const f = e.target.files?.[0];
                   if (f) uploadImage("logoUrl", f);
                 }}
@@ -652,7 +599,7 @@ export default function CenterDetail() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
+                onChange={e => {
                   const f = e.target.files?.[0];
                   if (f) uploadImage("imageUrl", f);
                 }}
@@ -677,7 +624,7 @@ export default function CenterDetail() {
           <div className="flex flex-wrap gap-2">
             <Select
               value={String(year)}
-              onChange={(v) => setYear(Number(v))}
+              onChange={v => setYear(Number(v))}
             >
               <option>2026</option>
               <option>2027</option>
@@ -686,9 +633,7 @@ export default function CenterDetail() {
 
             <Select
               value={period}
-              onChange={(v) =>
-                setPeriod(v as Period)
-              }
+              onChange={v => setPeriod(v as Period)}
             >
               <option value="S1">S1</option>
               <option value="S2">S2</option>
@@ -711,7 +656,6 @@ export default function CenterDetail() {
             <div className="text-xs text-slate-400">
               Estado
             </div>
-
             <div className="mt-1 font-bold">
               {review.confirmed
                 ? "CONFIRMADA"
@@ -723,7 +667,6 @@ export default function CenterDetail() {
             <div className="text-xs text-slate-400">
               Elementos
             </div>
-
             <div className="mt-1 font-bold">
               {summary.confirmed}/{summary.total}
             </div>
@@ -733,7 +676,6 @@ export default function CenterDetail() {
             <div className="text-xs text-amber-700">
               Pendientes confirmar
             </div>
-
             <div className="mt-1 text-xl font-black text-amber-700">
               {summary.pendingConfirmation}
             </div>
@@ -743,7 +685,6 @@ export default function CenterDetail() {
             <div className="text-xs text-emerald-700">
               Cumplimiento
             </div>
-
             <div className="mt-1 text-xl font-black text-emerald-700">
               {summary.score}%
             </div>
@@ -751,7 +692,7 @@ export default function CenterDetail() {
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-          {STATUSES.map((s) => (
+          {STATUSES.map(s => (
             <span
               key={s}
               className="rounded-full border border-slate-200 px-3 py-1"
@@ -816,60 +757,58 @@ export default function CenterDetail() {
           </div>
 
           <div className="mt-2 space-y-2">
-            {(review.participants || []).map(
-              (p, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
-                >
-                  <span>
-                    {p.name} · {p.role}
-                  </span>
+            {(review.participants || []).map((p, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
+              >
+                <span>
+                  {p.name} · {p.role}
+                </span>
 
-                  {p.signed ? (
-                    <Badge tone="success">
-                      Firmado
-                    </Badge>
-                  ) : admin && !review.confirmed ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        const participants = [
-                          ...(review.participants || []),
-                        ];
+                {p.signed ? (
+                  <Badge tone="success">
+                    Firmado
+                  </Badge>
+                ) : admin && !review.confirmed ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      const participants = [
+                        ...(review.participants || []),
+                      ];
 
-                        participants[i] = {
-                          ...participants[i],
-                          signed: true,
-                        };
+                      participants[i] = {
+                        ...participants[i],
+                        signed: true,
+                      };
 
-                        updateState({
-                          ...state,
-                          reviews: {
-                            ...state.reviews,
-                            [key]: {
-                              ...review,
-                              participants,
-                            },
+                      updateState({
+                        ...state,
+                        reviews: {
+                          ...state.reviews,
+                          [key]: {
+                            ...review,
+                            participants,
                           },
-                        });
-                      }}
-                    >
-                      Firmar
-                    </Button>
-                  ) : (
-                    <Badge>Pendiente</Badge>
-                  )}
-                </div>
-              )
-            )}
+                        },
+                      });
+                    }}
+                  >
+                    Firmar
+                  </Button>
+                ) : (
+                  <Badge>Pendiente</Badge>
+                )}
+              </div>
+            ))}
           </div>
 
           {!readOnly && !review.confirmed && (
             <div className="mt-3 flex gap-2">
               <input
                 value={participant}
-                onChange={(e) =>
+                onChange={e =>
                   setParticipant(e.target.value)
                 }
                 placeholder="Añadir participante"
@@ -923,9 +862,7 @@ export default function CenterDetail() {
 
             <input
               value={q}
-              onChange={(e) =>
-                setQ(e.target.value)
-              }
+              onChange={e => setQ(e.target.value)}
               placeholder="Buscar código, instalación, actuación..."
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
             />
@@ -935,7 +872,7 @@ export default function CenterDetail() {
             value={category}
             onChange={setCategory}
           >
-            {categories.map((c) => (
+            {categories.map(c => (
               <option key={c}>{c}</option>
             ))}
           </Select>
@@ -995,17 +932,14 @@ export default function CenterDetail() {
                     <td>
                       <Select
                         value={item.status}
-                        onChange={(v) =>
+                        onChange={v =>
                           updateItem(x.id, {
-                            status:
-                              v as V1Status,
+                            status: v as V1Status,
                           })
                         }
                       >
-                        {STATUSES.map((s) => (
-                          <option key={s}>
-                            {s}
-                          </option>
+                        {STATUSES.map(s => (
+                          <option key={s}>{s}</option>
                         ))}
                       </Select>
                     </td>
@@ -1015,7 +949,7 @@ export default function CenterDetail() {
                         disabled={locked}
                         type="date"
                         value={item.date}
-                        onChange={(e) =>
+                        onChange={e =>
                           updateItem(x.id, {
                             date: e.target.value,
                           })
@@ -1028,7 +962,7 @@ export default function CenterDetail() {
                       <input
                         disabled={locked}
                         value={item.company}
-                        onChange={(e) =>
+                        onChange={e =>
                           updateItem(x.id, {
                             company: e.target.value,
                           })
@@ -1064,10 +998,7 @@ export default function CenterDetail() {
                       {!readOnly && (
                         <button
                           onClick={() =>
-                            setActive(
-                              x.id,
-                              false
-                            )
+                            setActive(x.id, false)
                           }
                           title="Pasar a no activo"
                           className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
@@ -1120,8 +1051,8 @@ export default function CenterDetail() {
                 className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
               >
                 <div>
-                  <b>{x.code}</b> ·{" "}
-                  {x.installation} — {x.action}
+                  <b>{x.code}</b> · {x.installation} —{" "}
+                  {x.action}
                 </div>
 
                 {!readOnly && (
@@ -1147,54 +1078,44 @@ export default function CenterDetail() {
         />
 
         <div className="grid gap-3 md:grid-cols-4">
-          {[2026, 2027, 2028].flatMap((y) =>
-            (["S1", "S2"] as Period[]).map(
-              (p) => {
-                const r =
-                  state.reviews[
-                    reviewKey(
-                      center.id,
-                      y,
-                      p
-                    )
-                  ];
+          {[2026, 2027, 2028].flatMap(y =>
+            (["S1", "S2"] as Period[]).map(p => {
+              const r =
+                state.reviews[
+                  reviewKey(center.id, y, p)
+                ];
 
-                const sum = reviewSummary(
-                  r,
-                  (
-                    catalog.filter(
-                      (x: any) =>
-                        activeMap[x.id] !== false
-                    ) as any[]
-                  ).map(
-                    (x: any) => x.id
+              const sum = reviewSummary(
+                r,
+                catalog
+                  .filter(
+                    (x: any) =>
+                      activeMap[x.id] !== false
                   )
-                );
+                  .map((x: any) => x.id)
+              );
 
-                return (
-                  <div
-                    key={`${y}-${p}`}
-                    className="rounded-xl border border-slate-200 p-4"
-                  >
-                    <div className="text-xs text-slate-400">
-                      {p} {y}
-                    </div>
-
-                    <div className="mt-2 text-xl font-black">
-                      {r
-                        ? `${sum.score}%`
-                        : "—"}
-                    </div>
-
-                    <div className="mt-1 text-xs">
-                      {r?.confirmed
-                        ? "Confirmada"
-                        : "Sin confirmar"}
-                    </div>
+              return (
+                <div
+                  key={`${y}-${p}`}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
+                  <div className="text-xs text-slate-400">
+                    {p} {y}
                   </div>
-                );
-              }
-            )
+
+                  <div className="mt-2 text-xl font-black">
+                    {r ? `${sum.score}%` : "—"}
+                  </div>
+
+                  <div className="mt-1 text-xs">
+                    {r?.confirmed
+                      ? "Confirmada"
+                      : "Sin confirmar"}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 
