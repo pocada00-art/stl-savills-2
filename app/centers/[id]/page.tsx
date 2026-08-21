@@ -433,43 +433,41 @@ function calculateNextReview(
    * no debe convertirse accidentalmente
    * en 03/03.
    */
-  const targetMonthIndex =
-    month - 1 + months;
+ const targetMonthIndex =
+  month - 1 + months.months;
 
-  const targetYear =
-    year +
-    Math.floor(
-      targetMonthIndex / 12
-    );
+const targetYear =
+  year +
+  Math.floor(targetMonthIndex / 12);
 
-  const targetMonth =
-    targetMonthIndex % 12;
+// Mes para new Date(): 0 = enero, 11 = diciembre
+const targetMonth =
+  ((targetMonthIndex % 12) + 12) % 12;
 
-  /**
-   * Número de días del mes destino.
-   */
-  const lastDayOfTargetMonth =
-    new Date(
-      targetYear,
-      targetMonth + 1,
-      0
-    ).getDate();
-
-  /**
-   * Si el día original no existe en el
-   * mes destino, utilizamos el último día
-   * de ese mes.
-   */
-  const targetDay = Math.min(
-    originalDay,
-    lastDayOfTargetMonth
-  );
-
-  const finalDate = new Date(
+/**
+ * Último día del mes destino.
+ *
+ * Ejemplo:
+ * targetMonth = 1 → febrero
+ * new Date(año, 2, 0) → último día de febrero
+ */
+const lastDayOfTargetMonth =
+  new Date(
     targetYear,
-    targetMonth,
-    targetDay
-  );
+    targetMonth + 1,
+    0
+  ).getDate();
+
+const targetDay = Math.min(
+  originalDay,
+  lastDayOfTargetMonth
+);
+
+const finalDate = new Date(
+  targetYear,
+  targetMonth,
+  targetDay
+);
 
   finalDate.setHours(
     0,
