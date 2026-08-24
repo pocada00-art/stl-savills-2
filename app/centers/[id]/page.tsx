@@ -41,9 +41,11 @@ import {
   reviewKey,
   reviewSummary,
   blankItem,
+  resolveCenter,
   type V1State,
   type V1Status,
   type Period,
+  type CenterOverride,
 } from "@/lib/v1-state";
 
 const STATUSES: V1Status[] = [
@@ -53,27 +55,6 @@ const STATUSES: V1Status[] = [
   "PENDIENTE",
   "SIN INFORMACIÓN",
 ];
-
-type CenterFormValues = {
-  name?: string;
-  code?: string;
-  shortCode?: string;
-  address?: string;
-  manager?: string;
-  managerPhone?: string;
-  managerEmail?: string;
-  technicalResponsible?: string;
-  technicalResponsiblePhone?: string;
-  technicalResponsibleEmail?: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  property?: string;
-  city?: string;
-  province?: string;
-  imageUrl?: string;
-  logoUrl?: string;
-};
 
 type IconComponent = React.ComponentType<{
   className?: string;
@@ -683,7 +664,82 @@ export default function CenterDetail() {
     };
   }, []);
 
-  if (!center) {
+  const currentYear =
+    new Date().getFullYear();
+
+  const reviewYears =
+    useMemo(() => {
+      const years =
+        new Set<number>();
+
+      for (
+        let y = 2024;
+        y <= currentYear;
+        y++
+      ) {
+        years.add(y);
+      }
+
+      Object.keys(
+        state.reviews
+      ).forEach(
+        reviewId => {
+          const match =
+            reviewId.match(
+              /:(\d{4}):(S1|S2)$/
+            );
+
+          if (match) {
+            const reviewYear =
+              Number(match[1]);
+
+            if (
+              reviewYear <=
+              currentYear
+            ) {
+              years.add(
+                reviewYear
+              );
+            }
+          }
+        }
+      );
+
+      return Array.from(
+        years
+      ).sort(
+        (a, b) => a - b
+      );
+    }, [
+      state.reviews,
+      currentYear,
+    ]);
+
+  /*
+   * CENTRO RESUELTO
+   *
+   * La resolución de los datos del centro
+   * se realiza exclusivamente mediante
+   * resolveCenter(), centralizado en
+   * lib/v1-state.ts.
+   *
+   * Regla:
+   *
+   *   datos originales
+   *        +
+   *   overrides de state.centers
+   *        =
+   *   currentCenter
+   */
+  const currentCenter =
+    center
+      ? resolveCenter(
+          center,
+          state
+        )
+      : null;
+
+  if (!currentCenter) {
     return (
       <Card className="p-8">
         <h2 className="text-xl font-bold">
@@ -700,8 +756,6 @@ export default function CenterDetail() {
     );
   }
 
-  const currentCenter = center;
-
   const catalog =
     currentCenter.country === "España"
       ? demo.esCatalog
@@ -710,31 +764,24 @@ export default function CenterDetail() {
   const overrides =
     (state.centers[
       currentCenter.id
-    ] || {}) as CenterFormValues;
+    ] || {}) as CenterOverride;
 
   /*
-   * DATOS EFECTIVOS DEL CENTRO
+   * Los datos principales se obtienen
+   * directamente del centro resuelto.
    *
-   * Primero se utiliza el valor modificado
-   * guardado en state.centers.
-   *
-   * Si todavía no existe modificación,
-   * se utiliza el dato original de demo.centers.
+   * Los overrides solo se mantienen
+   * para campos que no requieren una
+   * segunda lógica de resolución.
    */
   const centerName =
-    overrides.name ??
-    currentCenter.name ??
-    "";
+    currentCenter.name ?? "";
 
   const centerCode =
-    overrides.code ??
-    currentCenter.code ??
-    "";
+    currentCenter.code ?? "";
 
   const centerShortCode =
-    overrides.shortCode ??
-    currentCenter.shortCode ??
-    "";
+    currentCenter.shortCode ?? "";
 
   const activeMap =
     state.activeItems[
@@ -814,57 +861,6 @@ export default function CenterDetail() {
           )
     );
 
-  const currentYear =
-    new Date().getFullYear();
-
-  const reviewYears =
-    useMemo(() => {
-      const years =
-        new Set<number>();
-
-      for (
-        let y = 2024;
-        y <= currentYear;
-        y++
-      ) {
-        years.add(y);
-      }
-
-      Object.keys(
-        state.reviews
-      ).forEach(
-        reviewId => {
-          const match =
-            reviewId.match(
-              /:(\d{4}):(S1|S2)$/
-            );
-
-          if (match) {
-            const reviewYear =
-              Number(match[1]);
-
-            if (
-              reviewYear <=
-              currentYear
-            ) {
-              years.add(
-                reviewYear
-              );
-            }
-          }
-        }
-      );
-
-      return Array.from(
-        years
-      ).sort(
-        (a, b) => a - b
-      );
-    }, [
-      state.reviews,
-      currentYear,
-    ]);
-
   function updateState(
     next: V1State
   ) {
@@ -880,7 +876,7 @@ export default function CenterDetail() {
   }
 
   function updateCenter(
-    field: keyof CenterFormValues,
+    field: keyof CenterOverride,
     value: string
   ) {
     updateState({
@@ -1080,9 +1076,9 @@ export default function CenterDetail() {
 
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
 
-              {overrides.logoUrl ? (
+              {currentCenter.logoUrl ? (
                 <img
-                  src={overrides.logoUrl}
+                  src={currentCenter.logoUrl}
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1107,8 +1103,7 @@ export default function CenterDetail() {
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
-                {overrides.address ||
-                  currentCenter.address ||
+                {currentCenter.address ||
                   "Dirección pendiente"}
               </p>
 
@@ -1136,9 +1131,9 @@ export default function CenterDetail() {
 
           <div className="flex items-center justify-center bg-white/5 p-4">
 
-            {overrides.imageUrl ? (
+            {currentCenter.imageUrl ? (
               <img
-                src={overrides.imageUrl}
+                src={currentCenter.imageUrl}
                 alt={centerName}
                 className="h-32 w-full rounded-xl object-cover"
               />
@@ -1287,7 +1282,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.property ??
                     currentCenter.property ??
                     ""
                   }
@@ -1309,7 +1303,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.address ??
                     currentCenter.address ??
                     ""
                   }
@@ -1330,7 +1323,10 @@ export default function CenterDetail() {
 
                 <input
                   disabled={readOnly}
-                  value={overrides.city ?? ""}
+                  value={
+                    currentCenter.city ??
+                    ""
+                  }
                   onChange={e =>
                     updateCenter(
                       "city",
@@ -1349,7 +1345,8 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.province ?? ""
+                    currentCenter.province ??
+                    ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1369,7 +1366,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.manager ??
                     currentCenter.manager ??
                     ""
                   }
@@ -1391,7 +1387,8 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.managerPhone ?? ""
+                    currentCenter.managerPhone ??
+                    ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1412,7 +1409,8 @@ export default function CenterDetail() {
                   disabled={readOnly}
                   type="email"
                   value={
-                    overrides.managerEmail ?? ""
+                    currentCenter.managerEmail ??
+                    ""
                   }
                   onChange={e =>
                     updateCenter(
@@ -1434,7 +1432,7 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.technicalResponsible ??
+                    currentCenter.technicalResponsible ??
                     ""
                   }
                   onChange={e =>
@@ -1455,7 +1453,7 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.technicalResponsiblePhone ??
+                    currentCenter.technicalResponsiblePhone ??
                     ""
                   }
                   onChange={e =>
@@ -1477,7 +1475,7 @@ export default function CenterDetail() {
                   disabled={readOnly}
                   type="email"
                   value={
-                    overrides.technicalResponsibleEmail ??
+                    currentCenter.technicalResponsibleEmail ??
                     ""
                   }
                   onChange={e =>
