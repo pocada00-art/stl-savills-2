@@ -15,6 +15,7 @@ import {
   loadState,
   saveState,
   type V1Country,
+  type V1STL,
   type V1State,
   type CenterOverride,
 } from "@/lib/v1-state";
@@ -60,7 +61,8 @@ type NewCenterForm = {
   city: string;
   province: string;
 
-  stl: string;
+  stl: V1STL | "";
+
   framework: string;
   status: string;
 
@@ -94,6 +96,7 @@ const EMPTY_FORM: NewCenterForm = {
   province: "",
 
   stl: "",
+
   framework: "",
   status: "Activo",
 
@@ -141,7 +144,7 @@ export default function Centers() {
     useState("");
 
   /*
-   * Cargamos el estado guardado.
+   * Cargamos el estado persistido.
    */
   const state: V1State = loadState();
 
@@ -162,8 +165,14 @@ export default function Centers() {
       : userCountry || "Todos";
 
   /*
-   * Construimos la lista aplicando los overrides
-   * guardados para cada centro.
+   * Construimos la lista combinando:
+   *
+   * 1. Centros existentes del catálogo demo.
+   * 2. Overrides persistidos en V1State.
+   *
+   * Los centros nuevos se incorporarán a la
+   * resolución general de centros mediante
+   * resolveCenter().
    */
   const list = useMemo(() => {
     const arr: CenterListItem[] =
@@ -290,16 +299,17 @@ export default function Centers() {
    * Genera un identificador interno único.
    *
    * IMPORTANTE:
-   * este ID no sustituye al número oficial del centro.
+   * este ID no sustituye al número oficial
+   * del centro.
+   *
    * El número oficial es newCenter.code.
    */
   function generateCenterId() {
-    const base =
+    return (
       `center-${Date.now()}-${Math.random()
         .toString(36)
-        .slice(2, 8)}`;
-
-    return base;
+        .slice(2, 8)}`
+    );
   }
 
   /*
@@ -325,6 +335,20 @@ export default function Centers() {
     if (!newCenter.country) {
       setError(
         "El país del centro es obligatorio."
+      );
+      return;
+    }
+
+    /*
+     * El STL es obligatorio.
+     *
+     * Aunque el tipo TypeScript ya impide introducir
+     * un valor arbitrario, comprobamos también
+     * en tiempo de ejecución que exista.
+     */
+    if (!newCenter.stl) {
+      setError(
+        "El STL del centro es obligatorio."
       );
       return;
     }
@@ -368,10 +392,14 @@ export default function Centers() {
       generateCenterId();
 
     /*
-     * El nuevo centro se guarda como override.
+     * El nuevo centro se guarda como
+     * CenterOverride dentro de V1State.
      *
-     * Se incluyen todos los datos definidos
-     * para un centro en V1State.
+     * IMPORTANTE:
+     * stl ya es V1STL | "" en el formulario.
+     *
+     * Tras la validación anterior TypeScript
+     * conoce que newCenter.stl es V1STL.
      */
     const override: CenterOverride = {
       id,
@@ -398,7 +426,7 @@ export default function Centers() {
         newCenter.province.trim(),
 
       stl:
-        newCenter.stl.trim(),
+        newCenter.stl,
 
       framework:
         newCenter.framework.trim(),
@@ -444,7 +472,11 @@ export default function Centers() {
     };
 
     /*
-     * Guardamos el centro nuevo.
+     * Guardamos el nuevo centro.
+     *
+     * activeItems se inicializa para que la ficha
+     * pueda gestionar posteriormente los elementos
+     * activos/no activos de ese centerId.
      */
     const nextState: V1State = {
       ...state,
@@ -469,14 +501,7 @@ export default function Centers() {
     setNewCenter(EMPTY_FORM);
 
     /*
-     * La aplicación trabaja actualmente con
-     * demo.centers como catálogo base.
-     *
-     * Por ello, el alta queda persistida en V1State.
-     * La integración del catálogo de centros nuevos
-     * con todas las pantallas se realizará en el
-     * siguiente paso mediante una única función
-     * de resolución de centros.
+     * Abrimos directamente la ficha del centro.
      */
     window.location.href =
       `/centers/${encodeURIComponent(id)}`;
@@ -524,12 +549,14 @@ export default function Centers() {
             type="button"
             onClick={() => {
               setError("");
+
               setNewCenter({
                 ...EMPTY_FORM,
                 country:
                   userCountry ||
                   "España",
               });
+
               setShowNewCenter(true);
             }}
           >
@@ -690,7 +717,8 @@ export default function Centers() {
                         : "warning"
                     }
                   >
-                    {c.stl}
+                    {c.stl ||
+                      "—"}
                   </Badge>
                 </td>
 
@@ -894,16 +922,50 @@ export default function Centers() {
                     }
                   />
 
-                  <Field
-                    label="STL"
-                    value={newCenter.stl}
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "stl",
-                        value
-                      )
-                    }
-                  />
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">
+                      STL *
+                    </label>
+
+                    <select
+                      value={newCenter.stl}
+                      onChange={(e) =>
+                        updateNewCenter(
+                          "stl",
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                    >
+                      <option value="">
+                        Seleccionar STL
+                      </option>
+
+                      {/*
+                       * Las opciones se obtienen
+                       * directamente de V1STL.
+                       *
+                       * Si V1STL contiene más valores
+                       * en lib/v1-state.ts, deberán
+                       * reflejarse aquí.
+                       */}
+                      {(
+                        [
+                          "STL ESPAÑA",
+                          "STL PORTUGAL",
+                        ] as V1STL[]
+                      ).map(
+                        (stl) => (
+                          <option
+                            key={stl}
+                            value={stl}
+                          >
+                            {stl}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
 
                   <Field
                     label="Framework"
@@ -1153,6 +1215,7 @@ function Field({
     <div>
       <label className="mb-1 block text-sm font-semibold text-slate-700">
         {label}
+
         {required && (
           <span className="ml-1 text-red-500">
             *
