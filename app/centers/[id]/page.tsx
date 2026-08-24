@@ -48,6 +48,8 @@ import {
   type CenterOverride,
 } from "@/lib/v1-state";
 
+import { loadCenterImage } from "@/lib/image-storage";
+
 const STATUSES: V1Status[] = [
   "APTO",
   "APTO CONDICIONADO",
@@ -632,6 +634,19 @@ export default function CenterDetail() {
     setOpenInstallations,
   ] = useState(true);
 
+  /*
+   * URL temporal del logotipo recuperado desde IndexedDB.
+   */
+  const [logoSrc, setLogoSrc] =
+    useState("");
+
+  /*
+   * URL temporal de la imagen del centro
+   * recuperada desde IndexedDB.
+   */
+  const [imageSrc, setImageSrc] =
+    useState("");
+
   useEffect(() => {
     setState(loadState());
   }, []);
@@ -817,6 +832,123 @@ export default function CenterDetail() {
     (state.centers[
       currentCenter.id
     ] || {}) as CenterOverride;
+
+  /*
+   * Recuperación de imágenes.
+   *
+   * Las nuevas imágenes no contienen el Blob ni un data URL
+   * dentro de localStorage. Contienen únicamente una referencia
+   * indexeddb://...
+   *
+   * Por tanto:
+   *
+   * indexeddb://... -> loadCenterImage() -> Blob -> blob: URL
+   *
+   * Las imágenes antiguas que ya sean una URL normal o data:
+   * continúan funcionando directamente.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const objectUrls: string[] = [];
+
+    async function loadStoredImages() {
+      setLogoSrc("");
+      setImageSrc("");
+
+      const logoValue =
+        String(
+          overrides.logoUrl || ""
+        ).trim();
+
+      const imageValue =
+        String(
+          overrides.imageUrl || ""
+        ).trim();
+
+      if (logoValue) {
+        if (
+          logoValue.startsWith(
+            "indexeddb://"
+          )
+        ) {
+          try {
+            const blob =
+              await loadCenterImage(
+                logoValue
+              );
+
+            if (
+              blob &&
+              !cancelled
+            ) {
+              const url =
+                URL.createObjectURL(blob);
+
+              objectUrls.push(url);
+
+              setLogoSrc(url);
+            }
+          } catch (error) {
+            console.error(
+              "Error cargando el logotipo del centro desde IndexedDB:",
+              error
+            );
+          }
+        } else {
+          setLogoSrc(logoValue);
+        }
+      }
+
+      if (imageValue) {
+        if (
+          imageValue.startsWith(
+            "indexeddb://"
+          )
+        ) {
+          try {
+            const blob =
+              await loadCenterImage(
+                imageValue
+              );
+
+            if (
+              blob &&
+              !cancelled
+            ) {
+              const url =
+                URL.createObjectURL(blob);
+
+              objectUrls.push(url);
+
+              setImageSrc(url);
+            }
+          } catch (error) {
+            console.error(
+              "Error cargando la imagen del centro desde IndexedDB:",
+              error
+            );
+          }
+        } else {
+          setImageSrc(imageValue);
+        }
+      }
+    }
+
+    loadStoredImages();
+
+    return () => {
+      cancelled = true;
+
+      objectUrls.forEach(
+        url =>
+          URL.revokeObjectURL(url)
+      );
+    };
+  }, [
+    overrides.logoUrl,
+    overrides.imageUrl,
+  ]);
 
   const centerName =
     currentCenter.name ?? "";
@@ -1132,9 +1264,9 @@ export default function CenterDetail() {
 
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
 
-              {overrides.logoUrl ? (
+              {logoSrc ? (
                 <img
-                  src={overrides.logoUrl}
+                  src={logoSrc}
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1187,9 +1319,9 @@ export default function CenterDetail() {
 
           <div className="flex items-center justify-center bg-white/5 p-4">
 
-            {overrides.imageUrl ? (
+            {imageSrc ? (
               <img
-                src={overrides.imageUrl}
+                src={imageSrc}
                 alt={centerName}
                 className="h-32 w-full rounded-xl object-cover"
               />
@@ -2193,10 +2325,6 @@ export default function CenterDetail() {
                             x.category
                           );
 
-                        /*
-                         * NO SE MODIFICA:
-                         * cálculo existente de próxima revisión.
-                         */
                         const nextDate =
                           calculateNextReview(
                             item.date,
