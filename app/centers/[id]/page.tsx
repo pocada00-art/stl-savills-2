@@ -518,9 +518,27 @@ function calculateResult(
     .trim()
     .toLowerCase();
 
-  if (normalizedFrequency === "inicial") {
-    return status;
+if (normalizedFrequency === "inicial") {
+  switch (status) {
+    case "APTO":
+      return "FAVORABLE";
+
+    case "APTO CONDICIONADO":
+      return "CONDICIONADO";
+
+    case "NO APTO":
+      return "DESFAVORABLE";
+
+    case "PENDIENTE":
+      return "PENDIENTE";
+
+    case "SIN INFORMACIÓN":
+      return "SIN INFORMACIÓN";
+
+    default:
+      return "ERROR";
   }
+}
 
   /**
    * APTO, APTO CONDICIONADO y NO APTO
