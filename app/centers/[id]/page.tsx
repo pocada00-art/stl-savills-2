@@ -41,6 +41,7 @@ import {
   reviewKey,
   reviewSummary,
   blankItem,
+  resolveCenter,
   type V1State,
   type V1Status,
   type Period,
@@ -58,42 +59,6 @@ const STATUSES: V1Status[] = [
 type IconComponent = React.ComponentType<{
   className?: string;
 }>;
-
-/**
- * Centro persistido por el nuevo sistema.
- *
- * Los centros nuevos se almacenan dentro de V1State.
- * Se mantiene un tipo flexible aquí para que esta página
- * pueda trabajar tanto con los centros antiguos del demo
- * como con los centros creados dinámicamente.
- */
-type PersistedCenter = CenterOverride & {
-  id?: string;
-  code?: string;
-  shortCode?: string;
-  name?: string;
-  country?: string;
-  stl?: string;
-  framework?: string;
-  regulatoryFramework?: string;
-  status?: string;
-  address?: string;
-  city?: string;
-  province?: string;
-  property?: string;
-  portfolio?: string;
-  manager?: string;
-  managerPhone?: string;
-  managerEmail?: string;
-  technicalResponsible?: string;
-  technicalResponsiblePhone?: string;
-  technicalResponsibleEmail?: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  imageUrl?: string;
-  logoUrl?: string;
-};
 
 function getInstallationVisual(
   installation = "",
@@ -253,6 +218,9 @@ function getResultVisual(result: string) {
 
 /**
  * Convierte la frecuencia a meses.
+ *
+ * IMPORTANTE:
+ * Esta lógica se mantiene sin cambios.
  */
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
@@ -347,7 +315,8 @@ function parseFrequency(frequency: string) {
  *
  * fecha de ejecución + frecuencia.
  *
- * Esta lógica se mantiene sin cambios funcionales.
+ * Esta función se conserva exactamente con la lógica
+ * existente. No se modifica en esta adaptación.
  */
 function calculateNextReview(
   date: string,
@@ -600,85 +569,20 @@ function formatDate(value: string) {
   );
 }
 
-/**
- * Normaliza el país del centro.
- *
- * El nuevo sistema guarda España / Portugal.
- * Se mantiene una resolución tolerante para no romper
- * centros antiguos si algún dato utiliza ES / PT.
- */
-function normalizeCountry(
-  value: unknown
-): "España" | "Portugal" | undefined {
-  const country = String(
-    value ?? ""
-  )
-    .trim()
-    .toLowerCase();
-
-  if (
-    country === "españa" ||
-    country === "espana" ||
-    country === "es"
-  ) {
-    return "España";
-  }
-
-  if (
-    country === "portugal" ||
-    country === "pt"
-  ) {
-    return "Portugal";
-  }
-
-  return undefined;
-}
-
-/**
- * Convierte el valor persistido de STL a un valor
- * utilizable por la ficha.
- *
- * No se modifica aquí el tipo V1STL ni se escribe
- * ningún valor nuevo en el estado.
- */
-function normalizeStl(
-  value: unknown,
-  country?: "España" | "Portugal"
-): string {
-  const stl = String(
-    value ?? ""
-  ).trim();
-
-  if (stl) {
-    return stl;
-  }
-
-  if (country === "España") {
-    return "STL España";
-  }
-
-  if (country === "Portugal") {
-    return "STL Portugal";
-  }
-
-  return "";
-}
-
 export default function CenterDetail() {
   const params = useParams();
 
   const id = String(params.id);
 
-  /**
-   * Cargamos el estado desde el primer render.
-   *
-   * Esto es importante para los centros creados con el
-   * nuevo sistema, porque no existen en demo.centers.
-   */
   const [state, setState] =
-    useState<V1State>(() =>
-      loadState()
-    );
+    useState<V1State>({
+      role: "ADMIN",
+      country: undefined,
+      centerId: undefined,
+      centers: {},
+      activeItems: {},
+      reviews: {},
+    });
 
   const [period, setPeriod] =
     useState<Period>("S2");
@@ -749,19 +653,23 @@ export default function CenterDetail() {
     };
   }, []);
 
-  /**
-   * ---------------------------------------------------------
-   * RESOLUCIÓN DEL CENTRO
-   * ---------------------------------------------------------
+  /*
+   * El centro base puede proceder de dos fuentes:
    *
-   * Primero buscamos centros antiguos en demo.centers.
+   * 1. demo.centers:
+   *    centros que ya existían en la aplicación.
    *
-   * Si no existe, buscamos el centro creado con el nuevo
-   * sistema dentro de state.centers.
+   * 2. state.centers:
+   *    centros creados mediante el nuevo sistema.
    *
-   * Esto permite que ambos tipos de centro utilicen
-   * exactamente la misma ficha.
+   * resolveCenter() se encarga posteriormente de combinar
+   * el centro base con los datos persistidos.
+   *
+   * Para los centros nuevos no existe necesariamente un
+   * registro equivalente en demo.centers, por lo que primero
+   * intentamos localizarlo en el estado persistido.
    */
+
   const demoCenter =
     demo.centers.find(
       c => c.id === id
@@ -772,74 +680,29 @@ export default function CenterDetail() {
     ) ||
     null;
 
+  /*
+   * El nuevo sistema guarda los centros por centerId.
+   * El identificador de la URL es, por tanto, la primera
+   * referencia para localizar un centro persistido.
+   */
   const persistedCenter =
-    (
-      state.centers[
-        id
-      ] || null
-    ) as PersistedCenter | null;
+    state.centers[id] || null;
 
-  /**
-   * Si el ID de la URL viene codificado, también
-   * intentamos localizar el centro persistido por
-   * comparación del identificador.
-   */
-  const persistedCenterByDecodedId =
-    persistedCenter ||
-    Object.entries(
-      state.centers
-    ).find(
-      ([centerId]) =>
-        centerId === id ||
-        encodeURIComponent(centerId) === id ||
-        decodeURIComponent(centerId) === id
-    )?.[1] as
-      | PersistedCenter
-      | undefined;
-
-  const storedCenter =
-    persistedCenterByDecodedId || null;
-
-  /**
-   * El centro demo conserva todos sus datos originales.
+  /*
+   * resolveCenter() necesita un centro base. Para los
+   * centros existentes usamos demo.centers. Para los
+   * centros nuevos usamos el registro persistido.
    *
-   * El centro nuevo se construye a partir de los datos
-   * almacenados en V1State.
+   * En caso de existir ambos, se conserva el centro demo
+   * como estructura base y los valores persistidos tienen
+   * prioridad mediante resolveCenter().
    */
-  const currentCenter = demoCenter
-    ? demoCenter
-    : storedCenter
-    ? {
-        ...storedCenter,
-        id:
-          storedCenter.id || id,
-        name:
-          storedCenter.name ||
-          "",
-        code:
-          storedCenter.code ||
-          "",
-        shortCode:
-          storedCenter.shortCode ||
-          "",
-        country:
-          normalizeCountry(
-            storedCenter.country
-          ),
-        stl:
-          normalizeStl(
-            storedCenter.stl,
-            normalizeCountry(
-              storedCenter.country
-            )
-          ),
-        status:
-          storedCenter.status ||
-          "Activo",
-      }
-    : null;
+  const rawCenter =
+    demoCenter ||
+    persistedCenter ||
+    null;
 
-  if (!currentCenter) {
+  if (!rawCenter) {
     return (
       <Card className="p-8">
         <h2 className="text-xl font-bold">
@@ -847,9 +710,8 @@ export default function CenterDetail() {
         </h2>
 
         <p className="mt-2 text-sm text-slate-500">
-          El centro no existe ni en el catálogo
-          existente ni entre los centros creados
-          con el nuevo sistema.
+          El centro no existe ni en el catálogo demo ni
+          entre los centros creados mediante el nuevo sistema.
         </p>
 
         <Link
@@ -862,47 +724,59 @@ export default function CenterDetail() {
     );
   }
 
-  const centerId =
-    currentCenter.id || id;
-
-  const currentCountry =
-    normalizeCountry(
-      currentCenter.country
+  /*
+   * A partir de este punto el centro está garantizado.
+   *
+   * resolveCenter() centraliza la combinación entre:
+   *
+   * - datos originales del centro;
+   * - datos persistidos;
+   * - overrides del nuevo sistema.
+   *
+   * Esto permite que la ficha sea la misma para centros
+   * existentes y centros creados recientemente.
+   */
+  const currentCenter =
+    resolveCenter(
+      rawCenter,
+      state
     );
 
-  /**
-   * Para centros nuevos, los datos almacenados
-   * en state.centers actúan como override editable.
-   *
-   * Para centros antiguos se conserva exactamente
-   * el comportamiento anterior.
-   */
-  const overrides =
-    (state.centers[
-      centerId
-    ] || {}) as CenterOverride;
-
-  /**
-   * El catálogo sigue gobernado por el país/STL.
-   *
-   * España -> catálogo España
-   * Portugal -> catálogo Portugal
-   *
-   * De esta forma el centro nuevo entra en la misma
-   * estructura de catálogo que los centros existentes.
+  /*
+   * El catálogo depende exclusivamente del país del centro
+   * resuelto. Por tanto, un centro creado mediante el nuevo
+   * sistema obtiene automáticamente el catálogo STL que le
+   * corresponde.
    */
   const catalog =
-    currentCountry === "Portugal"
-      ? demo.ptCatalog
-      : demo.esCatalog;
+    currentCenter.country === "España"
+      ? demo.esCatalog
+      : demo.ptCatalog;
 
-  /**
-   * La activación/desactivación de elementos se
-   * mantiene vinculada al ID del centro.
+  const overrides =
+    (state.centers[
+      currentCenter.id
+    ] || {}) as CenterOverride;
+
+  const centerName =
+    currentCenter.name ?? "";
+
+  const centerCode =
+    currentCenter.code ?? "";
+
+  const centerShortCode =
+    currentCenter.shortCode ?? "";
+
+  /*
+   * Los elementos activos/no activos se vinculan al
+   * centerId resuelto.
+   *
+   * De esta manera cada centro conserva su propia selección
+   * de elementos independientemente de los demás centros.
    */
   const activeMap =
     state.activeItems[
-      centerId
+      currentCenter.id
     ] || {};
 
   const activeItems =
@@ -917,8 +791,13 @@ export default function CenterDetail() {
         activeMap[x.id] === false
     );
 
+  /*
+   * Las revisiones también se vinculan al centerId.
+   * reviewKey() mantiene el aislamiento entre centros,
+   * años y periodos.
+   */
   const key = reviewKey(
-    centerId,
+    currentCenter.id,
     year,
     period
   );
@@ -1051,7 +930,7 @@ export default function CenterDetail() {
       ...state,
       centers: {
         ...state.centers,
-        [centerId]: {
+        [currentCenter.id]: {
           ...overrides,
           [field]: value,
         },
@@ -1067,7 +946,7 @@ export default function CenterDetail() {
       ...state,
       activeItems: {
         ...state.activeItems,
-        [centerId]: {
+        [currentCenter.id]: {
           ...activeMap,
           [itemId]: active,
         },
@@ -1221,39 +1100,6 @@ export default function CenterDetail() {
     );
   }
 
-  const centerName =
-    overrides.name ??
-    currentCenter.name ??
-    "";
-
-  const centerCode =
-    overrides.code ??
-    currentCenter.code ??
-    "";
-
-  const centerShortCode =
-    overrides.shortCode ??
-    currentCenter.shortCode ??
-    "";
-
-  const centerCountry =
-    normalizeCountry(
-      overrides.country ??
-      currentCenter.country
-    );
-
-  const centerStl =
-    normalizeStl(
-      overrides.stl ??
-      currentCenter.stl,
-      centerCountry
-    );
-
-  const centerStatus =
-    overrides.status ??
-    currentCenter.status ??
-    "Activo";
-
   return (
     <div className="space-y-6">
 
@@ -1295,8 +1141,8 @@ export default function CenterDetail() {
             <div>
 
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {centerCountry} ·{" "}
-                {centerStl}
+                {currentCenter.country} ·{" "}
+                {currentCenter.stl}
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
@@ -1304,15 +1150,14 @@ export default function CenterDetail() {
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
-                {overrides.address ??
-                  currentCenter.address ??
+                {currentCenter.address ||
                   "Dirección pendiente"}
               </p>
 
               <div className="mt-3 flex gap-2">
 
                 <Badge tone="success">
-                  {centerStatus}
+                  {currentCenter.status}
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
@@ -1484,7 +1329,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.property ??
                     currentCenter.property ??
                     ""
                   }
@@ -1506,7 +1350,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.address ??
                     currentCenter.address ??
                     ""
                   }
@@ -1528,7 +1371,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.city ??
                     currentCenter.city ??
                     ""
                   }
@@ -1550,7 +1392,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.province ??
                     currentCenter.province ??
                     ""
                   }
@@ -1572,7 +1413,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.manager ??
                     currentCenter.manager ??
                     ""
                   }
@@ -1594,7 +1434,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.managerPhone ??
                     currentCenter.managerPhone ??
                     ""
                   }
@@ -1617,7 +1456,6 @@ export default function CenterDetail() {
                   disabled={readOnly}
                   type="email"
                   value={
-                    overrides.managerEmail ??
                     currentCenter.managerEmail ??
                     ""
                   }
@@ -1641,7 +1479,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.technicalResponsible ??
                     currentCenter.technicalResponsible ??
                     ""
                   }
@@ -1663,7 +1500,6 @@ export default function CenterDetail() {
                 <input
                   disabled={readOnly}
                   value={
-                    overrides.technicalResponsiblePhone ??
                     currentCenter.technicalResponsiblePhone ??
                     ""
                   }
@@ -1686,7 +1522,6 @@ export default function CenterDetail() {
                   disabled={readOnly}
                   type="email"
                   value={
-                    overrides.technicalResponsibleEmail ??
                     currentCenter.technicalResponsibleEmail ??
                     ""
                   }
@@ -1800,7 +1635,7 @@ export default function CenterDetail() {
                     const r =
                       state.reviews[
                         reviewKey(
-                          centerId,
+                          currentCenter.id,
                           y,
                           p
                         )
@@ -2036,7 +1871,7 @@ export default function CenterDetail() {
                 </div>
 
                 <Link
-                  href={`/centers/${centerId}/certificate?year=${year}&period=${period}`}
+                  href={`/centers/${currentCenter.id}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
@@ -2349,6 +2184,10 @@ export default function CenterDetail() {
                             x.category
                           );
 
+                        /*
+                         * NO SE MODIFICA:
+                         * cálculo existente de próxima revisión.
+                         */
                         const nextDate =
                           calculateNextReview(
                             item.date,
