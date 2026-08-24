@@ -65,23 +65,14 @@ export type ReviewState = {
  * CENTROS
  * ========================================================= */
 
-/**
- * Países disponibles.
- */
 export type V1Country =
   | "España"
   | "Portugal";
 
-/**
- * Versiones STL disponibles.
- */
 export type V1STL =
   | "STL_ES_2026_V1"
   | "STL_PT_2026_V1";
 
-/**
- * Estados disponibles para un centro.
- */
 export type V1CenterStatus =
   | "Activo"
   | "Inactivo";
@@ -89,84 +80,46 @@ export type V1CenterStatus =
 /**
  * Datos modificables de un centro.
  *
- * Para los centros existentes en demo.centers:
+ * También se utiliza para almacenar centros nuevos.
  *
- *   state.centers[id]
+ * IMPORTANTE:
  *
- * contiene únicamente los cambios realizados.
- *
- * Para los centros creados desde la aplicación:
- *
- *   state.centers[id]
- *
- * contiene todos los datos necesarios para reconstruir
- * el centro aunque este no exista en demo.centers.
+ * Un centro nuevo no existe en demo.centers.
+ * Por eso debe quedar completamente definido
+ * dentro de state.centers[id].
  */
 export type CenterOverride = {
   id?: string;
 
-  /*
-   * Identificación.
-   */
   name?: string;
   code?: string;
   shortCode?: string;
 
-  /*
-   * Ubicación.
-   */
   country?: V1Country;
   address?: string;
   city?: string;
   province?: string;
 
-  /*
-   * Propiedad.
-   */
   property?: string | null;
 
-  /*
-   * STL.
-   */
   stl?: V1STL;
 
-  /*
-   * Estado.
-   */
   status?: V1CenterStatus;
 
-  /*
-   * Responsable de gestión.
-   */
   manager?: string | null;
   managerPhone?: string;
   managerEmail?: string;
 
-  /*
-   * Responsable técnico.
-   */
   technicalResponsible?: string;
   technicalResponsiblePhone?: string;
   technicalResponsibleEmail?: string;
 
-  /*
-   * Recursos gráficos.
-   */
   imageUrl?: string;
   logoUrl?: string;
 };
 
 /**
- * Centro resultante después de aplicar:
- *
- *   datos originales
- *   +
- *   datos persistidos
- *
- * Puede representar tanto:
- *
- * 1. un centro original de demo.centers
- * 2. un centro creado desde la aplicación
+ * Centro resuelto que utilizan las distintas pantallas.
  */
 export type ResolvedCenter = {
   id: string;
@@ -210,7 +163,7 @@ export type V1State = {
   centerId?: string;
 
   /**
-   * Centros modificados o creados.
+   * Centros modificados y centros creados por el usuario.
    *
    * La clave es siempre el ID interno.
    */
@@ -229,8 +182,6 @@ export type V1State = {
 
   /**
    * Revisiones históricas.
-   *
-   * reviewKey(centerId, year, period)
    */
   reviews: Record<
     string,
@@ -252,58 +203,24 @@ export const CURRENT_PERIOD: Period =
   "S2";
 
 /* =========================================================
- * RESOLUCIÓN DE CENTROS
+ * RESOLUCIÓN DE UN CENTRO
  * ========================================================= */
 
 /**
- * Obtiene el override persistido de un centro.
- */
-function getCenterOverride(
-  centerId: string,
-  state: V1State
-): CenterOverride {
-  return (
-    state.centers?.[centerId] ||
-    {}
-  );
-}
-
-/**
- * Determina si un objeto de centro contiene los datos
- * mínimos necesarios para ser considerado un centro
- * válido.
- *
- * Esta función se utiliza principalmente para reconstruir
- * centros creados desde la aplicación que no existen en
- * demo.centers.
- */
-function isPersistedCenter(
-  override: CenterOverride
-): boolean {
-  return Boolean(
-    override.id &&
-    override.name &&
-    override.code &&
-    override.country &&
-    override.stl &&
-    override.status
-  );
-}
-
-/**
- * Resuelve un centro aplicando los cambios guardados
+ * Resuelve un centro aplicando los datos guardados
  * en state.centers[id].
  *
- * IMPORTANTE:
+ * Hay dos posibles casos:
  *
- * Esta función funciona tanto con:
+ * 1. El centro existe en demo.centers.
+ *    Se aplican sus overrides.
  *
- * - centros originales de demo.centers
- * - centros creados dinámicamente
+ * 2. El centro NO existe en demo.centers.
+ *    Es un centro creado por el usuario y todos sus
+ *    datos proceden de state.centers[id].
  *
- * Para un centro nuevo, el objeto "center" puede contener
- * únicamente el ID y los datos persistidos se utilizarán
- * como fuente principal.
+ * De esta forma los centros nuevos son visibles
+ * en cualquier pantalla que utilice resolveCenter(s).
  */
 export function resolveCenter<
   T extends Record<string, any>
@@ -311,26 +228,25 @@ export function resolveCenter<
   center: T,
   state: V1State
 ): T & ResolvedCenter {
-  const centerId =
-    String(center.id ?? "");
-
   const overrides =
-    getCenterOverride(
-      centerId,
-      state
-    );
+    (state.centers?.[center.id] ||
+      {}) as CenterOverride;
 
-  return {
+  /*
+   * Construimos explícitamente el centro resultante.
+   *
+   * El cast final es intencionado:
+   * T representa la estructura original de demo.centers
+   * y ResolvedCenter garantiza los campos comunes de V1.
+   */
+  const resolved = {
     ...center,
     ...overrides,
 
     /*
-     * El ID interno siempre pertenece al centro original
-     * o al centro persistido.
+     * El ID interno nunca cambia.
      */
-    id:
-      centerId ||
-      String(overrides.id ?? ""),
+    id: center.id,
 
     /*
      * Identificación.
@@ -351,7 +267,7 @@ export function resolveCenter<
         : center.shortCode,
 
     /*
-     * Ubicación.
+     * Localización.
      */
     country:
       overrides.country !== undefined
@@ -398,7 +314,7 @@ export function resolveCenter<
         : (center.status as V1CenterStatus),
 
     /*
-     * Responsable.
+     * Responsables.
      */
     manager:
       overrides.manager !== undefined
@@ -415,9 +331,6 @@ export function resolveCenter<
         ? overrides.managerEmail
         : center.managerEmail,
 
-    /*
-     * Responsable técnico.
-     */
     technicalResponsible:
       overrides.technicalResponsible !== undefined
         ? overrides.technicalResponsible
@@ -445,11 +358,13 @@ export function resolveCenter<
       overrides.logoUrl !== undefined
         ? overrides.logoUrl
         : center.logoUrl,
-  } as T & ResolvedCenter;
+  };
+
+  return resolved as T & ResolvedCenter;
 }
 
 /* =========================================================
- * RESOLVER TODOS LOS CENTROS
+ * RESOLUCIÓN DE TODOS LOS CENTROS
  * ========================================================= */
 
 /**
@@ -457,32 +372,30 @@ export function resolveCenter<
  *
  * IMPORTANTE:
  *
- * Hasta ahora esta función únicamente resolvía los centros
- * que recibía en el parámetro "centers".
+ * demo.centers contiene los centros iniciales.
  *
- * Eso provocaba que los centros nuevos no apareciesen en
- * otras pantallas porque únicamente existían en:
+ * state.centers puede contener:
  *
- *   state.centers
+ * - overrides de centros existentes
+ * - centros completamente nuevos
  *
- * y no en:
+ * Los centros nuevos NO existen en demo.centers.
  *
- *   demo.centers
+ * Por tanto:
  *
- * A partir de ahora:
+ *   centros demo
+ *        +
+ *   centros persistidos nuevos
+ *        ↓
+ *   lista unificada
+ *        ↓
+ *   resolveCenter()
+ *        ↓
+ *   centros disponibles para todas las pantallas
  *
- *   resolveCenters(demo.centers, state)
- *
- * devuelve:
- *
- *   centros originales
- *   +
- *   centros modificados
- *   +
- *   centros nuevos
- *
- * Los centros nuevos se detectan porque existen en
- * state.centers pero no en el listado original.
+ * Esta es la pieza fundamental para que un centro creado
+ * desde "Centros comerciales" no desaparezca al navegar
+ * a otra pantalla.
  */
 export function resolveCenters<
   T extends Record<string, any>
@@ -491,166 +404,133 @@ export function resolveCenters<
   state: V1State
 ): Array<T & ResolvedCenter> {
   /*
-   * -------------------------------------------------------
-   * 1. Resolver los centros originales.
-   * -------------------------------------------------------
+   * Primero indexamos los centros originales.
    */
-  const resolved =
-    centers.map(
-      (center) =>
-        resolveCenter(
-          center,
-          state
-        )
-    );
+  const byId =
+    new Map<string, T>();
 
-  /*
-   * -------------------------------------------------------
-   * 2. Crear un índice de IDs ya existentes.
-   * -------------------------------------------------------
-   */
-  const existingIds =
-    new Set(
-      resolved.map(
-        (center) =>
-          String(center.id)
-      )
-    );
-
-  /*
-   * -------------------------------------------------------
-   * 3. Añadir centros creados desde la aplicación.
-   *
-   * Estos centros existen únicamente en state.centers.
-   * -------------------------------------------------------
-   */
-  const persistedCenters =
-    Object.entries(
-      state.centers || {}
-    )
-      .filter(
-        ([id, override]) =>
-          !existingIds.has(id) &&
-          isPersistedCenter(
-            override
-          )
-      )
-      .map(
-        ([id, override]) => {
-          /*
-           * Creamos un centro base mínimo.
-           *
-           * Todos los datos reales proceden del override
-           * persistido.
-           */
-          const persistedCenter = {
-            id,
-
-            name:
-              override.name ?? "",
-
-            code:
-              override.code ?? "",
-
-            shortCode:
-              override.shortCode,
-
-            country:
-              override.country,
-
-            address:
-              override.address,
-
-            city:
-              override.city,
-
-            province:
-              override.province,
-
-            property:
-              override.property,
-
-            stl:
-              override.stl,
-
-            status:
-              override.status,
-
-            manager:
-              override.manager,
-
-            managerPhone:
-              override.managerPhone,
-
-            managerEmail:
-              override.managerEmail,
-
-            technicalResponsible:
-              override.technicalResponsible,
-
-            technicalResponsiblePhone:
-              override.technicalResponsiblePhone,
-
-            technicalResponsibleEmail:
-              override.technicalResponsibleEmail,
-
-            imageUrl:
-              override.imageUrl,
-
-            logoUrl:
-              override.logoUrl,
-          };
-
-          return resolveCenter(
-            persistedCenter,
-            state
-          );
-        }
+  for (const center of centers) {
+    if (
+      center &&
+      typeof center.id ===
+        "string"
+    ) {
+      byId.set(
+        center.id,
+        center
       );
+    }
+  }
 
   /*
-   * -------------------------------------------------------
-   * 4. Resultado final.
+   * Añadimos los centros persistidos que todavía
+   * no estén presentes en demo.centers.
    *
-   * Primero los centros originales y después los nuevos.
-   * -------------------------------------------------------
+   * Estos son los centros creados por el usuario.
    */
-  return [
-    ...resolved,
-    ...persistedCenters,
-  ];
-}
+  for (const [
+    id,
+    override,
+  ] of Object.entries(
+    state.centers || {}
+  )) {
+    if (
+      byId.has(id)
+    ) {
+      continue;
+    }
 
-/**
- * Devuelve un único centro por ID.
- *
- * Esta función permite a cualquier pantalla obtener un
- * centro independientemente de si:
- *
- * - pertenece a demo.centers
- * - ha sido creado desde la aplicación
- * - ha sido modificado mediante overrides
- *
- * "centers" debe ser el listado base de centros de la
- * aplicación, normalmente demo.centers.
- */
-export function resolveCenterById<
-  T extends Record<string, any>
->(
-  centers: T[],
-  centerId: string,
-  state: V1State
-): (T & ResolvedCenter) | undefined {
-  const all =
-    resolveCenters(
-      centers,
-      state
+    /*
+     * Para un centro nuevo no existe un objeto base
+     * en demo.centers.
+     *
+     * Creamos un objeto base mínimo con los datos
+     * almacenados en el override.
+     */
+    const persistedCenter =
+      {
+        id,
+
+        name:
+          override.name ??
+          "",
+
+        code:
+          override.code ??
+          "",
+
+        shortCode:
+          override.shortCode,
+
+        country:
+          override.country,
+
+        address:
+          override.address,
+
+        city:
+          override.city,
+
+        province:
+          override.province,
+
+        property:
+          override.property,
+
+        stl:
+          override.stl,
+
+        status:
+          override.status,
+
+        manager:
+          override.manager,
+
+        managerPhone:
+          override.managerPhone,
+
+        managerEmail:
+          override.managerEmail,
+
+        technicalResponsible:
+          override.technicalResponsible,
+
+        technicalResponsiblePhone:
+          override.technicalResponsiblePhone,
+
+        technicalResponsibleEmail:
+          override.technicalResponsibleEmail,
+
+        imageUrl:
+          override.imageUrl,
+
+        logoUrl:
+          override.logoUrl,
+      } as T;
+
+    byId.set(
+      id,
+      persistedCenter
+    );
+  }
+
+  /*
+   * Ahora TODOS los centros pasan por la misma función
+   * de resolución.
+   *
+   * Esto evita mezclar tipos distintos en el return.
+   */
+  const unifiedCenters =
+    Array.from(
+      byId.values()
     );
 
-  return all.find(
+  return unifiedCenters.map(
     (center) =>
-      String(center.id) ===
-      String(centerId)
+      resolveCenter(
+        center,
+        state
+      )
   );
 }
 
@@ -688,10 +568,6 @@ export function blankItem(): ItemReview {
 
 /**
  * Genera la clave única de una revisión.
- *
- * Ejemplo:
- *
- * 123:2026:S2
  */
 export function reviewKey(
   centerId: string,
@@ -702,19 +578,18 @@ export function reviewKey(
 }
 
 /* =========================================================
- * ESTADO
+ * ESTADO INICIAL
  * ========================================================= */
 
-/**
- * Estado inicial de la aplicación.
- */
 function getEmptyState(): V1State {
   return {
     role: "ADMIN",
 
-    country: undefined,
+    country:
+      undefined,
 
-    centerId: undefined,
+    centerId:
+      undefined,
 
     centers: {},
 
@@ -724,45 +599,14 @@ function getEmptyState(): V1State {
   };
 }
 
-/**
- * Normaliza un estado antiguo.
- *
- * Sirve para evitar errores si localStorage contiene una
- * versión anterior en la que alguno de los nuevos objetos
- * todavía no existía.
- */
-function normalizeState(
-  value: Partial<V1State>
-): V1State {
-  return {
-    role:
-      value.role ??
-      "ADMIN",
-
-    country:
-      value.country,
-
-    centerId:
-      value.centerId,
-
-    centers:
-      value.centers ??
-      {},
-
-    activeItems:
-      value.activeItems ??
-      {},
-
-    reviews:
-      value.reviews ??
-      {},
-  };
-}
+/* =========================================================
+ * CARGAR ESTADO
+ * ========================================================= */
 
 /**
  * Carga el estado V1 desde localStorage.
  *
- * En servidor devuelve siempre el estado vacío.
+ * En servidor devuelve el estado vacío.
  */
 export function loadState(): V1State {
   if (
@@ -784,23 +628,50 @@ export function loadState(): V1State {
           raw
         ) as Partial<V1State>;
 
-      return normalizeState(
-        parsed
-      );
+      /*
+       * Normalizamos estructuras antiguas.
+       *
+       * Esto evita errores si ya existía información
+       * guardada antes de las últimas modificaciones.
+       */
+      return {
+        role:
+          parsed.role ??
+          "ADMIN",
+
+        country:
+          parsed.country,
+
+        centerId:
+          parsed.centerId,
+
+        centers:
+          parsed.centers ??
+          {},
+
+        activeItems:
+          parsed.activeItems ??
+          {},
+
+        reviews:
+          parsed.reviews ??
+          {},
+      };
     }
   } catch {
     /*
-     * Si localStorage está corrupto,
-     * utilizamos el estado inicial.
+     * Si localStorage está corrupto utilizamos
+     * el estado inicial.
      */
   }
 
   return getEmptyState();
 }
 
-/**
- * Guarda el estado V1 en localStorage.
- */
+/* =========================================================
+ * GUARDAR ESTADO
+ * ========================================================= */
+
 export function saveState(
   state: V1State
 ): void {
@@ -813,9 +684,7 @@ export function saveState(
 
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify(
-      normalizeState(state)
-    )
+    JSON.stringify(state)
   );
 }
 
@@ -836,7 +705,8 @@ export function scoreForV1Status(
   status: V1Status
 ): number {
   return {
-    APTO: 3,
+    APTO:
+      3,
 
     "APTO CONDICIONADO":
       2,
@@ -929,7 +799,8 @@ export function reviewSummary(
     );
 
   const max =
-    activeIds.length * 3;
+    activeIds.length *
+    3;
 
   return {
     counts,
