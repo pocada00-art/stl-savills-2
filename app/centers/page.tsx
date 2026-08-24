@@ -1,12 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   Search,
   Plus,
   ArrowUpDown,
   X,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
@@ -18,6 +24,11 @@ import {
   type V1State,
   type CenterOverride,
 } from "@/lib/v1-state";
+
+import {
+  saveCenterImage,
+  validateImageFile,
+} from "@/lib/image-storage";
 
 import {
   Card,
@@ -73,15 +84,6 @@ type NewCenterForm = {
   technicalResponsible: string;
   technicalResponsiblePhone: string;
   technicalResponsibleEmail: string;
-
-  /*
-   * Aunque estos campos mantienen su nombre interno
-   * para conservar compatibilidad con CenterOverride,
-   * ahora contienen Data URLs de imágenes y NO URLs
-   * introducidas manualmente por el usuario.
-   */
-  imageUrl: string;
-  logoUrl: string;
 };
 
 /* =========================================================
@@ -108,9 +110,6 @@ const EMPTY_FORM: NewCenterForm = {
   technicalResponsible: "",
   technicalResponsiblePhone: "",
   technicalResponsibleEmail: "",
-
-  imageUrl: "",
-  logoUrl: "",
 };
 
 /* =========================================================
@@ -138,6 +137,33 @@ export default function Centers() {
     useState<NewCenterForm>(EMPTY_FORM);
 
   const [error, setError] = useState("");
+
+  /* =======================================================
+   * ARCHIVOS DE IMAGEN SELECCIONADOS
+   * ======================================================= */
+
+  const [imageFile, setImageFile] =
+    useState<File | null>(null);
+
+  const [logoFile, setLogoFile] =
+    useState<File | null>(null);
+
+  /* =======================================================
+   * PREVISUALIZACIONES
+   * ======================================================= */
+
+  const [imagePreview, setImagePreview] =
+    useState<string | null>(null);
+
+  const [logoPreview, setLogoPreview] =
+    useState<string | null>(null);
+
+  /* =======================================================
+   * ESTADO DE CARGA
+   * ======================================================= */
+
+  const [saving, setSaving] =
+    useState(false);
 
   /*
    * Cargamos el estado persistido.
@@ -168,18 +194,30 @@ export default function Centers() {
       : userCountry || "Todos";
 
   /* =======================================================
+   * LIMPIAR URLS DE PREVISUALIZACIÓN
+   * ======================================================= */
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(
+          imagePreview
+        );
+      }
+
+      if (logoPreview) {
+        URL.revokeObjectURL(
+          logoPreview
+        );
+      }
+    };
+  }, [
+    imagePreview,
+    logoPreview,
+  ]);
+
+  /* =======================================================
    * LISTADO DE CENTROS
-   *
-   * El listado se construye a partir de DOS fuentes:
-   *
-   * 1. demo.centers
-   *    Centros que ya formaban parte de la aplicación.
-   *
-   * 2. state.centers
-   *    Centros creados mediante "Nuevo centro".
-   *
-   * Los centros demo pueden tener overrides persistidos.
-   * Los centros nuevos existen exclusivamente en state.centers.
    * ======================================================= */
 
   const list = useMemo(() => {
@@ -249,10 +287,6 @@ export default function Centers() {
       state.centers || {}
     ).forEach(
       ([centerId, savedCenter]) => {
-        /*
-         * Si el ID ya pertenece a demo.centers,
-         * ya lo hemos añadido arriba.
-         */
         if (demoIds.has(centerId)) {
           return;
         }
@@ -405,58 +439,58 @@ export default function Centers() {
   }
 
   /* =======================================================
-   * CARGAR IMAGEN DESDE EL EQUIPO
-   *
-   * El navegador no permite guardar una ruta local del tipo
-   * C:\...\imagen.jpg para reutilizarla posteriormente.
-   *
-   * Por eso convertimos la imagen seleccionada a Data URL.
-   * Esto permite conservarla dentro del estado actual.
+   * SELECCIONAR IMAGEN
    * ======================================================= */
 
-  function handleImageFile(
-    field: "imageUrl" | "logoUrl",
-    file: File | undefined
+  function handleImageChange(
+    file: File | null,
+    type: "image" | "logo"
   ) {
+    setError("");
+
     if (!file) {
       return;
     }
 
-    setError("");
-
-    if (!file.type.startsWith("image/")) {
-      setError(
-        "El archivo seleccionado debe ser una imagen."
+    const validationError =
+      validateImageFile(
+        file,
+        {
+          maxSizeMB: 10,
+        }
       );
+
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    const reader = new FileReader();
+    const preview =
+      URL.createObjectURL(file);
 
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        updateNewCenter(
-          field,
-          reader.result
-        );
-      } else {
-        setError(
-          "No se ha podido cargar la imagen."
+    if (type === "image") {
+      if (imagePreview) {
+        URL.revokeObjectURL(
+          imagePreview
         );
       }
-    };
 
-    reader.onerror = () => {
-      setError(
-        "No se ha podido cargar la imagen."
-      );
-    };
+      setImageFile(file);
+      setImagePreview(preview);
+    } else {
+      if (logoPreview) {
+        URL.revokeObjectURL(
+          logoPreview
+        );
+      }
 
-    reader.readAsDataURL(file);
+      setLogoFile(file);
+      setLogoPreview(preview);
+    }
   }
 
   /* =======================================================
-   * ID INTERNO
+   * GENERAR ID INTERNO
    * ======================================================= */
 
   function generateCenterId() {
@@ -471,7 +505,11 @@ export default function Centers() {
    * CREAR CENTRO
    * ======================================================= */
 
-  function createCenter() {
+  async function createCenter() {
+    if (saving) {
+      return;
+    }
+
     setError("");
 
     if (!newCenter.name.trim()) {
@@ -532,130 +570,284 @@ export default function Centers() {
     }
 
     /* -----------------------------------------------------
-     * ID interno
+     * STL AUTOMÁTICO SEGÚN PAÍS
+     *
+     * España  → STL_ES_2026_V1
+     * Portugal → STL_PT_2026_V1
+     * ----------------------------------------------------- */
+
+    const stl =
+      newCenter.country ===
+      "España"
+        ? "STL_ES_2026_V1"
+        : "STL_PT_2026_V1";
+
+    /* -----------------------------------------------------
+     * TODOS LOS CENTROS NUEVOS SE CREAN ACTIVOS
+     * ----------------------------------------------------- */
+
+    const status = "Activo";
+
+    /* -----------------------------------------------------
+     * ID INTERNO
      * ----------------------------------------------------- */
 
     const id =
       generateCenterId();
 
-    /* -----------------------------------------------------
-     * STL AUTOMÁTICO SEGÚN PAÍS
-     *
-     * España  -> STL_ES_2026_V1
-     * Portugal -> STL_PT_2026_V1
-     * ----------------------------------------------------- */
+    setSaving(true);
 
-    const stl =
-      newCenter.country === "España"
-        ? "STL_ES_2026_V1"
-        : "STL_PT_2026_V1";
+    try {
+      /* ---------------------------------------------------
+       * GUARDAR IMAGEN
+       *
+       * Las imágenes se almacenan en IndexedDB.
+       *
+       * Solo guardamos en v1-state la referencia.
+       * --------------------------------------------------- */
 
-    /* -----------------------------------------------------
-     * Override persistido
-     *
-     * Un centro nuevo siempre se crea como ACTIVO.
-     * El usuario ya no puede seleccionar el estado.
-     * ----------------------------------------------------- */
+      let imageReference:
+        | string
+        | undefined;
 
-    const override: CenterOverride = {
-      id,
+      let logoReference:
+        | string
+        | undefined;
 
-      name:
-        newCenter.name.trim(),
+      if (imageFile) {
+        imageReference =
+          await saveCenterImage(
+            id,
+            "image",
+            imageFile
+          );
+      }
 
-      code:
-        newCenter.code.trim(),
+      if (logoFile) {
+        logoReference =
+          await saveCenterImage(
+            id,
+            "logo",
+            logoFile
+          );
+      }
 
-      shortCode:
-        newCenter.shortCode.trim(),
+      /* ---------------------------------------------------
+       * OVERRIDE PERSISTIDO
+       * --------------------------------------------------- */
 
-      address:
-        newCenter.address.trim(),
+      const override: CenterOverride = {
+        id,
 
-      country:
-        newCenter.country,
+        name:
+          newCenter.name.trim(),
 
-      city:
-        newCenter.city.trim(),
+        code:
+          newCenter.code.trim(),
 
-      province:
-        newCenter.province.trim(),
+        shortCode:
+          newCenter.shortCode.trim(),
 
-      stl,
+        address:
+          newCenter.address.trim(),
 
-      status:
-        "Activo",
+        country:
+          newCenter.country,
 
-      property:
-        newCenter.property.trim(),
+        city:
+          newCenter.city.trim(),
 
-      manager:
-        newCenter.manager.trim(),
+        province:
+          newCenter.province.trim(),
 
-      managerPhone:
-        newCenter.managerPhone.trim(),
+        stl,
 
-      managerEmail:
-        newCenter.managerEmail.trim(),
+        status,
 
-      technicalResponsible:
-        newCenter.technicalResponsible.trim(),
+        property:
+          newCenter.property.trim(),
 
-      technicalResponsiblePhone:
-        newCenter.technicalResponsiblePhone.trim(),
+        manager:
+          newCenter.manager.trim(),
 
-      technicalResponsibleEmail:
-        newCenter.technicalResponsibleEmail.trim(),
+        managerPhone:
+          newCenter.managerPhone.trim(),
 
-      /*
-       * Las imágenes son Data URLs generadas a partir
-       * de los archivos seleccionados por el usuario.
-       */
-      imageUrl:
-        newCenter.imageUrl,
+        managerEmail:
+          newCenter.managerEmail.trim(),
 
-      logoUrl:
-        newCenter.logoUrl,
-    };
+        technicalResponsible:
+          newCenter.technicalResponsible.trim(),
 
-    /* -----------------------------------------------------
-     * Guardar centro
-     * ----------------------------------------------------- */
+        technicalResponsiblePhone:
+          newCenter.technicalResponsiblePhone.trim(),
 
-    const nextState: V1State = {
-      ...state,
+        technicalResponsibleEmail:
+          newCenter.technicalResponsibleEmail.trim(),
 
-      centers: {
-        ...state.centers,
-        [id]: override,
-      },
+        /*
+         * IMPORTANTE:
+         *
+         * Aquí NO guardamos Base64.
+         *
+         * Guardamos únicamente la referencia
+         * de IndexedDB.
+         */
+        ...(imageReference
+          ? {
+              imageUrl:
+                imageReference,
+            }
+          : {}),
 
-      activeItems: {
-        ...state.activeItems,
-        [id]: {},
-      },
-    };
+        ...(logoReference
+          ? {
+              logoUrl:
+                logoReference,
+            }
+          : {}),
+      };
 
-    saveState(nextState);
+      /* ---------------------------------------------------
+       * GUARDAR CENTRO
+       * --------------------------------------------------- */
 
-    /* -----------------------------------------------------
-     * Limpiar formulario
-     * ----------------------------------------------------- */
+      const nextState: V1State = {
+        ...state,
 
-    setShowNewCenter(false);
+        centers: {
+          ...state.centers,
+          [id]: override,
+        },
+
+        activeItems: {
+          ...state.activeItems,
+          [id]: {},
+        },
+      };
+
+      saveState(nextState);
+
+      /* ---------------------------------------------------
+       * LIMPIAR PREVISUALIZACIONES
+       * --------------------------------------------------- */
+
+      if (imagePreview) {
+        URL.revokeObjectURL(
+          imagePreview
+        );
+      }
+
+      if (logoPreview) {
+        URL.revokeObjectURL(
+          logoPreview
+        );
+      }
+
+      setImageFile(null);
+      setLogoFile(null);
+
+      setImagePreview(null);
+      setLogoPreview(null);
+
+      setShowNewCenter(false);
+
+      setNewCenter({
+        ...EMPTY_FORM,
+        country:
+          userCountry ||
+          "España",
+      });
+
+      /* ---------------------------------------------------
+       * ABRIR FICHA
+       * --------------------------------------------------- */
+
+      window.location.href =
+        `/centers/${encodeURIComponent(
+          id
+        )}`;
+    } catch (saveError) {
+      console.error(
+        "Error al crear el centro:",
+        saveError
+      );
+
+      setError(
+        "No se ha podido crear el centro. " +
+        "Comprueba que las imágenes sean válidas e inténtalo de nuevo."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /* =======================================================
+   * ABRIR MODAL NUEVO CENTRO
+   * ======================================================= */
+
+  function openNewCenter() {
+    setError("");
+
+    if (imagePreview) {
+      URL.revokeObjectURL(
+        imagePreview
+      );
+    }
+
+    if (logoPreview) {
+      URL.revokeObjectURL(
+        logoPreview
+      );
+    }
+
+    setImageFile(null);
+    setLogoFile(null);
+
+    setImagePreview(null);
+    setLogoPreview(null);
 
     setNewCenter({
       ...EMPTY_FORM,
+
       country:
-        userCountry || "España",
+        userCountry ||
+        "España",
     });
 
-    /* -----------------------------------------------------
-     * Abrir ficha
-     * ----------------------------------------------------- */
+    setShowNewCenter(true);
+  }
 
-    window.location.href =
-      `/centers/${encodeURIComponent(id)}`;
+  /* =======================================================
+   * CERRAR MODAL
+   * ======================================================= */
+
+  function closeNewCenter() {
+    if (saving) {
+      return;
+    }
+
+    if (imagePreview) {
+      URL.revokeObjectURL(
+        imagePreview
+      );
+    }
+
+    if (logoPreview) {
+      URL.revokeObjectURL(
+        logoPreview
+      );
+    }
+
+    setImageFile(null);
+    setLogoFile(null);
+
+    setImagePreview(null);
+    setLogoPreview(null);
+
+    setError("");
+
+    setShowNewCenter(false);
   }
 
   /* =======================================================
@@ -703,19 +895,7 @@ export default function Centers() {
         action={
           <Button
             type="button"
-            onClick={() => {
-              setError("");
-
-              setNewCenter({
-                ...EMPTY_FORM,
-
-                country:
-                  userCountry ||
-                  "España",
-              });
-
-              setShowNewCenter(true);
-            }}
+            onClick={openNewCenter}
           >
             <Plus className="mr-2 inline h-4 w-4" />
             Nuevo centro
@@ -975,10 +1155,9 @@ export default function Centers() {
 
               <button
                 type="button"
-                onClick={() =>
-                  setShowNewCenter(false)
-                }
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                onClick={closeNewCenter}
+                disabled={saving}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Cerrar"
               >
                 <X className="h-5 w-5" />
@@ -1084,7 +1263,8 @@ export default function Centers() {
                             .value as V1Country
                         )
                       }
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                      disabled={saving}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
                     >
 
                       <option value="España">
@@ -1170,6 +1350,49 @@ export default function Centers() {
                       )
                     }
                   />
+
+                  {/* ---------------------------------------------
+                   * STL AUTOMÁTICO
+                   * --------------------------------------------- */}
+
+                  <div>
+
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">
+                      STL
+                    </label>
+
+                    <div className="flex min-h-[42px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                      {newCenter.country ===
+                      "España"
+                        ? "STL_ES_2026_V1"
+                        : "STL_PT_2026_V1"}
+                    </div>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      Se asigna automáticamente según el país.
+                    </p>
+
+                  </div>
+
+                  {/* ---------------------------------------------
+                   * ESTADO AUTOMÁTICO
+                   * --------------------------------------------- */}
+
+                  <div>
+
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">
+                      Estado
+                    </label>
+
+                    <div className="flex min-h-[42px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-green-700">
+                      Activo
+                    </div>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      Los centros nuevos se crean activos.
+                    </p>
+
+                  </div>
 
                 </div>
 
@@ -1297,79 +1520,41 @@ export default function Centers() {
                   Imagen y logotipo
                 </h3>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-6 md:grid-cols-2">
 
-                  {/* ------------------------------------------------
+                  {/* ---------------------------------------------
                    * IMAGEN DEL CENTRO
-                   * ------------------------------------------------ */}
+                   * --------------------------------------------- */}
 
-                  <div>
+                  <ImageUploadField
+                    label="Imagen del centro"
+                    file={imageFile}
+                    preview={imagePreview}
+                    onChange={(file) =>
+                      handleImageChange(
+                        file,
+                        "image"
+                      )
+                    }
+                    disabled={saving}
+                  />
 
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      Imagen del centro
-                    </label>
-
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) =>
-                        handleImageFile(
-                          "imageUrl",
-                          e.target.files?.[0]
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                    />
-
-                    {newCenter.imageUrl && (
-                      <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
-                        <img
-                          src={
-                            newCenter.imageUrl
-                          }
-                          alt="Vista previa del centro"
-                          className="h-32 w-full object-cover"
-                        />
-                      </div>
-                    )}
-
-                  </div>
-
-                  {/* ------------------------------------------------
+                  {/* ---------------------------------------------
                    * LOGOTIPO
-                   * ------------------------------------------------ */}
+                   * --------------------------------------------- */}
 
-                  <div>
-
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      Logotipo
-                    </label>
-
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) =>
-                        handleImageFile(
-                          "logoUrl",
-                          e.target.files?.[0]
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                    />
-
-                    {newCenter.logoUrl && (
-                      <div className="mt-3 flex h-32 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <img
-                          src={
-                            newCenter.logoUrl
-                          }
-                          alt="Vista previa del logotipo"
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                    )}
-
-                  </div>
+                  <ImageUploadField
+                    label="Logotipo"
+                    file={logoFile}
+                    preview={logoPreview}
+                    onChange={(file) =>
+                      handleImageChange(
+                        file,
+                        "logo"
+                      )
+                    }
+                    disabled={saving}
+                  />
 
                 </div>
 
@@ -1377,17 +1562,16 @@ export default function Centers() {
 
             </div>
 
-            {/* ===================================================
+            {/* =================================================
              * BOTONES
-             * =================================================== */}
+             * ================================================= */}
 
             <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t bg-white px-6 py-4">
 
               <Button
                 type="button"
-                onClick={() =>
-                  setShowNewCenter(false)
-                }
+                onClick={closeNewCenter}
+                disabled={saving}
               >
                 Cancelar
               </Button>
@@ -1397,9 +1581,13 @@ export default function Centers() {
                 onClick={
                   createCenter
                 }
+                disabled={saving}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Crear centro
+
+                {saving
+                  ? "Creando centro..."
+                  : "Crear centro"}
               </Button>
 
             </div>
@@ -1457,6 +1645,120 @@ function Field({
         }
         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
       />
+
+    </div>
+  );
+}
+
+/* =========================================================
+ * COMPONENTE CARGA DE IMAGEN
+ * ========================================================= */
+
+function ImageUploadField({
+  label,
+  file,
+  preview,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  file: File | null;
+  preview: string | null;
+  onChange: (
+    file: File | null
+  ) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+
+      <label className="mb-1 block text-sm font-semibold text-slate-700">
+        {label}
+      </label>
+
+      <input
+        id={`file-${label
+          .toLowerCase()
+          .replace(/\s+/g, "-")}`}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        disabled={disabled}
+        onChange={(e) => {
+          const file =
+            e.target.files?.[0] ||
+            null;
+
+          onChange(file);
+
+          /*
+           * Permitimos volver a seleccionar el mismo
+           * archivo posteriormente.
+           */
+          e.target.value = "";
+        }}
+      />
+
+      <label
+        htmlFor={`file-${label
+          .toLowerCase()
+          .replace(/\s+/g, "-")}`}
+        className={`flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center transition hover:border-slate-400 hover:bg-slate-100 ${
+          disabled
+            ? "cursor-not-allowed opacity-60"
+            : ""
+        }`}
+      >
+
+        {preview ? (
+          <div className="flex w-full flex-col items-center gap-3">
+
+            <div className="flex h-32 w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+              <img
+                src={preview}
+                alt={`Vista previa de ${label}`}
+                className="max-h-full max-w-full object-contain"
+              />
+
+            </div>
+
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+
+              <Upload className="h-4 w-4" />
+
+              Cambiar imagen
+
+            </div>
+
+            <p className="max-w-full truncate text-xs text-slate-400">
+              {file?.name}
+            </p>
+
+          </div>
+        ) : (
+          <>
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
+
+              <ImageIcon className="h-6 w-6 text-slate-400" />
+
+            </div>
+
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+
+              <Upload className="h-4 w-4" />
+
+              Cargar {label.toLowerCase()}
+
+            </div>
+
+            <p className="mt-2 text-xs text-slate-400">
+              JPG, PNG, WEBP o GIF · Máximo 10 MB
+            </p>
+          </>
+        )}
+
+      </label>
 
     </div>
   );
