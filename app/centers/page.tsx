@@ -159,6 +159,13 @@ export default function Centers() {
 
   /*
    * Cargamos el estado persistido.
+   *
+   * El estado contiene:
+   *
+   * - centros originales modificados;
+   * - centros creados mediante el nuevo sistema;
+   * - elementos activos;
+   * - revisiones históricas.
    */
   const state: V1State = loadState();
 
@@ -180,70 +187,189 @@ export default function Centers() {
 
   /* =======================================================
    * LISTADO DE CENTROS
+   *
+   * IMPORTANTE:
+   *
+   * El listado se construye a partir de DOS fuentes:
+   *
+   * 1. demo.centers
+   *    Centros que ya formaban parte de la aplicación.
+   *
+   * 2. state.centers
+   *    Centros creados mediante "Nuevo centro".
+   *
+   * Los centros demo pueden tener overrides persistidos.
+   * Los centros nuevos existen exclusivamente en state.centers.
    * ======================================================= */
 
   const list = useMemo(() => {
-    const arr: CenterListItem[] =
-      demo.centers
-        .map((c) => {
-          const overrides =
-            (state.centers?.[c.id] ||
-              {}) as CenterOverride;
+    const arr: CenterListItem[] = [];
 
-          return {
-            ...c,
+    /*
+     * -------------------------------------------------------
+     * 1. CENTROS ORIGINALES
+     * -------------------------------------------------------
+     *
+     * Conservamos exactamente el comportamiento anterior:
+     * partimos de demo.centers y aplicamos los overrides
+     * guardados en state.centers.
+     */
 
-            name:
-              overrides.name ??
-              c.name,
+    demo.centers.forEach((c) => {
+      const overrides =
+        (state.centers?.[c.id] ||
+          {}) as CenterOverride;
 
-            code:
-              overrides.code ??
-              c.code,
+      arr.push({
+        ...c,
 
-            shortCode:
-              overrides.shortCode ??
-              c.shortCode,
+        name:
+          overrides.name ??
+          c.name,
 
-            country:
-              overrides.country ??
-              c.country,
+        code:
+          overrides.code ??
+          c.code,
 
-            property:
-              overrides.property ??
-              c.property,
+        shortCode:
+          overrides.shortCode ??
+          c.shortCode,
 
-            manager:
-              overrides.manager ??
-              c.manager,
+        country:
+          overrides.country ??
+          c.country,
 
-            stl:
-              overrides.stl ??
-              c.stl,
+        property:
+          overrides.property ??
+          c.property,
 
-            status:
-              overrides.status ??
-              c.status,
-          };
-        })
-        .filter(
-          (c) =>
-            (
-              effectiveCountry === "Todos" ||
-              c.country === effectiveCountry
-            ) &&
-            `${c.name} ${c.code} ${
-              c.shortCode || ""
-            } ${c.property || ""} ${
-              c.manager || ""
-            }`
-              .toLowerCase()
-              .includes(
-                q.toLowerCase()
-              )
+        manager:
+          overrides.manager ??
+          c.manager,
+
+        stl:
+          overrides.stl ??
+          c.stl,
+
+        status:
+          overrides.status ??
+          c.status,
+      });
+    });
+
+    /*
+     * -------------------------------------------------------
+     * 2. CENTROS CREADOS MEDIANTE EL NUEVO SISTEMA
+     * -------------------------------------------------------
+     *
+     * Estos centros no existen en demo.centers.
+     *
+     * Por tanto, recorremos state.centers y añadimos aquellos
+     * cuyo ID no pertenece al catálogo demo.
+     */
+
+    const demoIds = new Set(
+      demo.centers.map(
+        (center) => center.id
+      )
+    );
+
+    Object.entries(
+      state.centers || {}
+    ).forEach(
+      ([centerId, savedCenter]) => {
+        /*
+         * Si el ID ya pertenece a demo.centers,
+         * ya lo hemos añadido arriba.
+         *
+         * Así evitamos duplicados.
+         */
+        if (demoIds.has(centerId)) {
+          return;
+        }
+
+        const center =
+          savedCenter as CenterOverride;
+
+        arr.push({
+          id:
+            center.id ||
+            centerId,
+
+          name:
+            center.name ||
+            "",
+
+          code:
+            center.code ||
+            "",
+
+          shortCode:
+            center.shortCode ||
+            "",
+
+          country:
+            center.country ||
+            "España",
+
+          property:
+            center.property ||
+            "",
+
+          manager:
+            center.manager ||
+            "",
+
+          stl:
+            center.stl ||
+            "",
+
+          status:
+            center.status ||
+            "Activo",
+        });
+      }
+    );
+
+    /*
+     * -------------------------------------------------------
+     * FILTROS
+     * -------------------------------------------------------
+     */
+
+    const filtered =
+      arr.filter((c) => {
+        const matchesCountry =
+          effectiveCountry ===
+            "Todos" ||
+          c.country ===
+            effectiveCountry;
+
+        const searchText =
+          `${c.name} ${c.code} ${
+            c.shortCode || ""
+          } ${c.property || ""} ${
+            c.manager || ""
+          }`.toLowerCase();
+
+        const matchesSearch =
+          searchText.includes(
+            q.toLowerCase()
+          );
+
+        return (
+          matchesCountry &&
+          matchesSearch
         );
+      });
 
-    return [...arr].sort(
+    /*
+     * -------------------------------------------------------
+     * ORDENACIÓN
+     * -------------------------------------------------------
+     */
+
+    return [...filtered].sort(
       (a, b) => {
         const valueA =
           String(
@@ -401,10 +527,6 @@ export default function Centers() {
 
     /* -----------------------------------------------------
      * Override persistido
-     *
-     * IMPORTANTE:
-     * Este objeto contiene exclusivamente propiedades
-     * admitidas por CenterOverride.
      * ----------------------------------------------------- */
 
     const override: CenterOverride = {
@@ -490,6 +612,7 @@ export default function Centers() {
      * ----------------------------------------------------- */
 
     setShowNewCenter(false);
+
     setNewCenter({
       ...EMPTY_FORM,
       country:
@@ -545,7 +668,7 @@ export default function Centers() {
 
       <SectionTitle
         title="Gestión de centros comerciales"
-        subtitle={`${list.length} centros · datos reales iniciales`}
+        subtitle={`${list.length} centros`}
         action={
           <Button
             type="button"
