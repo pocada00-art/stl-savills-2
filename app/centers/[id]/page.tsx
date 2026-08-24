@@ -654,6 +654,66 @@ export default function CenterDetail() {
   }, []);
 
   /*
+   * El año actual y los años de histórico se calculan
+   * siempre antes de cualquier return condicional.
+   *
+   * IMPORTANTE:
+   * Este useMemo debe permanecer antes de cualquier
+   * return del componente para mantener estable el orden
+   * de Hooks de React.
+   */
+  const currentYear =
+    new Date().getFullYear();
+
+  const reviewYears =
+    useMemo(() => {
+      const years =
+        new Set<number>();
+
+      for (
+        let y = 2024;
+        y <= currentYear;
+        y++
+      ) {
+        years.add(y);
+      }
+
+      Object.keys(
+        state.reviews
+      ).forEach(
+        reviewId => {
+          const match =
+            reviewId.match(
+              /:(\d{4}):(S1|S2)$/
+            );
+
+          if (match) {
+            const reviewYear =
+              Number(match[1]);
+
+            if (
+              reviewYear <=
+              currentYear
+            ) {
+              years.add(
+                reviewYear
+              );
+            }
+          }
+        }
+      );
+
+      return Array.from(
+        years
+      ).sort(
+        (a, b) => a - b
+      );
+    }, [
+      state.reviews,
+      currentYear,
+    ]);
+
+  /*
    * El centro base puede proceder de dos fuentes:
    *
    * 1. demo.centers:
@@ -856,57 +916,6 @@ export default function CenterDetail() {
             addElementSearch.toLowerCase()
           )
     );
-
-  const currentYear =
-    new Date().getFullYear();
-
-  const reviewYears =
-    useMemo(() => {
-      const years =
-        new Set<number>();
-
-      for (
-        let y = 2024;
-        y <= currentYear;
-        y++
-      ) {
-        years.add(y);
-      }
-
-      Object.keys(
-        state.reviews
-      ).forEach(
-        reviewId => {
-          const match =
-            reviewId.match(
-              /:(\d{4}):(S1|S2)$/
-            );
-
-          if (match) {
-            const reviewYear =
-              Number(match[1]);
-
-            if (
-              reviewYear <=
-              currentYear
-            ) {
-              years.add(
-                reviewYear
-              );
-            }
-          }
-        }
-      );
-
-      return Array.from(
-        years
-      ).sort(
-        (a, b) => a - b
-      );
-    }, [
-      state.reviews,
-      currentYear,
-    ]);
 
   function updateState(
     next: V1State
