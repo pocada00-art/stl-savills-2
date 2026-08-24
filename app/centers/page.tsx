@@ -15,8 +15,6 @@ import {
   loadState,
   saveState,
   type V1Country,
-  type V1STL,
-  type V1CenterStatus,
   type V1State,
   type CenterOverride,
 } from "@/lib/v1-state";
@@ -66,10 +64,6 @@ type NewCenterForm = {
   city: string;
   province: string;
 
-  stl: V1STL | "";
-
-  status: V1CenterStatus;
-
   property: string;
 
   manager: string;
@@ -80,23 +74,15 @@ type NewCenterForm = {
   technicalResponsiblePhone: string;
   technicalResponsibleEmail: string;
 
+  /*
+   * Aunque estos campos mantienen su nombre interno
+   * para conservar compatibilidad con CenterOverride,
+   * ahora contienen Data URLs de imágenes y NO URLs
+   * introducidas manualmente por el usuario.
+   */
   imageUrl: string;
   logoUrl: string;
 };
-
-/* =========================================================
- * OPCIONES V1
- * ========================================================= */
-
-const STL_OPTIONS: V1STL[] = [
-  "STL_ES_2026_V1",
-  "STL_PT_2026_V1",
-];
-
-const STATUS_OPTIONS: V1CenterStatus[] = [
-  "Activo",
-  "Inactivo",
-];
 
 /* =========================================================
  * FORMULARIO VACÍO
@@ -112,10 +98,6 @@ const EMPTY_FORM: NewCenterForm = {
   address: "",
   city: "",
   province: "",
-
-  stl: "",
-
-  status: "Activo",
 
   property: "",
 
@@ -188,8 +170,6 @@ export default function Centers() {
   /* =======================================================
    * LISTADO DE CENTROS
    *
-   * IMPORTANTE:
-   *
    * El listado se construye a partir de DOS fuentes:
    *
    * 1. demo.centers
@@ -209,10 +189,6 @@ export default function Centers() {
      * -------------------------------------------------------
      * 1. CENTROS ORIGINALES
      * -------------------------------------------------------
-     *
-     * Conservamos exactamente el comportamiento anterior:
-     * partimos de demo.centers y aplicamos los overrides
-     * guardados en state.centers.
      */
 
     demo.centers.forEach((c) => {
@@ -261,11 +237,6 @@ export default function Centers() {
      * -------------------------------------------------------
      * 2. CENTROS CREADOS MEDIANTE EL NUEVO SISTEMA
      * -------------------------------------------------------
-     *
-     * Estos centros no existen en demo.centers.
-     *
-     * Por tanto, recorremos state.centers y añadimos aquellos
-     * cuyo ID no pertenece al catálogo demo.
      */
 
     const demoIds = new Set(
@@ -281,8 +252,6 @@ export default function Centers() {
         /*
          * Si el ID ya pertenece a demo.centers,
          * ya lo hemos añadido arriba.
-         *
-         * Así evitamos duplicados.
          */
         if (demoIds.has(centerId)) {
           return;
@@ -436,6 +405,57 @@ export default function Centers() {
   }
 
   /* =======================================================
+   * CARGAR IMAGEN DESDE EL EQUIPO
+   *
+   * El navegador no permite guardar una ruta local del tipo
+   * C:\...\imagen.jpg para reutilizarla posteriormente.
+   *
+   * Por eso convertimos la imagen seleccionada a Data URL.
+   * Esto permite conservarla dentro del estado actual.
+   * ======================================================= */
+
+  function handleImageFile(
+    field: "imageUrl" | "logoUrl",
+    file: File | undefined
+  ) {
+    if (!file) {
+      return;
+    }
+
+    setError("");
+
+    if (!file.type.startsWith("image/")) {
+      setError(
+        "El archivo seleccionado debe ser una imagen."
+      );
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        updateNewCenter(
+          field,
+          reader.result
+        );
+      } else {
+        setError(
+          "No se ha podido cargar la imagen."
+        );
+      }
+    };
+
+    reader.onerror = () => {
+      setError(
+        "No se ha podido cargar la imagen."
+      );
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  /* =======================================================
    * ID INTERNO
    * ======================================================= */
 
@@ -471,13 +491,6 @@ export default function Centers() {
     if (!newCenter.country) {
       setError(
         "El país del centro es obligatorio."
-      );
-      return;
-    }
-
-    if (!newCenter.stl) {
-      setError(
-        "El STL del centro es obligatorio."
       );
       return;
     }
@@ -526,7 +539,22 @@ export default function Centers() {
       generateCenterId();
 
     /* -----------------------------------------------------
+     * STL AUTOMÁTICO SEGÚN PAÍS
+     *
+     * España  -> STL_ES_2026_V1
+     * Portugal -> STL_PT_2026_V1
+     * ----------------------------------------------------- */
+
+    const stl =
+      newCenter.country === "España"
+        ? "STL_ES_2026_V1"
+        : "STL_PT_2026_V1";
+
+    /* -----------------------------------------------------
      * Override persistido
+     *
+     * Un centro nuevo siempre se crea como ACTIVO.
+     * El usuario ya no puede seleccionar el estado.
      * ----------------------------------------------------- */
 
     const override: CenterOverride = {
@@ -553,11 +581,10 @@ export default function Centers() {
       province:
         newCenter.province.trim(),
 
-      stl:
-        newCenter.stl,
+      stl,
 
       status:
-        newCenter.status,
+        "Activo",
 
       property:
         newCenter.property.trim(),
@@ -580,11 +607,15 @@ export default function Centers() {
       technicalResponsibleEmail:
         newCenter.technicalResponsibleEmail.trim(),
 
+      /*
+       * Las imágenes son Data URLs generadas a partir
+       * de los archivos seleccionados por el usuario.
+       */
       imageUrl:
-        newCenter.imageUrl.trim(),
+        newCenter.imageUrl,
 
       logoUrl:
-        newCenter.logoUrl.trim(),
+        newCenter.logoUrl,
     };
 
     /* -----------------------------------------------------
@@ -1140,86 +1171,6 @@ export default function Centers() {
                     }
                   />
 
-                  {/* STL */}
-
-                  <div>
-
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      STL *
-                    </label>
-
-                    <select
-                      value={
-                        newCenter.stl
-                      }
-                      onChange={(e) =>
-                        updateNewCenter(
-                          "stl",
-                          e.target
-                            .value as
-                            | V1STL
-                            | ""
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                    >
-
-                      <option value="">
-                        Seleccionar STL
-                      </option>
-
-                      {STL_OPTIONS.map(
-                        (stl) => (
-                          <option
-                            key={stl}
-                            value={stl}
-                          >
-                            {stl}
-                          </option>
-                        )
-                      )}
-
-                    </select>
-
-                  </div>
-
-                  {/* ESTADO */}
-
-                  <div>
-
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      Estado
-                    </label>
-
-                    <select
-                      value={
-                        newCenter.status
-                      }
-                      onChange={(e) =>
-                        updateNewCenter(
-                          "status",
-                          e.target
-                            .value as V1CenterStatus
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                    >
-
-                      {STATUS_OPTIONS.map(
-                        (status) => (
-                          <option
-                            key={status}
-                            value={status}
-                          >
-                            {status}
-                          </option>
-                        )
-                      )}
-
-                    </select>
-
-                  </div>
-
                 </div>
 
               </section>
@@ -1348,31 +1299,77 @@ export default function Centers() {
 
                 <div className="grid gap-4 md:grid-cols-2">
 
-                  <Field
-                    label="URL de imagen"
-                    value={
-                      newCenter.imageUrl
-                    }
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "imageUrl",
-                        value
-                      )
-                    }
-                  />
+                  {/* ------------------------------------------------
+                   * IMAGEN DEL CENTRO
+                   * ------------------------------------------------ */}
 
-                  <Field
-                    label="URL de logotipo"
-                    value={
-                      newCenter.logoUrl
-                    }
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "logoUrl",
-                        value
-                      )
-                    }
-                  />
+                  <div>
+
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">
+                      Imagen del centro
+                    </label>
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageFile(
+                          "imageUrl",
+                          e.target.files?.[0]
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                    />
+
+                    {newCenter.imageUrl && (
+                      <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                        <img
+                          src={
+                            newCenter.imageUrl
+                          }
+                          alt="Vista previa del centro"
+                          className="h-32 w-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* ------------------------------------------------
+                   * LOGOTIPO
+                   * ------------------------------------------------ */}
+
+                  <div>
+
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">
+                      Logotipo
+                    </label>
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageFile(
+                          "logoUrl",
+                          e.target.files?.[0]
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                    />
+
+                    {newCenter.logoUrl && (
+                      <div className="mt-3 flex h-32 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <img
+                          src={
+                            newCenter.logoUrl
+                          }
+                          alt="Vista previa del logotipo"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                    )}
+
+                  </div>
 
                 </div>
 
@@ -1380,9 +1377,9 @@ export default function Centers() {
 
             </div>
 
-            {/* =================================================
+            {/* ===================================================
              * BOTONES
-             * ================================================= */}
+             * =================================================== */}
 
             <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t bg-white px-6 py-4">
 
