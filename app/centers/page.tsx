@@ -16,6 +16,7 @@ import {
   saveState,
   type V1Country,
   type V1STL,
+  type V1CenterStatus,
   type V1State,
   type CenterOverride,
 } from "@/lib/v1-state";
@@ -64,7 +65,7 @@ type NewCenterForm = {
   stl: V1STL | "";
 
   framework: string;
-  status: string;
+  status: V1CenterStatus;
 
   property: string;
 
@@ -118,6 +119,16 @@ const EMPTY_FORM: NewCenterForm = {
   logoUrl: "",
 };
 
+const STL_OPTIONS: V1STL[] = [
+  "STL ESPAÑA",
+  "STL PORTUGAL",
+];
+
+const CENTER_STATUS_OPTIONS: V1CenterStatus[] = [
+  "Activo",
+  "Inactivo",
+];
+
 export default function Centers() {
   const [q, setQ] = useState("");
 
@@ -165,14 +176,11 @@ export default function Centers() {
       : userCountry || "Todos";
 
   /*
-   * Construimos la lista combinando:
+   * Construimos la lista de centros existentes.
    *
-   * 1. Centros existentes del catálogo demo.
-   * 2. Overrides persistidos en V1State.
-   *
-   * Los centros nuevos se incorporarán a la
-   * resolución general de centros mediante
-   * resolveCenter().
+   * Los centros del demo se mantienen como catálogo
+   * base y los overrides persistidos sustituyen sus
+   * datos cuando existen.
    */
   const list = useMemo(() => {
     const arr: CenterListItem[] =
@@ -284,6 +292,10 @@ export default function Centers() {
 
   /*
    * Actualiza un campo del formulario.
+   *
+   * Los campos tipados como V1STL o V1CenterStatus
+   * se actualizan mediante sus respectivos handlers
+   * para conservar el tipado estricto.
    */
   function updateNewCenter(
     field: keyof NewCenterForm,
@@ -292,6 +304,24 @@ export default function Centers() {
     setNewCenter((current) => ({
       ...current,
       [field]: value,
+    }));
+  }
+
+  function updateNewCenterStatus(
+    value: V1CenterStatus
+  ) {
+    setNewCenter((current) => ({
+      ...current,
+      status: value,
+    }));
+  }
+
+  function updateNewCenterSTL(
+    value: V1STL | ""
+  ) {
+    setNewCenter((current) => ({
+      ...current,
+      stl: value,
     }));
   }
 
@@ -341,10 +371,6 @@ export default function Centers() {
 
     /*
      * El STL es obligatorio.
-     *
-     * Aunque el tipo TypeScript ya impide introducir
-     * un valor arbitrario, comprobamos también
-     * en tiempo de ejecución que exista.
      */
     if (!newCenter.stl) {
       setError(
@@ -355,7 +381,7 @@ export default function Centers() {
 
     /*
      * Evitamos duplicar el número oficial
-     * de centro.
+     * de centro entre los centros demo.
      */
     const existingCode =
       demo.centers.some(
@@ -368,6 +394,9 @@ export default function Centers() {
             .toLowerCase()
       );
 
+    /*
+     * Y también entre los centros persistidos.
+     */
     const savedCode =
       Object.values(
         state.centers || {}
@@ -392,14 +421,17 @@ export default function Centers() {
       generateCenterId();
 
     /*
-     * El nuevo centro se guarda como
-     * CenterOverride dentro de V1State.
-     *
      * IMPORTANTE:
-     * stl ya es V1STL | "" en el formulario.
      *
-     * Tras la validación anterior TypeScript
-     * conoce que newCenter.stl es V1STL.
+     * Aquí status ya es V1CenterStatus.
+     *
+     * Por tanto no hacemos:
+     *
+     * status: newCenter.status.trim()
+     *
+     * porque trim() devuelve string.
+     *
+     * Conservamos directamente el valor tipado.
      */
     const override: CenterOverride = {
       id,
@@ -432,7 +464,7 @@ export default function Centers() {
         newCenter.framework.trim(),
 
       status:
-        newCenter.status.trim(),
+        newCenter.status,
 
       property:
         newCenter.property.trim(),
@@ -930,9 +962,10 @@ export default function Centers() {
                     <select
                       value={newCenter.stl}
                       onChange={(e) =>
-                        updateNewCenter(
-                          "stl",
-                          e.target.value
+                        updateNewCenterSTL(
+                          e.target.value as
+                            | V1STL
+                            | ""
                         )
                       }
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
@@ -941,20 +974,7 @@ export default function Centers() {
                         Seleccionar STL
                       </option>
 
-                      {/*
-                       * Las opciones se obtienen
-                       * directamente de V1STL.
-                       *
-                       * Si V1STL contiene más valores
-                       * en lib/v1-state.ts, deberán
-                       * reflejarse aquí.
-                       */}
-                      {(
-                        [
-                          "STL ESPAÑA",
-                          "STL PORTUGAL",
-                        ] as V1STL[]
-                      ).map(
+                      {STL_OPTIONS.map(
                         (stl) => (
                           <option
                             key={stl}
@@ -978,16 +998,32 @@ export default function Centers() {
                     }
                   />
 
-                  <Field
-                    label="Estado"
-                    value={newCenter.status}
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "status",
-                        value
-                      )
-                    }
-                  />
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700">
+                      Estado
+                    </label>
+
+                    <select
+                      value={newCenter.status}
+                      onChange={(e) =>
+                        updateNewCenterStatus(
+                          e.target.value as V1CenterStatus
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                    >
+                      {CENTER_STATUS_OPTIONS.map(
+                        (status) => (
+                          <option
+                            key={status}
+                            value={status}
+                          >
+                            {status}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
 
                 </div>
               </section>
