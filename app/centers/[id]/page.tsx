@@ -55,6 +55,9 @@ const STATUSES: V1Status[] = [
 ];
 
 type CenterFormValues = {
+  name?: string;
+  code?: string;
+  shortCode?: string;
   address?: string;
   manager?: string;
   managerPhone?: string;
@@ -250,13 +253,12 @@ function parseFrequency(frequency: string) {
     return null;
   }
 
-  // Frecuencias expresadas mediante texto
-  if (value.includes("mensual")) {
-    return { months: 1 };
-  }
-
   if (value.includes("bimensual")) {
     return { months: 2 };
+  }
+
+  if (value.includes("mensual")) {
+    return { months: 1 };
   }
 
   if (value.includes("trimestral")) {
@@ -279,14 +281,6 @@ function parseFrequency(frequency: string) {
     return { months: 12 };
   }
 
-  /*
-   * Frecuencias expresadas como:
-   *
-   * "3 meses" -> 3 meses
-   * "6 meses" -> 6 meses
-   * "1 año"   -> 12 meses
-   * "2 años"  -> 24 meses
-   */
   const numericWithUnit = value.match(
     /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)$/
   );
@@ -314,17 +308,6 @@ function parseFrequency(frequency: string) {
     };
   }
 
-  /*
-   * NUEVO:
-   *
-   * Si la frecuencia contiene únicamente un número,
-   * se interpreta como AÑOS.
-   *
-   * 1 -> 1 año  -> 12 meses
-   * 2 -> 2 años -> 24 meses
-   * 3 -> 3 años -> 36 meses
-   * 4 -> 4 años -> 48 meses
-   */
   const numericOnly = value.match(
     /^\d+(?:[.,]\d+)?$/
   );
@@ -350,19 +333,14 @@ function parseFrequency(frequency: string) {
 }
 
 /**
- * Calcula la próxima revisión.
+ * Calcula la próxima revisión:
  *
- * FASE ACTUAL:
- *
- * próxima revisión =
- * fecha de ejecución + frecuencia
+ * fecha de ejecución + frecuencia.
  *
  * Todavía NO se aplican:
  * - sábados
  * - domingos
  * - festivos
- *
- * La función devuelve YYYY-MM-DD.
  */
 function calculateNextReview(
   date: string,
@@ -382,8 +360,7 @@ function calculateNextReview(
     return "";
   }
 
-  const months =
-    parseFrequency(frequency);
+  const months = parseFrequency(frequency);
 
   if (!months) {
     return "";
@@ -417,18 +394,9 @@ function calculateNextReview(
     day
   );
 
-  result.setHours(
-    0,
-    0,
-    0,
-    0
-  );
+  result.setHours(0, 0, 0, 0);
 
-  if (
-    Number.isNaN(
-      result.getTime()
-    )
-  ) {
+  if (Number.isNaN(result.getTime())) {
     return "";
   }
 
@@ -437,9 +405,7 @@ function calculateNextReview(
 
   const targetYear =
     year +
-    Math.floor(
-      targetMonthIndex / 12
-    );
+    Math.floor(targetMonthIndex / 12);
 
   const targetMonth =
     ((targetMonthIndex % 12) + 12) % 12;
@@ -462,33 +428,22 @@ function calculateNextReview(
     targetDay
   );
 
-  finalDate.setHours(
-    0,
-    0,
-    0,
-    0
-  );
+  finalDate.setHours(0, 0, 0, 0);
 
-  if (
-    Number.isNaN(
-      finalDate.getTime()
-    )
-  ) {
+  if (Number.isNaN(finalDate.getTime())) {
     return "";
   }
 
   const finalYear =
     finalDate.getFullYear();
 
-  const finalMonth =
-    String(
-      finalDate.getMonth() + 1
-    ).padStart(2, "0");
+  const finalMonth = String(
+    finalDate.getMonth() + 1
+  ).padStart(2, "0");
 
-  const finalDay =
-    String(
-      finalDate.getDate()
-    ).padStart(2, "0");
+  const finalDay = String(
+    finalDate.getDate()
+  ).padStart(2, "0");
 
   return `${finalYear}-${finalMonth}-${finalDay}`;
 }
@@ -500,50 +455,34 @@ function calculateResult(
   nextReviewDate: string,
   frequency: string
 ) {
-  /**
-   * FRECUENCIA INICIAL
-   *
-   * INICIAL significa que no existe
-   * una próxima revisión periódica.
-   *
-   * La fecha corresponde a la fecha
-   * inicial / apertura del centro.
-   *
-   * En este caso RESULTADO debe mostrar
-   * directamente el ESTADO REVISION.
-   */
   const normalizedFrequency = String(
     frequency || ""
   )
     .trim()
     .toLowerCase();
 
-if (normalizedFrequency === "inicial") {
-  switch (status) {
-    case "APTO":
-      return "FAVORABLE";
+  if (normalizedFrequency === "inicial") {
+    switch (status) {
+      case "APTO":
+        return "FAVORABLE";
 
-    case "APTO CONDICIONADO":
-      return "CONDICIONADO";
+      case "APTO CONDICIONADO":
+        return "CONDICIONADO";
 
-    case "NO APTO":
-      return "DESFAVORABLE";
+      case "NO APTO":
+        return "DESFAVORABLE";
 
-    case "PENDIENTE":
-      return "PENDIENTE";
+      case "PENDIENTE":
+        return "PENDIENTE";
 
-    case "SIN INFORMACIÓN":
-      return "SIN INFORMACIÓN";
+      case "SIN INFORMACIÓN":
+        return "SIN INFORMACIÓN";
 
-    default:
-      return "ERROR";
+      default:
+        return "ERROR";
+    }
   }
-}
 
-  /**
-   * APTO, APTO CONDICIONADO y NO APTO
-   * necesitan una fecha de revisión.
-   */
   if (
     (
       status === "APTO" ||
@@ -559,9 +498,6 @@ if (normalizedFrequency === "inicial") {
     return "-";
   }
 
-  /**
-   * APTO CONDICIONADO
-   */
   if (
     status === "APTO CONDICIONADO"
   ) {
@@ -571,12 +507,7 @@ if (normalizedFrequency === "inicial") {
 
     const today = new Date();
 
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
+    today.setHours(0, 0, 0, 0);
 
     const secondDate = new Date(
       `${secondReviewDate}T00:00:00`
@@ -594,9 +525,6 @@ if (normalizedFrequency === "inicial") {
     return "CONDICIONADO";
   }
 
-  /**
-   * APTO / NO APTO
-   */
   if (
     status === "APTO" ||
     status === "NO APTO"
@@ -607,12 +535,7 @@ if (normalizedFrequency === "inicial") {
 
     const today = new Date();
 
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
+    today.setHours(0, 0, 0, 0);
 
     const nextDate = new Date(
       `${nextReviewDate}T00:00:00`
@@ -639,9 +562,6 @@ if (normalizedFrequency === "inicial") {
     }
   }
 
-  /**
-   * PENDIENTE / SIN INFORMACIÓN
-   */
   if (
     status === "PENDIENTE" ||
     status === "SIN INFORMACIÓN"
@@ -681,9 +601,7 @@ export default function CenterDetail() {
     ) ||
     demo.centers.find(
       c =>
-        encodeURIComponent(
-          c.id
-        ) === id
+        encodeURIComponent(c.id) === id
     );
 
   const [state, setState] =
@@ -793,6 +711,30 @@ export default function CenterDetail() {
     (state.centers[
       currentCenter.id
     ] || {}) as CenterFormValues;
+
+  /*
+   * DATOS EFECTIVOS DEL CENTRO
+   *
+   * Primero se utiliza el valor modificado
+   * guardado en state.centers.
+   *
+   * Si todavía no existe modificación,
+   * se utiliza el dato original de demo.centers.
+   */
+  const centerName =
+    overrides.name ??
+    currentCenter.name ??
+    "";
+
+  const centerCode =
+    overrides.code ??
+    currentCenter.code ??
+    "";
+
+  const centerShortCode =
+    overrides.shortCode ??
+    currentCenter.shortCode ??
+    "";
 
   const activeMap =
     state.activeItems[
@@ -983,9 +925,7 @@ export default function CenterDetail() {
   function updateItem(
     itemId: string,
     patch: Partial<
-      ReturnType<
-        typeof blankItem
-      >
+      ReturnType<typeof blankItem>
     >
   ) {
     const current =
@@ -1148,8 +1088,8 @@ export default function CenterDetail() {
                 />
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
-                  {currentCenter.shortCode ||
-                    currentCenter.code}
+                  {centerShortCode ||
+                    centerCode}
                 </span>
               )}
 
@@ -1163,7 +1103,7 @@ export default function CenterDetail() {
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
-                {currentCenter.name}
+                {centerName}
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
@@ -1180,12 +1120,12 @@ export default function CenterDetail() {
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Código{" "}
-                  {currentCenter.shortCode ||
+                  {centerShortCode ||
                     "—"}
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº {currentCenter.code}
+                  Nº {centerCode}
                 </span>
 
               </div>
@@ -1199,7 +1139,7 @@ export default function CenterDetail() {
             {overrides.imageUrl ? (
               <img
                 src={overrides.imageUrl}
-                alt={currentCenter.name}
+                alt={centerName}
                 className="h-32 w-full rounded-xl object-cover"
               />
             ) : (
@@ -1284,6 +1224,60 @@ export default function CenterDetail() {
           <>
 
             <div className="grid gap-4 md:grid-cols-4">
+
+              <label className="text-sm">
+                <span className="text-xs text-slate-400">
+                  Nº centro
+                </span>
+
+                <input
+                  disabled={readOnly}
+                  value={centerCode}
+                  onChange={e =>
+                    updateCenter(
+                      "code",
+                      e.target.value
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono outline-none disabled:bg-slate-50"
+                />
+              </label>
+
+              <label className="text-sm">
+                <span className="text-xs text-slate-400">
+                  Código corto
+                </span>
+
+                <input
+                  disabled={readOnly}
+                  value={centerShortCode}
+                  onChange={e =>
+                    updateCenter(
+                      "shortCode",
+                      e.target.value
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono uppercase outline-none disabled:bg-slate-50"
+                />
+              </label>
+
+              <label className="text-sm md:col-span-2">
+                <span className="text-xs text-slate-400">
+                  Nombre completo del centro
+                </span>
+
+                <input
+                  disabled={readOnly}
+                  value={centerName}
+                  onChange={e =>
+                    updateCenter(
+                      "name",
+                      e.target.value
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-semibold outline-none disabled:bg-slate-50"
+                />
+              </label>
 
               <label className="text-sm">
                 <span className="text-xs text-slate-400">
@@ -2145,17 +2139,6 @@ export default function CenterDetail() {
                             x.category
                           );
 
-                        /**
-                         * CÁLCULO DIRECTO:
-                         *
-                         * item.date
-                         * +
-                         * x.frequency
-                         *
-                         * No depende del resultado.
-                         * No depende de hoy.
-                         * No depende del estado.
-                         */
                         const nextDate =
                           calculateNextReview(
                             item.date,
@@ -2170,7 +2153,9 @@ export default function CenterDetail() {
                             item.date,
                             item.secondReviewDate,
                             nextDate,
-                            String(x.frequency || "")
+                            String(
+                              x.frequency || ""
+                            )
                           );
 
                         const resultVisual =
@@ -2210,9 +2195,7 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <div className="font-semibold text-slate-800">
-                                {
-                                  x.installation
-                                }
+                                {x.installation}
                               </div>
 
                               {x.category && (
