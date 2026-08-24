@@ -372,37 +372,18 @@ function calculateNextReview(
     return "";
   }
 
-  const months = parseFrequency(frequency);
-  function calculateNextReview(
-  date: string,
-  frequency: string
-): string {
-  if (!date || !frequency) {
-    return "";
-  }
-
-  const normalizedFrequency = String(frequency)
+  const normalizedFrequency = String(
+    frequency
+  )
     .trim()
     .toLowerCase();
 
-  /**
-   * INICIAL significa que la instalación
-   * no tiene renovación periódica.
-   *
-   * La fecha introducida corresponde a la
-   * fecha inicial/apertura del centro y no
-   * debe utilizarse para calcular una
-   * próxima revisión.
-   */
   if (normalizedFrequency === "inicial") {
     return "";
   }
 
-  const months = parseFrequency(frequency);
-
-  if (!months) {
-    return "";
-  }
+  const months =
+    parseFrequency(frequency);
 
   if (!months) {
     return "";
@@ -428,76 +409,58 @@ function calculateNextReview(
     return "";
   }
 
-  /**
-   * Guardamos el día original.
-   */
   const originalDay = day;
 
-  /**
-   * Creamos la fecha usando componentes locales.
-   * No usamos new Date("YYYY-MM-DD") para
-   * evitar problemas de zona horaria.
-   */
   const result = new Date(
     year,
     month - 1,
     day
   );
 
-  result.setHours(0, 0, 0, 0);
+  result.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
-  if (Number.isNaN(result.getTime())) {
+  if (
+    Number.isNaN(
+      result.getTime()
+    )
+  ) {
     return "";
   }
 
-  /**
-   * Calculamos el mes de destino de forma
-   * independiente para evitar que JavaScript
-   * desborde automáticamente al mes siguiente
-   * cuando el día no existe.
-   *
-   * Ejemplo:
-   *
-   * 31/01 + 1 mes
-   *
-   * no debe convertirse accidentalmente
-   * en 03/03.
-   */
- const targetMonthIndex =
-  month - 1 + months.months;
+  const targetMonthIndex =
+    month - 1 + months.months;
 
-const targetYear =
-  year +
-  Math.floor(targetMonthIndex / 12);
+  const targetYear =
+    year +
+    Math.floor(
+      targetMonthIndex / 12
+    );
 
-// Mes para new Date(): 0 = enero, 11 = diciembre
-const targetMonth =
-  ((targetMonthIndex % 12) + 12) % 12;
+  const targetMonth =
+    ((targetMonthIndex % 12) + 12) % 12;
 
-/**
- * Último día del mes destino.
- *
- * Ejemplo:
- * targetMonth = 1 → febrero
- * new Date(año, 2, 0) → último día de febrero
- */
-const lastDayOfTargetMonth =
-  new Date(
+  const lastDayOfTargetMonth =
+    new Date(
+      targetYear,
+      targetMonth + 1,
+      0
+    ).getDate();
+
+  const targetDay = Math.min(
+    originalDay,
+    lastDayOfTargetMonth
+  );
+
+  const finalDate = new Date(
     targetYear,
-    targetMonth + 1,
-    0
-  ).getDate();
-
-const targetDay = Math.min(
-  originalDay,
-  lastDayOfTargetMonth
-);
-
-const finalDate = new Date(
-  targetYear,
-  targetMonth,
-  targetDay
-);
+    targetMonth,
+    targetDay
+  );
 
   finalDate.setHours(
     0,
@@ -517,13 +480,15 @@ const finalDate = new Date(
   const finalYear =
     finalDate.getFullYear();
 
-  const finalMonth = String(
-    finalDate.getMonth() + 1
-  ).padStart(2, "0");
+  const finalMonth =
+    String(
+      finalDate.getMonth() + 1
+    ).padStart(2, "0");
 
-  const finalDay = String(
-    finalDate.getDate()
-  ).padStart(2, "0");
+  const finalDay =
+    String(
+      finalDate.getDate()
+    ).padStart(2, "0");
 
   return `${finalYear}-${finalMonth}-${finalDay}`;
 }
@@ -538,12 +503,14 @@ function calculateResult(
   /**
    * FRECUENCIA INICIAL
    *
-   * No existe próxima revisión.
-   * La fecha corresponde a la fecha inicial
-   * / apertura del centro.
+   * INICIAL significa que no existe
+   * una próxima revisión periódica.
    *
-   * El resultado debe reflejar directamente
-   * el estado seleccionado en la revisión.
+   * La fecha corresponde a la fecha
+   * inicial / apertura del centro.
+   *
+   * En este caso RESULTADO debe mostrar
+   * directamente el ESTADO REVISION.
    */
   const normalizedFrequency = String(
     frequency || ""
@@ -555,6 +522,10 @@ function calculateResult(
     return status;
   }
 
+  /**
+   * APTO, APTO CONDICIONADO y NO APTO
+   * necesitan una fecha de revisión.
+   */
   if (
     (
       status === "APTO" ||
@@ -570,6 +541,9 @@ function calculateResult(
     return "-";
   }
 
+  /**
+   * APTO CONDICIONADO
+   */
   if (
     status === "APTO CONDICIONADO"
   ) {
@@ -578,7 +552,13 @@ function calculateResult(
     }
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
     const secondDate = new Date(
       `${secondReviewDate}T00:00:00`
@@ -596,6 +576,9 @@ function calculateResult(
     return "CONDICIONADO";
   }
 
+  /**
+   * APTO / NO APTO
+   */
   if (
     status === "APTO" ||
     status === "NO APTO"
@@ -605,7 +588,13 @@ function calculateResult(
     }
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
     const nextDate = new Date(
       `${nextReviewDate}T00:00:00`
@@ -630,6 +619,16 @@ function calculateResult(
     if (status === "NO APTO") {
       return "DESFAVORABLE";
     }
+  }
+
+  /**
+   * PENDIENTE / SIN INFORMACIÓN
+   */
+  if (
+    status === "PENDIENTE" ||
+    status === "SIN INFORMACION"
+  ) {
+    return status;
   }
 
   return "ERROR";
