@@ -373,6 +373,36 @@ function calculateNextReview(
   }
 
   const months = parseFrequency(frequency);
+  function calculateNextReview(
+  date: string,
+  frequency: string
+): string {
+  if (!date || !frequency) {
+    return "";
+  }
+
+  const normalizedFrequency = String(frequency)
+    .trim()
+    .toLowerCase();
+
+  /**
+   * INICIAL significa que la instalación
+   * no tiene renovación periódica.
+   *
+   * La fecha introducida corresponde a la
+   * fecha inicial/apertura del centro y no
+   * debe utilizarse para calcular una
+   * próxima revisión.
+   */
+  if (normalizedFrequency === "inicial") {
+    return "";
+  }
+
+  const months = parseFrequency(frequency);
+
+  if (!months) {
+    return "";
+  }
 
   if (!months) {
     return "";
@@ -502,8 +532,29 @@ function calculateResult(
   status: V1Status,
   date: string,
   secondReviewDate: string,
-  nextReviewDate: string
+  nextReviewDate: string,
+  frequency: string
 ) {
+  /**
+   * FRECUENCIA INICIAL
+   *
+   * No existe próxima revisión.
+   * La fecha corresponde a la fecha inicial
+   * / apertura del centro.
+   *
+   * El resultado debe reflejar directamente
+   * el estado seleccionado en la revisión.
+   */
+  const normalizedFrequency = String(
+    frequency || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (normalizedFrequency === "inicial") {
+    return status;
+  }
+
   if (
     (
       status === "APTO" ||
@@ -2101,7 +2152,8 @@ export default function CenterDetail() {
                             item.status,
                             item.date,
                             item.secondReviewDate,
-                            nextDate
+                            nextDate,
+                            String(x.frequency || "")
                           );
 
                         const resultVisual =
