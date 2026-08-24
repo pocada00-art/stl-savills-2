@@ -35,7 +35,10 @@ import {
   reviewKey,
   reviewSummary,
   blankItem,
+  CURRENT_YEAR,
+  CURRENT_PERIOD,
   type Period,
+  type V1Country,
   type V1State,
   type V1Status,
 } from "@/lib/v1-state";
@@ -76,9 +79,28 @@ type HistoricalReview = {
  * FRECUENCIAS
  * ========================================================= */
 
+/**
+ * Convierte la frecuencia de revisión en meses.
+ *
+ * Ejemplos:
+ *
+ * - mensual       → 1
+ * - bimensual     → 2
+ * - trimestral    → 3
+ * - cuatrimestral → 4
+ * - semestral     → 6
+ * - anual         → 12
+ * - bienal        → 24
+ *
+ * También admite valores numéricos:
+ *
+ * - "6 meses" → 6
+ * - "1 año"   → 12
+ * - "2 años"  → 24
+ */
 function parseFrequency(
   frequency: string
-) {
+): { months: number } | null {
   const value =
     String(frequency || "")
       .trim()
@@ -182,8 +204,12 @@ function parseFrequency(
     }
 
     if (
-      value.includes("año") ||
-      value.includes("años")
+      value.includes(
+        "año"
+      ) ||
+      value.includes(
+        "años"
+      )
     ) {
       return {
         months:
@@ -201,6 +227,14 @@ function parseFrequency(
     };
   }
 
+  /*
+   * Si se introduce únicamente un número,
+   * se interpreta como años.
+   *
+   * Ejemplo:
+   * "1" → 12 meses
+   * "2" → 24 meses
+   */
   const numericOnly =
     value.match(
       /^\d+(?:[.,]\d+)?$/
@@ -238,9 +272,15 @@ function parseFrequency(
 /**
  * Calcula la próxima revisión.
  *
- * Se evita el desbordamiento de fechas
- * de JavaScript en meses con diferente
- * número de días.
+ * Se conserva el día original siempre que sea posible.
+ *
+ * Si el día no existe en el mes de destino,
+ * se utiliza el último día disponible.
+ *
+ * Ejemplo:
+ *
+ * 31/01 + 1 mes → 28/02
+ * 31/01 + 2 meses → 31/03
  */
 function calculateNextReview(
   date: string,
@@ -270,7 +310,13 @@ function calculateNextReview(
       frequency
     );
 
-  if (!parsedFrequency) {
+  if (
+    !parsedFrequency ||
+    !Number.isFinite(
+      parsedFrequency.months
+    ) ||
+    parsedFrequency.months <= 0
+  ) {
     return "";
   }
 
@@ -301,11 +347,23 @@ function calculateNextReview(
     ) ||
     !Number.isInteger(
       day
-    )
+    ) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
   ) {
     return "";
   }
 
+  /*
+   * El índice del mes se trabaja en base 0:
+   *
+   * enero = 0
+   * febrero = 1
+   * ...
+   * diciembre = 11
+   */
   const targetMonthIndex =
     month -
     1 +
@@ -324,6 +382,9 @@ function calculateNextReview(
       12) %
     12;
 
+  /*
+   * Último día real del mes de destino.
+   */
   const lastDayOfTargetMonth =
     new Date(
       targetYear,
@@ -365,12 +426,18 @@ function calculateNextReview(
   const finalMonth =
     String(
       finalDate.getMonth() + 1
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   const finalDay =
     String(
       finalDate.getDate()
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${finalYear}-${finalMonth}-${finalDay}`;
 }
@@ -379,6 +446,13 @@ function calculateNextReview(
  * FECHAS
  * ========================================================= */
 
+/**
+ * Formato reducido de fecha para la matriz.
+ *
+ * Ejemplo:
+ *
+ * 2026-01-15 → 01/26
+ */
 function formatMonthYear(
   value: string
 ): string {
@@ -398,6 +472,10 @@ function formatMonthYear(
   return `${match[2]}/${match[1].slice(-2)}`;
 }
 
+/**
+ * Convierte una fecha ISO en valor numérico
+ * para poder ordenar cronológicamente.
+ */
 function dateValue(
   value: string
 ): number {
@@ -410,7 +488,9 @@ function dateValue(
       `${value}T00:00:00`
     ).getTime();
 
-  return Number.isNaN(time)
+  return Number.isNaN(
+    time
+  )
     ? 0
     : time;
 }
@@ -429,7 +509,8 @@ function getStatusClasses(
           "bg-emerald-100 text-emerald-700 border-emerald-200",
         dot:
           "bg-emerald-500",
-        letter: "A",
+        letter:
+          "A",
       };
 
     case "APTO CONDICIONADO":
@@ -438,7 +519,8 @@ function getStatusClasses(
           "bg-amber-100 text-amber-700 border-amber-200",
         dot:
           "bg-amber-500",
-        letter: "C",
+        letter:
+          "C",
       };
 
     case "NO APTO":
@@ -447,7 +529,8 @@ function getStatusClasses(
           "bg-red-100 text-red-700 border-red-200",
         dot:
           "bg-red-500",
-        letter: "N",
+        letter:
+          "N",
       };
 
     case "PENDIENTE":
@@ -456,7 +539,8 @@ function getStatusClasses(
           "bg-orange-100 text-orange-700 border-orange-200",
         dot:
           "bg-orange-500",
-        letter: "P",
+        letter:
+          "P",
       };
 
     default:
@@ -465,7 +549,8 @@ function getStatusClasses(
           "bg-slate-100 text-slate-500 border-slate-200",
         dot:
           "bg-slate-400",
-        letter: "S",
+        letter:
+          "S",
       };
   }
 }
@@ -474,6 +559,10 @@ function getStatusClasses(
  * HISTÓRICO
  * ========================================================= */
 
+/**
+ * Obtiene todas las revisiones históricas de un elemento
+ * para un centro concreto.
+ */
 function getHistoricalReviews(
   state: V1State,
   centerId: string,
@@ -507,7 +596,9 @@ function getHistoricalReviews(
       }
 
       const year =
-        Number(match[2]);
+        Number(
+          match[2]
+        );
 
       const period =
         match[3] as Period;
@@ -527,8 +618,10 @@ function getHistoricalReviews(
       result.push({
         year,
         period,
-        date: item.date,
-        status: item.status,
+        date:
+          item.date,
+        status:
+          item.status,
         item,
       });
     }
@@ -562,10 +655,12 @@ function getHistoricalReviews(
       }
 
       return (
-        (b.period === "S2"
+        (b.period ===
+        "S2"
           ? 2
           : 1) -
-        (a.period === "S2"
+        (a.period ===
+        "S2"
           ? 2
           : 1)
       );
@@ -573,6 +668,9 @@ function getHistoricalReviews(
   );
 }
 
+/**
+ * Obtiene la última revisión registrada.
+ */
 function getLastReview(
   state: V1State,
   centerId: string,
@@ -591,6 +689,10 @@ function getLastReview(
   );
 }
 
+/**
+ * Calcula la próxima revisión
+ * utilizando la última revisión histórica.
+ */
 function getNextReview(
   state: V1State,
   centerId: string,
@@ -618,9 +720,30 @@ function getNextReview(
  * ORDENACIÓN
  * ========================================================= */
 
+/**
+ * Ordenación del número de centro.
+ *
+ * Los códigos numéricos se ordenan numéricamente.
+ *
+ * Ejemplo:
+ *
+ * 2
+ * 10
+ * 25
+ *
+ * y no:
+ *
+ * 10
+ * 2
+ * 25
+ */
 function compareCenterCode(
-  a: any,
-  b: any
+  a: {
+    code?: unknown;
+  },
+  b: {
+    code?: unknown;
+  }
 ): number {
   const aCode =
     String(
@@ -673,7 +796,8 @@ function compareCenterCode(
     "es",
     {
       numeric: true,
-      sensitivity: "base",
+      sensitivity:
+        "base",
     }
   );
 }
@@ -686,19 +810,31 @@ export default function Inspections() {
   const [
     country,
     setCountry,
-  ] = useState("España");
+  ] =
+    useState<V1Country>(
+      "España"
+    );
 
-  const [q, setQ] =
-    useState("");
+  const [
+    q,
+    setQ,
+  ] = useState("");
 
   const [
     period,
     setPeriod,
   ] =
-    useState<Period>("S2");
+    useState<Period>(
+      CURRENT_PERIOD
+    );
 
-  const [year, setYear] =
-    useState(2026);
+  const [
+    year,
+    setYear,
+  ] =
+    useState(
+      CURRENT_YEAR
+    );
 
   const [
     mode,
@@ -764,7 +900,10 @@ export default function Inspections() {
     const loaded =
       loadState();
 
-    setState(loaded);
+    setState(
+      loaded
+    );
+
     setSavedStateLoaded(
       true
     );
@@ -818,21 +957,21 @@ export default function Inspections() {
   const centers =
     useMemo(() => {
       /*
-       * Todos los centros pasan por la función
-       * centralizada de lib/v1-state.ts.
+       * La resolución de centros está centralizada
+       * exclusivamente en lib/v1-state.ts.
        *
-       * De esta forma la pantalla no contiene
-       * su propia lógica de resolución.
+       * Esta pantalla NO contiene una implementación
+       * propia de resolveCenter().
        */
       return resolveCenters(
         demo.centers,
         state
       )
         .filter(
-          c =>
-            c.country ===
+          center =>
+            center.country ===
               country &&
-            c.status ===
+            center.status ===
               "Activo"
         )
         .sort(
@@ -843,13 +982,23 @@ export default function Inspections() {
       state,
     ]);
 
+  /* =======================================================
+   * CATÁLOGO
+   * ======================================================= */
+
   const catalog =
     useMemo(() => {
       return country ===
         "España"
         ? demo.esCatalog
         : demo.ptCatalog;
-    }, [country]);
+    }, [
+      country,
+    ]);
+
+  /* =======================================================
+   * CATEGORÍAS
+   * ======================================================= */
 
   const categories =
     useMemo(() => {
@@ -859,14 +1008,16 @@ export default function Inspections() {
           new Set(
             catalog
               .map(
-                (x: any) =>
-                  x.category
+                (item: any) =>
+                  item.category
               )
               .filter(Boolean)
           )
         ),
       ];
-    }, [catalog]);
+    }, [
+      catalog,
+    ]);
 
   /* =======================================================
    * MATRIZ
@@ -875,15 +1026,17 @@ export default function Inspections() {
   const matrixItems =
     useMemo(() => {
       return catalog.filter(
-        (x: any) => {
+        (item: any) => {
           const matchesCategory =
             category ===
               "Todas" ||
-            x.category ===
+            item.category ===
               category;
 
           const text =
-            `${x.code} ${x.installation} ${x.action} ${x.category || ""}`;
+            `${item.code} ${item.installation} ${item.action} ${
+              item.category || ""
+            }`;
 
           const matchesSearch =
             text
@@ -912,53 +1065,62 @@ export default function Inspections() {
     useMemo(() => {
       const result =
         centers
-          .filter(c =>
-            `${c.name} ${c.code} ${
-              c.shortCode || ""
-            }`
-              .toLowerCase()
-              .includes(
-                q.toLowerCase()
-              )
+          .filter(
+            center =>
+              `${center.name} ${center.code} ${
+                center.shortCode ||
+                ""
+              }`
+                .toLowerCase()
+                .includes(
+                  q.toLowerCase()
+                )
           )
-          .map(c => {
-            const active =
-              catalog.filter(
-                (x: any) =>
-                  state
-                    .activeItems?.[
-                    c.id
-                  ]?.[
-                    x.id
-                  ] !== false
-              );
+          .map(
+            center => {
+              /*
+               * Un elemento está activo salvo que exista
+               * expresamente como false para ese centro.
+               */
+              const active =
+                catalog.filter(
+                  (item: any) =>
+                    state
+                      .activeItems?.[
+                      center.id
+                    ]?.[
+                      item.id
+                    ] !== false
+                );
 
-            const review =
-              state
-                .reviews?.[
-                reviewKey(
-                  c.id,
-                  year,
-                  period
-                )
-              ];
+              const review =
+                state
+                  .reviews?.[
+                  reviewKey(
+                    center.id,
+                    year,
+                    period
+                  )
+                ];
 
-            const summary =
-              reviewSummary(
+              const summary =
+                reviewSummary(
+                  review,
+                  active.map(
+                    (item: any) =>
+                      item.id
+                  )
+                );
+
+              return {
+                c:
+                  center,
+                active,
                 review,
-                active.map(
-                  (x: any) =>
-                    x.id
-                )
-              );
-
-            return {
-              c,
-              active,
-              review,
-              summary,
-            };
-          });
+                summary,
+              };
+            }
+          );
 
       result.sort(
         (a, b) => {
@@ -994,10 +1156,8 @@ export default function Inspections() {
 
             case "score":
               comparison =
-                a.summary
-                  .score -
-                b.summary
-                  .score;
+                a.summary.score -
+                b.summary.score;
               break;
 
             case "apto":
@@ -1118,8 +1278,9 @@ export default function Inspections() {
       state
         .activeItems?.[
         centerId
-      ]?.[item.id] !==
-      false;
+      ]?.[
+        item.id
+      ] !== false;
 
     const lastReview =
       getLastReview(
@@ -1160,7 +1321,8 @@ export default function Inspections() {
     ) {
       setSortDirection(
         current =>
-          current === "asc"
+          current ===
+          "asc"
             ? "desc"
             : "asc"
       );
@@ -1168,7 +1330,10 @@ export default function Inspections() {
       return;
     }
 
-    setSortKey(key);
+    setSortKey(
+      key
+    );
+
     setSortDirection(
       "asc"
     );
@@ -1203,6 +1368,10 @@ export default function Inspections() {
     window.print();
   }
 
+  /* =======================================================
+   * CARGANDO
+   * ======================================================= */
+
   if (
     !savedStateLoaded
   ) {
@@ -1217,11 +1386,15 @@ export default function Inspections() {
     );
   }
 
+  /* =======================================================
+   * RENDER
+   * ======================================================= */
+
   return (
     <div className="space-y-6 inspections-page">
 
       {/* =====================================================
-       * CABECERA
+       * CABECERA DE IMPRESIÓN
        * ===================================================== */}
 
       <div className="print-header hidden">
@@ -1242,6 +1415,10 @@ export default function Inspections() {
         </div>
       </div>
 
+      {/* =====================================================
+       * TÍTULO
+       * ===================================================== */}
+
       <SectionTitle
         title="Plan de inspecciones"
         subtitle="Resumen y matriz de seguimiento técnico-legal por centro y elemento"
@@ -1261,9 +1438,9 @@ export default function Inspections() {
 
             <input
               value={q}
-              onChange={e =>
+              onChange={event =>
                 setQ(
-                  e.target.value
+                  event.target.value
                 )
               }
               placeholder={
@@ -1281,8 +1458,9 @@ export default function Inspections() {
             value={country}
             onChange={value => {
               setCountry(
-                value
+                value as V1Country
               );
+
               setCategory(
                 "Todas"
               );
@@ -1303,7 +1481,9 @@ export default function Inspections() {
             )}
             onChange={value =>
               setYear(
-                Number(value)
+                Number(
+                  value
+                )
               )
             }
           >
@@ -1423,10 +1603,9 @@ export default function Inspections() {
               checked={
                 showLast
               }
-              onChange={e =>
+              onChange={event =>
                 setShowLast(
-                  e.target
-                    .checked
+                  event.target.checked
                 )
               }
               className="h-4 w-4 rounded border-slate-300"
@@ -1445,10 +1624,9 @@ export default function Inspections() {
               checked={
                 showNext
               }
-              onChange={e =>
+              onChange={event =>
                 setShowNext(
-                  e.target
-                    .checked
+                  event.target.checked
                 )
               }
               className="h-4 w-4 rounded border-slate-300"
