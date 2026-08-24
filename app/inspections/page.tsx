@@ -59,28 +59,165 @@ type HistoricalReview = {
   item: ReturnType<typeof blankItem>;
 };
 
+/**
+ * Datos modificables de un centro.
+ *
+ * Se mantienen opcionales porque demo.centers
+ * sigue siendo la fuente base y state.centers
+ * contiene únicamente los cambios realizados.
+ *
+ * "name" se incluye expresamente para permitir
+ * modificar el nombre completo del centro.
+ */
+type CenterOverrides = {
+  name?: string;
+  code?: string;
+  shortCode?: string;
+  address?: string;
+  country?: string;
+  stl?: string;
+  framework?: string;
+  status?: string;
+  property?: string | null;
+  manager?: string | null;
+  managerPhone?: string;
+  managerEmail?: string;
+  technicalResponsible?: string;
+  technicalResponsiblePhone?: string;
+  technicalResponsibleEmail?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  city?: string;
+  province?: string;
+  imageUrl?: string;
+  logoUrl?: string;
+};
+
+type ResolvedCenter = {
+  id: string;
+  name: string;
+  code: string;
+  shortCode?: string;
+  address?: string;
+  country: string;
+  stl: string;
+  framework?: string;
+  status: string;
+  property?: string | null;
+  manager?: string | null;
+  managerPhone?: string;
+  managerEmail?: string;
+  technicalResponsible?: string;
+  technicalResponsiblePhone?: string;
+  technicalResponsibleEmail?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  city?: string;
+  province?: string;
+  imageUrl?: string;
+  logoUrl?: string;
+};
+
+/* =========================================================
+ * RESOLUCIÓN GENÉRICA DE CENTROS
+ * ========================================================= */
+
+/**
+ * Devuelve el centro que debe utilizar la aplicación.
+ *
+ * Regla:
+ *
+ *   datos originales de demo.centers
+ *                 +
+ *   modificaciones guardadas en state.centers[id]
+ *
+ * De esta manera ninguna pantalla debe utilizar
+ * directamente demo.centers cuando quiera mostrar
+ * información editable del centro.
+ *
+ * El ID NO se modifica.
+ *
+ * El CODE se mantiene como el número oficial
+ * definido en demo.centers, salvo que exista
+ * explícitamente un override ya guardado.
+ */
+function resolveCenter(
+  center: any,
+  state: V1State
+): ResolvedCenter {
+  const overrides = (
+    state.centers?.[center.id] || {}
+  ) as CenterOverrides;
+
+  return {
+    ...center,
+    ...overrides,
+
+    /*
+     * El identificador interno nunca se modifica.
+     */
+    id: center.id,
+
+    /*
+     * El nombre sí es editable.
+     */
+    name:
+      overrides.name !== undefined
+        ? String(overrides.name)
+        : String(center.name ?? ""),
+
+    /*
+     * El número de centro procede del
+     * dato oficial del centro.
+     */
+    code:
+      overrides.code !== undefined
+        ? String(overrides.code)
+        : String(center.code ?? ""),
+
+    shortCode:
+      overrides.shortCode !== undefined
+        ? String(overrides.shortCode)
+        : center.shortCode,
+
+    country:
+      overrides.country !== undefined
+        ? String(overrides.country)
+        : String(center.country ?? ""),
+
+    stl:
+      overrides.stl !== undefined
+        ? String(overrides.stl)
+        : String(center.stl ?? ""),
+
+    status:
+      overrides.status !== undefined
+        ? String(overrides.status)
+        : String(center.status ?? ""),
+  };
+}
+
+/**
+ * Resuelve todos los centros de la aplicación.
+ *
+ * Esta función mantiene una única regla para cualquier
+ * vista que necesite trabajar con los centros.
+ */
+function resolveCenters(
+  centers: any[],
+  state: V1State
+): ResolvedCenter[] {
+  return centers.map((center) =>
+    resolveCenter(center, state)
+  );
+}
+
 /* =========================================================
  * FRECUENCIAS
  * ========================================================= */
 
-/**
- * Convierte la frecuencia del catálogo en meses.
- *
- * Ejemplos:
- *
- * mensual          -> 1
- * bimensual        -> 2
- * trimestral       -> 3
- * cuatrimestral    -> 4
- * semestral        -> 6
- * anual            -> 12
- * bienal           -> 24
- * 3 meses          -> 3
- * 2 años           -> 24
- * 3                -> 36
- *
- * Los números sin unidad se interpretan como AÑOS.
- */
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
     .trim()
@@ -90,10 +227,6 @@ function parseFrequency(frequency: string) {
     return null;
   }
 
-  /*
-   * IMPORTANTE:
-   * bimensual se comprueba antes de mensual.
-   */
   if (value.includes("bimensual")) {
     return { months: 2 };
   }
@@ -171,11 +304,10 @@ function parseFrequency(frequency: string) {
 }
 
 /**
- * Calcula la próxima revisión a partir de:
+ * Calcula la próxima revisión.
  *
- * fecha de revisión + frecuencia
- *
- * Devuelve YYYY-MM-DD.
+ * Se evita el desbordamiento de fechas de JavaScript
+ * en meses con diferente número de días.
  */
 function calculateNextReview(
   date: string,
@@ -222,29 +354,9 @@ function calculateNextReview(
     return "";
   }
 
-  const result = new Date(
-    year,
-    month - 1,
-    day
-  );
-
-  result.setHours(0, 0, 0, 0);
-
-  if (Number.isNaN(result.getTime())) {
-    return "";
-  }
-
-  /*
-   * IMPORTANTE:
-   *
-   * parseFrequency() devuelve:
-   *
-   * { months: number }
-   *
-   * Por eso utilizamos parsedFrequency.months.
-   */
   const targetMonthIndex =
-    month - 1 +
+    month -
+    1 +
     parsedFrequency.months;
 
   const targetYear =
@@ -304,14 +416,6 @@ function calculateNextReview(
  * FECHAS
  * ========================================================= */
 
-/**
- * Formato solicitado para la Matriz:
- *
- * YYYY-MM-DD -> MM/AA
- *
- * Ejemplo:
- * 15/01/2027 -> 01/27
- */
 function formatMonthYear(
   value: string
 ): string {
@@ -330,10 +434,6 @@ function formatMonthYear(
   return `${match[2]}/${match[1].slice(-2)}`;
 }
 
-/**
- * Convierte una fecha YYYY-MM-DD
- * a un valor numérico comparable.
- */
 function dateValue(
   value: string
 ): number {
@@ -345,7 +445,9 @@ function dateValue(
     `${value}T00:00:00`
   ).getTime();
 
-  return Number.isNaN(time) ? 0 : time;
+  return Number.isNaN(time)
+    ? 0
+    : time;
 }
 
 /* =========================================================
@@ -402,13 +504,6 @@ function getStatusClasses(
  * HISTÓRICO
  * ========================================================= */
 
-/**
- * Obtiene todas las revisiones históricas
- * de un elemento concreto de un centro.
- *
- * Solamente se consideran revisiones que
- * tengan una fecha real.
- */
 function getHistoricalReviews(
   state: V1State,
   centerId: string,
@@ -417,7 +512,7 @@ function getHistoricalReviews(
   const result: HistoricalReview[] = [];
 
   Object.entries(
-    state.reviews
+    state.reviews || {}
   ).forEach(([key, review]) => {
     const expectedPrefix =
       `${centerId}:`;
@@ -476,10 +571,6 @@ function getHistoricalReviews(
   );
 }
 
-/**
- * Devuelve la última revisión real
- * de un elemento.
- */
 function getLastReview(
   state: V1State,
   centerId: string,
@@ -495,10 +586,6 @@ function getLastReview(
   return history[0] || null;
 }
 
-/**
- * Devuelve la próxima revisión
- * calculada desde la última revisión real.
- */
 function getNextReview(
   state: V1State,
   centerId: string,
@@ -523,7 +610,7 @@ function getNextReview(
 }
 
 /* =========================================================
- * ORDENACIÓN DE CENTROS
+ * ORDENACIÓN
  * ========================================================= */
 
 function compareCenterCode(
@@ -639,6 +726,10 @@ export default function Inspections() {
     setSavedStateLoaded,
   ] = useState(false);
 
+  /* =======================================================
+   * CARGA Y SINCRONIZACIÓN DEL ESTADO
+   * ======================================================= */
+
   useEffect(() => {
     const loaded =
       loadState();
@@ -648,32 +739,87 @@ export default function Inspections() {
   }, []);
 
   useEffect(() => {
-    const handler = () => {
+    const refreshState = () => {
       setState(loadState());
     };
 
+    /*
+     * Cambios realizados desde otras pestañas.
+     */
+    window.addEventListener(
+      "storage",
+      refreshState
+    );
+
+    /*
+     * Evento utilizado actualmente
+     * por la herramienta para refrescar
+     * información compartida.
+     */
     window.addEventListener(
       "stl-role-change",
-      handler
+      refreshState
+    );
+
+    /*
+     * Evento genérico para cambios de estado.
+     *
+     * Si una pantalla guarda información y
+     * posteriormente emite "stl-state-change",
+     * esta pantalla se actualiza automáticamente.
+     */
+    window.addEventListener(
+      "stl-state-change",
+      refreshState
     );
 
     return () => {
       window.removeEventListener(
+        "storage",
+        refreshState
+      );
+
+      window.removeEventListener(
         "stl-role-change",
-        handler
+        refreshState
+      );
+
+      window.removeEventListener(
+        "stl-state-change",
+        refreshState
       );
     };
   }, []);
 
-  const centers = useMemo(() => {
-    return demo.centers
-      .filter(
-        c =>
-          c.country === country &&
-          c.status === "Activo"
+  /* =======================================================
+   * CENTROS RESUELTOS
+   * ======================================================= */
+
+  const centers =
+    useMemo(() => {
+      /*
+       * IMPORTANTE:
+       *
+       * Nunca trabajamos directamente con
+       * demo.centers después de este punto.
+       *
+       * Todos los datos pasan por resolveCenter()
+       * para aplicar las modificaciones guardadas.
+       */
+      return resolveCenters(
+        demo.centers,
+        state
       )
-      .sort(compareCenterCode);
-  }, [country]);
+        .filter(
+          c =>
+            c.country === country &&
+            c.status === "Activo"
+        )
+        .sort(compareCenterCode);
+    }, [
+      country,
+      state,
+    ]);
 
   const catalog = useMemo(() => {
     return country === "España"
@@ -698,9 +844,10 @@ export default function Inspections() {
       ];
     }, [catalog]);
 
-  /**
-   * Filtrado de elementos de la Matriz.
-   */
+  /* =======================================================
+   * MATRIZ
+   * ======================================================= */
+
   const matrixItems =
     useMemo(() => {
       return catalog.filter(
@@ -731,12 +878,10 @@ export default function Inspections() {
       q,
     ]);
 
-  /**
-   * Datos de cada centro.
-   *
-   * El resumen utiliza el periodo
-   * seleccionado.
-   */
+  /* =======================================================
+   * RESUMEN
+   * ======================================================= */
+
   const rows = useMemo(() => {
     const result =
       centers
@@ -753,13 +898,13 @@ export default function Inspections() {
           const active =
             catalog.filter(
               (x: any) =>
-                state.activeItems[
+                state.activeItems?.[
                   c.id
                 ]?.[x.id] !== false
             );
 
           const review =
-            state.reviews[
+            state.reviews?.[
               reviewKey(
                 c.id,
                 year,
@@ -894,21 +1039,16 @@ export default function Inspections() {
     sortDirection,
   ]);
 
-  /**
-   * Estado de una celda de la matriz.
-   *
-   * El estado corresponde al periodo
-   * seleccionado.
-   *
-   * Las fechas son independientes y
-   * proceden del histórico completo.
-   */
+  /* =======================================================
+   * CELDA MATRIZ
+   * ======================================================= */
+
   function getMatrixCell(
     centerId: string,
     item: any
   ) {
     const review =
-      state.reviews[
+      state.reviews?.[
         reviewKey(
           centerId,
           year,
@@ -921,7 +1061,7 @@ export default function Inspections() {
       blankItem();
 
     const active =
-      state.activeItems[
+      state.activeItems?.[
         centerId
       ]?.[item.id] !== false;
 
@@ -951,9 +1091,10 @@ export default function Inspections() {
     };
   }
 
-  /**
-   * Ordenación del resumen.
-   */
+  /* =======================================================
+   * ORDENACIÓN
+   * ======================================================= */
+
   function handleSort(
     key: SortKey
   ) {
@@ -990,16 +1131,10 @@ export default function Inspections() {
     );
   }
 
-  /**
-   * Exportación preparada para PDF.
-   *
-   * Se utiliza la impresión nativa del navegador
-   * para evitar añadir dependencias externas al proyecto.
-   *
-   * El usuario puede seleccionar:
-   *
-   * Guardar como PDF
-   */
+  /* =======================================================
+   * EXPORTACIÓN
+   * ======================================================= */
+
   function exportPdf() {
     window.print();
   }
@@ -1184,8 +1319,6 @@ export default function Inspections() {
 
         </div>
 
-        {/* SELECTORES DE FECHAS */}
-
         <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-slate-100 pt-4">
 
           <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
@@ -1278,9 +1411,7 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort(
-                          "code"
-                        )
+                        handleSort("code")
                       }
                       className="flex items-center gap-1"
                     >
@@ -1293,9 +1424,7 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort(
-                          "name"
-                        )
+                        handleSort("name")
                       }
                       className="flex items-center gap-1"
                     >
@@ -1312,9 +1441,7 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort(
-                          "score"
-                        )
+                        handleSort("score")
                       }
                       className="flex items-center gap-1"
                     >
@@ -1327,9 +1454,7 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort(
-                          "apto"
-                        )
+                        handleSort("apto")
                       }
                       className="mx-auto flex items-center gap-1"
                     >
@@ -1357,9 +1482,7 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort(
-                          "noApto"
-                        )
+                        handleSort("noApto")
                       }
                       className="mx-auto flex items-center gap-1"
                     >
@@ -1372,9 +1495,7 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort(
-                          "pendiente"
-                        )
+                        handleSort("pendiente")
                       }
                       className="mx-auto flex items-center gap-1"
                     >
@@ -1404,144 +1525,112 @@ export default function Inspections() {
 
               <tbody>
 
-                {rows.map(
-                  row => {
-                    const pending =
-                      row.summary
-                        .pendingConfirmation;
+                {rows.map(row => {
+                  const pending =
+                    row.summary
+                      .pendingConfirmation;
 
-                    return (
-                      <tr
-                        key={
-                          row.c.id
+                  return (
+                    <tr
+                      key={row.c.id}
+                      className="border-t border-slate-100 hover:bg-slate-50"
+                    >
+
+                      <td className="px-3 py-3 align-middle font-mono text-sm font-black text-slate-700">
+                        {row.c.code}
+                      </td>
+
+                      <td className="px-3 py-3 align-middle">
+
+                        <Link
+                          href={`/centers/${encodeURIComponent(
+                            row.c.id
+                          )}`}
+                          className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
+                        >
+                          {row.c.name}
+                        </Link>
+
+                      </td>
+
+                      <td className="px-3 py-3 align-middle">
+
+                        {row.review?.confirmed ? (
+                          <Badge tone="success">
+                            CONFIRMADA
+                          </Badge>
+                        ) : (
+                          <Badge tone="warning">
+                            EN CURSO
+                          </Badge>
+                        )}
+
+                      </td>
+
+                      <td className="px-3 py-3 align-middle">
+
+                        <span className="text-lg font-black">
+                          {row.summary.score}%
+                        </span>
+
+                      </td>
+
+                      <td className="px-3 py-3 text-center align-middle font-semibold text-emerald-700">
+                        {
+                          row.summary.counts[
+                            "APTO"
+                          ]
                         }
-                        className="border-t border-slate-100 hover:bg-slate-50"
-                      >
+                      </td>
 
-                        {/* Nº CENTRO */}
+                      <td className="px-3 py-3 text-center align-middle font-semibold text-amber-700">
+                        {
+                          row.summary.counts[
+                            "APTO CONDICIONADO"
+                          ]
+                        }
+                      </td>
 
-                        <td className="px-3 py-3 align-middle font-mono text-sm font-black text-slate-700">
-                          {row.c.code}
-                        </td>
+                      <td className="px-3 py-3 text-center align-middle font-semibold text-red-700">
+                        {
+                          row.summary.counts[
+                            "NO APTO"
+                          ]
+                        }
+                      </td>
 
-                        {/* CENTRO */}
+                      <td className="px-3 py-3 text-center align-middle font-semibold text-orange-700">
+                        {
+                          row.summary.counts[
+                            "PENDIENTE"
+                          ]
+                        } +
+                        {
+                          row.summary.counts[
+                            "SIN INFORMACIÓN"
+                          ]
+                        }
+                      </td>
 
-                        <td className="px-3 py-3 align-middle">
+                      <td className="px-3 py-3 align-middle">
 
-                          <Link
-                            href={`/centers/${row.c.id}`}
-                            className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
-                          >
-                            {
-                              row.c.name
-                            }
-                          </Link>
+                        {pending === 0 ? (
+                          <Badge tone="success">
+                            Completa
+                          </Badge>
+                        ) : (
+                          <Badge tone="warning">
+                            {pending} pendientes
+                          </Badge>
+                        )}
 
-                        </td>
+                      </td>
 
-                        {/* ESTADO */}
+                    </tr>
+                  );
+                })}
 
-                        <td className="px-3 py-3 align-middle">
-
-                          {row.review?.confirmed ? (
-                            <Badge tone="success">
-                              CONFIRMADA
-                            </Badge>
-                          ) : (
-                            <Badge tone="warning">
-                              EN CURSO
-                            </Badge>
-                          )}
-
-                        </td>
-
-                        {/* CUMPLIMIENTO */}
-
-                        <td className="px-3 py-3 align-middle">
-
-                          <span className="text-lg font-black">
-                            {
-                              row.summary
-                                .score
-                            }
-                            %
-                          </span>
-
-                        </td>
-
-                        {/* APTO */}
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-emerald-700">
-                          {
-                            row.summary
-                              .counts[
-                              "APTO"
-                            ]
-                          }
-                        </td>
-
-                        {/* CONDICIONADO */}
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-amber-700">
-                          {
-                            row.summary
-                              .counts[
-                              "APTO CONDICIONADO"
-                            ]
-                          }
-                        </td>
-
-                        {/* NO APTO */}
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-red-700">
-                          {
-                            row.summary
-                              .counts[
-                              "NO APTO"
-                            ]
-                          }
-                        </td>
-
-                        {/* PENDIENTE */}
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-orange-700">
-                          {
-                            row.summary
-                              .counts[
-                              "PENDIENTE"
-                            ] +
-                              row.summary
-                                .counts[
-                                "SIN INFORMACIÓN"
-                              ]
-                          }
-                        </td>
-
-                        {/* CONFIRMACIÓN */}
-
-                        <td className="px-3 py-3 align-middle">
-
-                          {pending ===
-                          0 ? (
-                            <Badge tone="success">
-                              Completa
-                            </Badge>
-                          ) : (
-                            <Badge tone="warning">
-                              {pending}{" "}
-                              pendientes
-                            </Badge>
-                          )}
-
-                        </td>
-
-                      </tr>
-                    );
-                  }
-                )}
-
-                {rows.length ===
-                  0 && (
+                {rows.length === 0 && (
                   <tr>
                     <td
                       colSpan={9}
@@ -1559,6 +1648,7 @@ export default function Inspections() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
+
             <span>
               País:{" "}
               <b className="text-slate-600">
@@ -1585,6 +1675,7 @@ export default function Inspections() {
                 )}
               </b>
             </span>
+
           </div>
 
         </Card>
@@ -1620,9 +1711,7 @@ export default function Inspections() {
               </Badge>
 
               <Badge>
-                {
-                  matrixItems.length
-                } elementos
+                {matrixItems.length} elementos
               </Badge>
 
             </div>
@@ -1670,8 +1759,6 @@ export default function Inspections() {
 
                 <tr>
 
-                  {/* Nº CENTRO */}
-
                   <th
                     rowSpan={2}
                     className="matrix-fixed-header sticky left-0 z-30 w-24 min-w-24 border-r border-white/20 bg-[#002A54] px-2 py-3 text-center text-[10px] font-bold uppercase tracking-wide"
@@ -1681,8 +1768,6 @@ export default function Inspections() {
                     centro
                   </th>
 
-                  {/* CENTRO */}
-
                   <th
                     rowSpan={2}
                     className="matrix-fixed-header sticky left-24 z-30 w-48 min-w-48 border-r border-white/20 bg-[#002A54] px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide"
@@ -1690,25 +1775,18 @@ export default function Inspections() {
                     Centro
                   </th>
 
-                  {/* ELEMENTOS */}
-
                   {matrixItems.map(
                     (item: any) => (
                       <th
-                        key={
-                          item.id
-                        }
+                        key={item.id}
                         className="matrix-element-header h-52 w-14 min-w-14 border-r border-white/20 bg-[#002A54] p-0 align-bottom"
                         title={`${item.code} · ${item.installation} · ${item.action}`}
                       >
                         <div className="flex h-52 w-14 items-center justify-center overflow-hidden">
 
                           <div className="matrix-vertical-text">
-                            {item.code}{" "}
-                            ·{" "}
-                            {
-                              item.installation
-                            }
+                            {item.code} ·{" "}
+                            {item.installation}
                             {item.category
                               ? ` · ${item.category}`
                               : ""}
@@ -1738,168 +1816,145 @@ export default function Inspections() {
 
               <tbody>
 
-                {rows.map(
-                  row => (
-                    <tr
-                      key={
-                        row.c.id
-                      }
-                      className="border-t border-slate-200"
-                    >
+                {rows.map(row => (
+                  <tr
+                    key={row.c.id}
+                    className="border-t border-slate-200"
+                  >
 
-                      {/* Nº CENTRO */}
+                    <td className="matrix-fixed-cell sticky left-0 z-20 w-24 min-w-24 border-r border-slate-200 bg-white px-2 py-3 text-center font-mono text-xs font-black text-slate-700">
 
-                      <td className="matrix-fixed-cell sticky left-0 z-20 w-24 min-w-24 border-r border-slate-200 bg-white px-2 py-3 text-center font-mono text-xs font-black text-slate-700">
-                        <Link
-                          href={`/centers/${row.c.id}`}
-                          className="hover:text-[#002A54] hover:underline"
-                        >
-                          {
-                            row.c.code
-                          }
-                        </Link>
-                      </td>
+                      <Link
+                        href={`/centers/${encodeURIComponent(
+                          row.c.id
+                        )}`}
+                        className="hover:text-[#002A54] hover:underline"
+                      >
+                        {row.c.code}
+                      </Link>
 
-                      {/* CENTRO */}
+                    </td>
 
-                      <td className="matrix-fixed-cell sticky left-24 z-20 w-48 min-w-48 border-r border-slate-200 bg-white px-3 py-3">
-                        <Link
-                          href={`/centers/${row.c.id}`}
-                          className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
-                        >
-                          {
-                            row.c.name
-                          }
-                        </Link>
-                      </td>
+                    <td className="matrix-fixed-cell sticky left-24 z-20 w-48 min-w-48 border-r border-slate-200 bg-white px-3 py-3">
 
-                      {/* ELEMENTOS */}
+                      <Link
+                        href={`/centers/${encodeURIComponent(
+                          row.c.id
+                        )}`}
+                        className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
+                      >
+                        {row.c.name}
+                      </Link>
 
-                      {matrixItems.map(
-                        (item: any) => {
-                          const cell =
-                            getMatrixCell(
-                              row.c.id,
-                              item
-                            );
+                    </td>
 
-                          if (
-                            !cell.active
-                          ) {
-                            return (
-                              <td
-                                key={
-                                  item.id
-                                }
-                                className="w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-1 py-2 text-center align-middle"
-                                title="Elemento no activo"
-                              >
-                                <span className="text-lg font-light text-slate-300">
-                                  —
-                                </span>
-                              </td>
-                            );
-                          }
+                    {matrixItems.map(
+                      (item: any) => {
+                        const cell =
+                          getMatrixCell(
+                            row.c.id,
+                            item
+                          );
 
-                          const status =
-                            cell
-                              .itemReview
-                              .status;
-
-                          const statusVisual =
-                            getStatusClasses(
-                              status
-                            );
-
-                          const hasLast =
-                            Boolean(
-                              cell
-                                .lastReview
-                                ?.date
-                            );
-
-                          const hasNext =
-                            Boolean(
-                              cell.nextReview
-                            );
-
+                        if (!cell.active) {
                           return (
                             <td
-                              key={
-                                item.id
-                              }
-                              className="w-14 min-w-14 border-r border-slate-100 px-1 py-1 text-center align-middle"
-                              title={`${item.code} · ${item.installation}`}
+                              key={item.id}
+                              className="w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-1 py-2 text-center align-middle"
+                              title="Elemento no activo"
                             >
-
-                              <div className="flex min-h-[70px] flex-col items-center justify-center gap-1">
-
-                                {/* ESTADO */}
-
-                                <span
-                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black ${statusVisual.badge}`}
-                                  title={
-                                    status
-                                  }
-                                >
-                                  {
-                                    statusVisual.letter
-                                  }
-                                </span>
-
-                                {/* ÚLTIMA */}
-
-                                {showLast && (
-                                  <div
-                                    className={`whitespace-nowrap text-[9px] font-semibold ${
-                                      hasLast
-                                        ? "text-slate-600"
-                                        : "text-slate-300"
-                                    }`}
-                                  >
-                                    U:{" "}
-                                    {hasLast
-                                      ? formatMonthYear(
-                                          cell
-                                            .lastReview!
-                                            .date
-                                        )
-                                      : "—"}
-                                  </div>
-                                )}
-
-                                {/* PRÓXIMA */}
-
-                                {showNext && (
-                                  <div
-                                    className={`whitespace-nowrap text-[9px] font-semibold ${
-                                      hasNext
-                                        ? "text-slate-600"
-                                        : "text-slate-300"
-                                    }`}
-                                  >
-                                    P:{" "}
-                                    {hasNext
-                                      ? formatMonthYear(
-                                          cell.nextReview
-                                        )
-                                      : "—"}
-                                  </div>
-                                )}
-
-                              </div>
-
+                              <span className="text-lg font-light text-slate-300">
+                                —
+                              </span>
                             </td>
                           );
                         }
-                      )}
 
-                    </tr>
-                  )
-                )}
+                        const status =
+                          cell.itemReview
+                            .status;
 
-                {rows.length ===
-                  0 && (
+                        const statusVisual =
+                          getStatusClasses(
+                            status
+                          );
+
+                        const hasLast =
+                          Boolean(
+                            cell.lastReview
+                              ?.date
+                          );
+
+                        const hasNext =
+                          Boolean(
+                            cell.nextReview
+                          );
+
+                        return (
+                          <td
+                            key={item.id}
+                            className="w-14 min-w-14 border-r border-slate-100 px-1 py-1 text-center align-middle"
+                            title={`${item.code} · ${item.installation}`}
+                          >
+
+                            <div className="flex min-h-[70px] flex-col items-center justify-center gap-1">
+
+                              <span
+                                className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black ${statusVisual.badge}`}
+                                title={status}
+                              >
+                                {
+                                  statusVisual.letter
+                                }
+                              </span>
+
+                              {showLast && (
+                                <div
+                                  className={`whitespace-nowrap text-[9px] font-semibold ${
+                                    hasLast
+                                      ? "text-slate-600"
+                                      : "text-slate-300"
+                                  }`}
+                                >
+                                  U:{" "}
+                                  {hasLast
+                                    ? formatMonthYear(
+                                        cell
+                                          .lastReview!
+                                          .date
+                                      )
+                                    : "—"}
+                                </div>
+                              )}
+
+                              {showNext && (
+                                <div
+                                  className={`whitespace-nowrap text-[9px] font-semibold ${
+                                    hasNext
+                                      ? "text-slate-600"
+                                      : "text-slate-300"
+                                  }`}
+                                >
+                                  P:{" "}
+                                  {hasNext
+                                    ? formatMonthYear(
+                                        cell.nextReview
+                                      )
+                                    : "—"}
+                                </div>
+                              )}
+
+                            </div>
+
+                          </td>
+                        );
+                      }
+                    )}
+
+                  </tr>
+                ))}
+
+                {rows.length === 0 && (
                   <tr>
                     <td
                       colSpan={
@@ -1935,18 +1990,14 @@ export default function Inspections() {
               Próxima revisión
             </span>
 
-            <span>
-              ·
-            </span>
+            <span>·</span>
 
             <span>
               Las fechas proceden del histórico
               de cada elemento y centro.
             </span>
 
-            <span>
-              ·
-            </span>
+            <span>·</span>
 
             <span>
               Los elementos no activos no computan
@@ -1973,19 +2024,10 @@ export default function Inspections() {
       )}
 
       {/* =====================================================
-       * ESTILOS ESPECÍFICOS
+       * ESTILOS
        * ===================================================== */}
 
       <style jsx global>{`
-
-        /*
-         * Texto de los elementos de la Matriz:
-         *
-         * ROTACIÓN REAL DE 90º.
-         *
-         * Se utiliza writing-mode para mantener
-         * las columnas extremadamente estrechas.
-         */
 
         .matrix-vertical-text {
           writing-mode: vertical-rl;
@@ -2013,15 +2055,6 @@ export default function Inspections() {
         .inspection-matrix thead {
           display: table-header-group;
         }
-
-        /*
-         * Al imprimir:
-         *
-         * - se ocultan filtros y controles;
-         * - se mantiene la cabecera;
-         * - la matriz se imprime horizontal;
-         * - las cabeceras de tabla se repiten.
-         */
 
         @media print {
 
@@ -2084,30 +2117,15 @@ export default function Inspections() {
             print-color-adjust: exact !important;
           }
 
-          /*
-           * Eliminamos el sticky durante impresión
-           * para evitar problemas de superposición.
-           */
-
           .matrix-fixed-header,
           .matrix-fixed-cell {
             position: static !important;
           }
 
-          /*
-           * La matriz no necesita scroll durante
-           * la impresión.
-           */
-
           .overflow-auto,
           .overflow-x-auto {
             overflow: visible !important;
           }
-
-          /*
-           * Mantener el texto vertical también
-           * en el PDF.
-           */
 
           .matrix-vertical-text {
             writing-mode: vertical-rl !important;
