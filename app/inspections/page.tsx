@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import Link from "next/link";
+
 import {
   Search,
   LayoutGrid,
@@ -25,6 +31,7 @@ import { demo } from "@/lib/data";
 
 import {
   loadState,
+  resolveCenters,
   reviewKey,
   reviewSummary,
   blankItem,
@@ -37,7 +44,9 @@ import {
  * TIPOS
  * ========================================================= */
 
-type ViewMode = "summary" | "matrix";
+type ViewMode =
+  | "summary"
+  | "matrix";
 
 type SortKey =
   | "code"
@@ -49,222 +58,126 @@ type SortKey =
   | "pendiente"
   | "confirmation";
 
-type SortDirection = "asc" | "desc";
+type SortDirection =
+  | "asc"
+  | "desc";
 
 type HistoricalReview = {
   year: number;
   period: Period;
   date: string;
   status: V1Status;
-  item: ReturnType<typeof blankItem>;
+  item: ReturnType<
+    typeof blankItem
+  >;
 };
-
-/**
- * Datos modificables de un centro.
- *
- * Se mantienen opcionales porque demo.centers
- * sigue siendo la fuente base y state.centers
- * contiene únicamente los cambios realizados.
- *
- * "name" se incluye expresamente para permitir
- * modificar el nombre completo del centro.
- */
-type CenterOverrides = {
-  name?: string;
-  code?: string;
-  shortCode?: string;
-  address?: string;
-  country?: string;
-  stl?: string;
-  framework?: string;
-  status?: string;
-  property?: string | null;
-  manager?: string | null;
-  managerPhone?: string;
-  managerEmail?: string;
-  technicalResponsible?: string;
-  technicalResponsiblePhone?: string;
-  technicalResponsibleEmail?: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  city?: string;
-  province?: string;
-  imageUrl?: string;
-  logoUrl?: string;
-};
-
-type ResolvedCenter = {
-  id: string;
-  name: string;
-  code: string;
-  shortCode?: string;
-  address?: string;
-  country: string;
-  stl: string;
-  framework?: string;
-  status: string;
-  property?: string | null;
-  manager?: string | null;
-  managerPhone?: string;
-  managerEmail?: string;
-  technicalResponsible?: string;
-  technicalResponsiblePhone?: string;
-  technicalResponsibleEmail?: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  city?: string;
-  province?: string;
-  imageUrl?: string;
-  logoUrl?: string;
-};
-
-/* =========================================================
- * RESOLUCIÓN GENÉRICA DE CENTROS
- * ========================================================= */
-
-/**
- * Devuelve el centro que debe utilizar la aplicación.
- *
- * Regla:
- *
- *   datos originales de demo.centers
- *                 +
- *   modificaciones guardadas en state.centers[id]
- *
- * De esta manera ninguna pantalla debe utilizar
- * directamente demo.centers cuando quiera mostrar
- * información editable del centro.
- *
- * El ID NO se modifica.
- *
- * El CODE se mantiene como el número oficial
- * definido en demo.centers, salvo que exista
- * explícitamente un override ya guardado.
- */
-function resolveCenter(
-  center: any,
-  state: V1State
-): ResolvedCenter {
-  const overrides = (
-    state.centers?.[center.id] || {}
-  ) as CenterOverrides;
-
-  return {
-    ...center,
-    ...overrides,
-
-    /*
-     * El identificador interno nunca se modifica.
-     */
-    id: center.id,
-
-    /*
-     * El nombre sí es editable.
-     */
-    name:
-      overrides.name !== undefined
-        ? String(overrides.name)
-        : String(center.name ?? ""),
-
-    /*
-     * El número de centro procede del
-     * dato oficial del centro.
-     */
-    code:
-      overrides.code !== undefined
-        ? String(overrides.code)
-        : String(center.code ?? ""),
-
-    shortCode:
-      overrides.shortCode !== undefined
-        ? String(overrides.shortCode)
-        : center.shortCode,
-
-    country:
-      overrides.country !== undefined
-        ? String(overrides.country)
-        : String(center.country ?? ""),
-
-    stl:
-      overrides.stl !== undefined
-        ? String(overrides.stl)
-        : String(center.stl ?? ""),
-
-    status:
-      overrides.status !== undefined
-        ? String(overrides.status)
-        : String(center.status ?? ""),
-  };
-}
-
-/**
- * Resuelve todos los centros de la aplicación.
- *
- * Esta función mantiene una única regla para cualquier
- * vista que necesite trabajar con los centros.
- */
-function resolveCenters(
-  centers: any[],
-  state: V1State
-): ResolvedCenter[] {
-  return centers.map((center) =>
-    resolveCenter(center, state)
-  );
-}
 
 /* =========================================================
  * FRECUENCIAS
  * ========================================================= */
 
-function parseFrequency(frequency: string) {
-  const value = String(frequency || "")
-    .trim()
-    .toLowerCase();
+function parseFrequency(
+  frequency: string
+) {
+  const value =
+    String(frequency || "")
+      .trim()
+      .toLowerCase();
 
   if (!value) {
     return null;
   }
 
-  if (value.includes("bimensual")) {
-    return { months: 2 };
+  if (
+    value.includes(
+      "bimensual"
+    )
+  ) {
+    return {
+      months: 2,
+    };
   }
 
-  if (value.includes("mensual")) {
-    return { months: 1 };
+  if (
+    value.includes(
+      "mensual"
+    )
+  ) {
+    return {
+      months: 1,
+    };
   }
 
-  if (value.includes("trimestral")) {
-    return { months: 3 };
+  if (
+    value.includes(
+      "trimestral"
+    )
+  ) {
+    return {
+      months: 3,
+    };
   }
 
-  if (value.includes("cuatrimestral")) {
-    return { months: 4 };
+  if (
+    value.includes(
+      "cuatrimestral"
+    )
+  ) {
+    return {
+      months: 4,
+    };
   }
 
-  if (value.includes("semestral")) {
-    return { months: 6 };
+  if (
+    value.includes(
+      "semestral"
+    )
+  ) {
+    return {
+      months: 6,
+    };
   }
 
-  if (value.includes("bienal")) {
-    return { months: 24 };
+  if (
+    value.includes(
+      "bienal"
+    )
+  ) {
+    return {
+      months: 24,
+    };
   }
 
-  if (value.includes("anual")) {
-    return { months: 12 };
+  if (
+    value.includes(
+      "anual"
+    )
+  ) {
+    return {
+      months: 12,
+    };
   }
 
-  const numericWithUnit = value.match(
-    /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)$/
-  );
-
-  if (numericWithUnit) {
-    const amount = Number(
-      numericWithUnit[1].replace(",", ".")
+  const numericWithUnit =
+    value.match(
+      /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)$/
     );
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+  if (numericWithUnit) {
+    const amount =
+      Number(
+        numericWithUnit[1].replace(
+          ",",
+          "."
+        )
+      );
+
+    if (
+      !Number.isFinite(
+        amount
+      ) ||
+      amount <= 0
+    ) {
       return null;
     }
 
@@ -273,30 +186,49 @@ function parseFrequency(frequency: string) {
       value.includes("años")
     ) {
       return {
-        months: Math.round(amount * 12),
+        months:
+          Math.round(
+            amount * 12
+          ),
       };
     }
 
     return {
-      months: Math.round(amount),
+      months:
+        Math.round(
+          amount
+        ),
     };
   }
 
-  const numericOnly = value.match(
-    /^\d+(?:[.,]\d+)?$/
-  );
-
-  if (numericOnly) {
-    const years = Number(
-      value.replace(",", ".")
+  const numericOnly =
+    value.match(
+      /^\d+(?:[.,]\d+)?$/
     );
 
-    if (!Number.isFinite(years) || years <= 0) {
+  if (numericOnly) {
+    const years =
+      Number(
+        value.replace(
+          ",",
+          "."
+        )
+      );
+
+    if (
+      !Number.isFinite(
+        years
+      ) ||
+      years <= 0
+    ) {
       return null;
     }
 
     return {
-      months: Math.round(years * 12),
+      months:
+        Math.round(
+          years * 12
+        ),
     };
   }
 
@@ -306,50 +238,70 @@ function parseFrequency(frequency: string) {
 /**
  * Calcula la próxima revisión.
  *
- * Se evita el desbordamiento de fechas de JavaScript
- * en meses con diferente número de días.
+ * Se evita el desbordamiento de fechas
+ * de JavaScript en meses con diferente
+ * número de días.
  */
 function calculateNextReview(
   date: string,
   frequency: string
 ): string {
-  if (!date || !frequency) {
+  if (
+    !date ||
+    !frequency
+  ) {
     return "";
   }
 
-  const normalizedFrequency = String(
-    frequency
-  )
-    .trim()
-    .toLowerCase();
+  const normalizedFrequency =
+    String(frequency)
+      .trim()
+      .toLowerCase();
 
-  if (normalizedFrequency === "inicial") {
+  if (
+    normalizedFrequency ===
+    "inicial"
+  ) {
     return "";
   }
 
   const parsedFrequency =
-    parseFrequency(frequency);
+    parseFrequency(
+      frequency
+    );
 
   if (!parsedFrequency) {
     return "";
   }
 
-  const match = date.match(
-    /^(\d{4})-(\d{2})-(\d{2})$/
-  );
+  const match =
+    date.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    );
 
   if (!match) {
     return "";
   }
 
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
+  const year =
+    Number(match[1]);
+
+  const month =
+    Number(match[2]);
+
+  const day =
+    Number(match[3]);
 
   if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day)
+    !Number.isInteger(
+      year
+    ) ||
+    !Number.isInteger(
+      month
+    ) ||
+    !Number.isInteger(
+      day
+    )
   ) {
     return "";
   }
@@ -362,11 +314,15 @@ function calculateNextReview(
   const targetYear =
     year +
     Math.floor(
-      targetMonthIndex / 12
+      targetMonthIndex /
+        12
     );
 
   const targetMonth =
-    ((targetMonthIndex % 12) + 12) % 12;
+    ((targetMonthIndex %
+      12) +
+      12) %
+    12;
 
   const lastDayOfTargetMonth =
     new Date(
@@ -375,18 +331,25 @@ function calculateNextReview(
       0
     ).getDate();
 
-  const targetDay = Math.min(
-    day,
-    lastDayOfTargetMonth
-  );
+  const targetDay =
+    Math.min(
+      day,
+      lastDayOfTargetMonth
+    );
 
-  const finalDate = new Date(
-    targetYear,
-    targetMonth,
-    targetDay
-  );
+  const finalDate =
+    new Date(
+      targetYear,
+      targetMonth,
+      targetDay
+    );
 
-  finalDate.setHours(0, 0, 0, 0);
+  finalDate.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   if (
     Number.isNaN(
@@ -423,9 +386,10 @@ function formatMonthYear(
     return "";
   }
 
-  const match = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})$/
-  );
+  const match =
+    value.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    );
 
   if (!match) {
     return "";
@@ -441,9 +405,10 @@ function dateValue(
     return 0;
   }
 
-  const time = new Date(
-    `${value}T00:00:00`
-  ).getTime();
+  const time =
+    new Date(
+      `${value}T00:00:00`
+    ).getTime();
 
   return Number.isNaN(time)
     ? 0
@@ -462,7 +427,8 @@ function getStatusClasses(
       return {
         badge:
           "bg-emerald-100 text-emerald-700 border-emerald-200",
-        dot: "bg-emerald-500",
+        dot:
+          "bg-emerald-500",
         letter: "A",
       };
 
@@ -470,7 +436,8 @@ function getStatusClasses(
       return {
         badge:
           "bg-amber-100 text-amber-700 border-amber-200",
-        dot: "bg-amber-500",
+        dot:
+          "bg-amber-500",
         letter: "C",
       };
 
@@ -478,7 +445,8 @@ function getStatusClasses(
       return {
         badge:
           "bg-red-100 text-red-700 border-red-200",
-        dot: "bg-red-500",
+        dot:
+          "bg-red-500",
         letter: "N",
       };
 
@@ -486,7 +454,8 @@ function getStatusClasses(
       return {
         badge:
           "bg-orange-100 text-orange-700 border-orange-200",
-        dot: "bg-orange-500",
+        dot:
+          "bg-orange-500",
         letter: "P",
       };
 
@@ -494,7 +463,8 @@ function getStatusClasses(
       return {
         badge:
           "bg-slate-100 text-slate-500 border-slate-200",
-        dot: "bg-slate-400",
+        dot:
+          "bg-slate-400",
         letter: "S",
       };
   }
@@ -509,63 +479,95 @@ function getHistoricalReviews(
   centerId: string,
   itemId: string
 ): HistoricalReview[] {
-  const result: HistoricalReview[] = [];
+  const result: HistoricalReview[] =
+    [];
 
   Object.entries(
     state.reviews || {}
-  ).forEach(([key, review]) => {
-    const expectedPrefix =
-      `${centerId}:`;
+  ).forEach(
+    ([key, review]) => {
+      const expectedPrefix =
+        `${centerId}:`;
 
-    if (!key.startsWith(expectedPrefix)) {
-      return;
+      if (
+        !key.startsWith(
+          expectedPrefix
+        )
+      ) {
+        return;
+      }
+
+      const match =
+        key.match(
+          /^(.+):(\d{4}):(S1|S2)$/
+        );
+
+      if (!match) {
+        return;
+      }
+
+      const year =
+        Number(match[2]);
+
+      const period =
+        match[3] as Period;
+
+      const item =
+        review.items?.[
+          itemId
+        ];
+
+      if (
+        !item ||
+        !item.date
+      ) {
+        return;
+      }
+
+      result.push({
+        year,
+        period,
+        date: item.date,
+        status: item.status,
+        item,
+      });
     }
-
-    const match = key.match(
-      /^(.+):(\d{4}):(S1|S2)$/
-    );
-
-    if (!match) {
-      return;
-    }
-
-    const year = Number(match[2]);
-    const period =
-      match[3] as Period;
-
-    const item =
-      review.items?.[itemId];
-
-    if (!item || !item.date) {
-      return;
-    }
-
-    result.push({
-      year,
-      period,
-      date: item.date,
-      status: item.status,
-      item,
-    });
-  });
+  );
 
   return result.sort(
     (a, b) => {
       const dateDifference =
-        dateValue(b.date) -
-        dateValue(a.date);
+        dateValue(
+          b.date
+        ) -
+        dateValue(
+          a.date
+        );
 
-      if (dateDifference !== 0) {
+      if (
+        dateDifference !==
+        0
+      ) {
         return dateDifference;
       }
 
-      if (b.year !== a.year) {
-        return b.year - a.year;
+      if (
+        b.year !==
+        a.year
+      ) {
+        return (
+          b.year -
+          a.year
+        );
       }
 
       return (
-        (b.period === "S2" ? 2 : 1) -
-        (a.period === "S2" ? 2 : 1)
+        (b.period === "S2"
+          ? 2
+          : 1) -
+        (a.period === "S2"
+          ? 2
+          : 1)
       );
     }
   );
@@ -583,7 +585,10 @@ function getLastReview(
       itemId
     );
 
-  return history[0] || null;
+  return (
+    history[0] ||
+    null
+  );
 }
 
 function getNextReview(
@@ -618,10 +623,14 @@ function compareCenterCode(
   b: any
 ): number {
   const aCode =
-    String(a.code ?? "").trim();
+    String(
+      a.code ?? ""
+    ).trim();
 
   const bCode =
-    String(b.code ?? "").trim();
+    String(
+      b.code ?? ""
+    ).trim();
 
   const aNumber =
     Number(aCode);
@@ -631,17 +640,24 @@ function compareCenterCode(
 
   const aIsNumber =
     aCode !== "" &&
-    Number.isFinite(aNumber);
+    Number.isFinite(
+      aNumber
+    );
 
   const bIsNumber =
     bCode !== "" &&
-    Number.isFinite(bNumber);
+    Number.isFinite(
+      bNumber
+    );
 
   if (
     aIsNumber &&
     bIsNumber
   ) {
-    return aNumber - bNumber;
+    return (
+      aNumber -
+      bNumber
+    );
   }
 
   if (aIsNumber) {
@@ -678,7 +694,8 @@ export default function Inspections() {
   const [
     period,
     setPeriod,
-  ] = useState<Period>("S2");
+  ] =
+    useState<Period>("S2");
 
   const [year, setYear] =
     useState(2026);
@@ -686,45 +703,58 @@ export default function Inspections() {
   const [
     mode,
     setMode,
-  ] = useState<ViewMode>("summary");
+  ] =
+    useState<ViewMode>(
+      "summary"
+    );
 
   const [
     showLast,
     setShowLast,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     showNext,
     setShowNext,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     category,
     setCategory,
-  ] = useState("Todas");
+  ] =
+    useState("Todas");
 
   const [
     state,
     setState,
-  ] = useState<V1State>(
-    loadState()
-  );
+  ] =
+    useState<V1State>(
+      loadState()
+    );
 
   const [
     sortKey,
     setSortKey,
-  ] = useState<SortKey>("code");
+  ] =
+    useState<SortKey>(
+      "code"
+    );
 
   const [
     sortDirection,
     setSortDirection,
   ] =
-    useState<SortDirection>("asc");
+    useState<SortDirection>(
+      "asc"
+    );
 
   const [
     savedStateLoaded,
     setSavedStateLoaded,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   /* =======================================================
    * CARGA Y SINCRONIZACIÓN DEL ESTADO
@@ -735,39 +765,29 @@ export default function Inspections() {
       loadState();
 
     setState(loaded);
-    setSavedStateLoaded(true);
+    setSavedStateLoaded(
+      true
+    );
   }, []);
 
   useEffect(() => {
-    const refreshState = () => {
-      setState(loadState());
-    };
+    const refreshState =
+      () => {
+        setState(
+          loadState()
+        );
+      };
 
-    /*
-     * Cambios realizados desde otras pestañas.
-     */
     window.addEventListener(
       "storage",
       refreshState
     );
 
-    /*
-     * Evento utilizado actualmente
-     * por la herramienta para refrescar
-     * información compartida.
-     */
     window.addEventListener(
       "stl-role-change",
       refreshState
     );
 
-    /*
-     * Evento genérico para cambios de estado.
-     *
-     * Si una pantalla guarda información y
-     * posteriormente emite "stl-state-change",
-     * esta pantalla se actualiza automáticamente.
-     */
     window.addEventListener(
       "stl-state-change",
       refreshState
@@ -798,13 +818,11 @@ export default function Inspections() {
   const centers =
     useMemo(() => {
       /*
-       * IMPORTANTE:
+       * Todos los centros pasan por la función
+       * centralizada de lib/v1-state.ts.
        *
-       * Nunca trabajamos directamente con
-       * demo.centers después de este punto.
-       *
-       * Todos los datos pasan por resolveCenter()
-       * para aplicar las modificaciones guardadas.
+       * De esta forma la pantalla no contiene
+       * su propia lógica de resolución.
        */
       return resolveCenters(
         demo.centers,
@@ -812,20 +830,26 @@ export default function Inspections() {
       )
         .filter(
           c =>
-            c.country === country &&
-            c.status === "Activo"
+            c.country ===
+              country &&
+            c.status ===
+              "Activo"
         )
-        .sort(compareCenterCode);
+        .sort(
+          compareCenterCode
+        );
     }, [
       country,
       state,
     ]);
 
-  const catalog = useMemo(() => {
-    return country === "España"
-      ? demo.esCatalog
-      : demo.ptCatalog;
-  }, [country]);
+  const catalog =
+    useMemo(() => {
+      return country ===
+        "España"
+        ? demo.esCatalog
+        : demo.ptCatalog;
+    }, [country]);
 
   const categories =
     useMemo(() => {
@@ -853,8 +877,10 @@ export default function Inspections() {
       return catalog.filter(
         (x: any) => {
           const matchesCategory =
-            category === "Todas" ||
-            x.category === category;
+            category ===
+              "Todas" ||
+            x.category ===
+              category;
 
           const text =
             `${x.code} ${x.installation} ${x.action} ${x.category || ""}`;
@@ -882,162 +908,187 @@ export default function Inspections() {
    * RESUMEN
    * ======================================================= */
 
-  const rows = useMemo(() => {
-    const result =
-      centers
-        .filter(c =>
-          `${c.name} ${c.code} ${
-            c.shortCode || ""
-          }`
-            .toLowerCase()
-            .includes(
-              q.toLowerCase()
-            )
-        )
-        .map(c => {
-          const active =
-            catalog.filter(
-              (x: any) =>
-                state.activeItems?.[
-                  c.id
-                ]?.[x.id] !== false
-            );
-
-          const review =
-            state.reviews?.[
-              reviewKey(
-                c.id,
-                year,
-                period
+  const rows =
+    useMemo(() => {
+      const result =
+        centers
+          .filter(c =>
+            `${c.name} ${c.code} ${
+              c.shortCode || ""
+            }`
+              .toLowerCase()
+              .includes(
+                q.toLowerCase()
               )
-            ];
-
-          const summary =
-            reviewSummary(
-              review,
-              active.map(
+          )
+          .map(c => {
+            const active =
+              catalog.filter(
                 (x: any) =>
-                  x.id
-              )
-            );
-
-          return {
-            c,
-            active,
-            review,
-            summary,
-          };
-        });
-
-    result.sort(
-      (a, b) => {
-        let comparison = 0;
-
-        switch (sortKey) {
-          case "code":
-            comparison =
-              compareCenterCode(
-                a.c,
-                b.c
+                  state
+                    .activeItems?.[
+                    c.id
+                  ]?.[
+                    x.id
+                  ] !== false
               );
-            break;
 
-          case "name":
-            comparison =
-              String(a.c.name)
-                .localeCompare(
-                  String(b.c.name),
+            const review =
+              state
+                .reviews?.[
+                reviewKey(
+                  c.id,
+                  year,
+                  period
+                )
+              ];
+
+            const summary =
+              reviewSummary(
+                review,
+                active.map(
+                  (x: any) =>
+                    x.id
+                )
+              );
+
+            return {
+              c,
+              active,
+              review,
+              summary,
+            };
+          });
+
+      result.sort(
+        (a, b) => {
+          let comparison =
+            0;
+
+          switch (
+            sortKey
+          ) {
+            case "code":
+              comparison =
+                compareCenterCode(
+                  a.c,
+                  b.c
+                );
+              break;
+
+            case "name":
+              comparison =
+                String(
+                  a.c.name
+                ).localeCompare(
+                  String(
+                    b.c.name
+                  ),
                   "es",
                   {
                     sensitivity:
                       "base",
                   }
                 );
-            break;
+              break;
 
-          case "score":
-            comparison =
-              a.summary.score -
-              b.summary.score;
-            break;
+            case "score":
+              comparison =
+                a.summary
+                  .score -
+                b.summary
+                  .score;
+              break;
 
-          case "apto":
-            comparison =
-              a.summary.counts[
-                "APTO"
-              ] -
-              b.summary.counts[
-                "APTO"
-              ];
-            break;
+            case "apto":
+              comparison =
+                a.summary
+                  .counts[
+                  "APTO"
+                ] -
+                b.summary
+                  .counts[
+                  "APTO"
+                ];
+              break;
 
-          case "condicionado":
-            comparison =
-              a.summary.counts[
-                "APTO CONDICIONADO"
-              ] -
-              b.summary.counts[
-                "APTO CONDICIONADO"
-              ];
-            break;
+            case "condicionado":
+              comparison =
+                a.summary
+                  .counts[
+                  "APTO CONDICIONADO"
+                ] -
+                b.summary
+                  .counts[
+                  "APTO CONDICIONADO"
+                ];
+              break;
 
-          case "noApto":
-            comparison =
-              a.summary.counts[
-                "NO APTO"
-              ] -
-              b.summary.counts[
-                "NO APTO"
-              ];
-            break;
+            case "noApto":
+              comparison =
+                a.summary
+                  .counts[
+                  "NO APTO"
+                ] -
+                b.summary
+                  .counts[
+                  "NO APTO"
+                ];
+              break;
 
-          case "pendiente":
-            comparison =
-              (
-                a.summary.counts[
-                  "PENDIENTE"
-                ] +
-                a.summary.counts[
-                  "SIN INFORMACIÓN"
-                ]
-              ) -
-              (
-                b.summary.counts[
-                  "PENDIENTE"
-                ] +
-                b.summary.counts[
-                  "SIN INFORMACIÓN"
-                ]
-              );
-            break;
+            case "pendiente":
+              comparison =
+                (
+                  a.summary
+                    .counts[
+                    "PENDIENTE"
+                  ] +
+                  a.summary
+                    .counts[
+                    "SIN INFORMACIÓN"
+                  ]
+                ) -
+                (
+                  b.summary
+                    .counts[
+                    "PENDIENTE"
+                  ] +
+                  b.summary
+                    .counts[
+                    "SIN INFORMACIÓN"
+                  ]
+                );
+              break;
 
-          case "confirmation":
-            comparison =
-              a.summary
-                .pendingConfirmation -
-              b.summary
-                .pendingConfirmation;
-            break;
+            case "confirmation":
+              comparison =
+                a.summary
+                  .pendingConfirmation -
+                b.summary
+                  .pendingConfirmation;
+              break;
+          }
+
+          return (
+            sortDirection ===
+            "asc"
+              ? comparison
+              : -comparison
+          );
         }
+      );
 
-        return sortDirection ===
-          "asc"
-          ? comparison
-          : -comparison;
-      }
-    );
-
-    return result;
-  }, [
-    centers,
-    catalog,
-    q,
-    state,
-    year,
-    period,
-    sortKey,
-    sortDirection,
-  ]);
+      return result;
+    }, [
+      centers,
+      catalog,
+      q,
+      state,
+      year,
+      period,
+      sortKey,
+      sortDirection,
+    ]);
 
   /* =======================================================
    * CELDA MATRIZ
@@ -1048,7 +1099,8 @@ export default function Inspections() {
     item: any
   ) {
     const review =
-      state.reviews?.[
+      state
+        .reviews?.[
         reviewKey(
           centerId,
           year,
@@ -1057,13 +1109,17 @@ export default function Inspections() {
       ];
 
     const itemReview =
-      review?.items?.[item.id] ||
+      review?.items?.[
+        item.id
+      ] ||
       blankItem();
 
     const active =
-      state.activeItems?.[
+      state
+        .activeItems?.[
         centerId
-      ]?.[item.id] !== false;
+      ]?.[item.id] !==
+      false;
 
     const lastReview =
       getLastReview(
@@ -1078,7 +1134,8 @@ export default function Inspections() {
         centerId,
         item.id,
         String(
-          item.frequency || ""
+          item.frequency ||
+            ""
         )
       );
 
@@ -1098,18 +1155,23 @@ export default function Inspections() {
   function handleSort(
     key: SortKey
   ) {
-    if (sortKey === key) {
+    if (
+      sortKey === key
+    ) {
       setSortDirection(
         current =>
           current === "asc"
             ? "desc"
             : "asc"
       );
+
       return;
     }
 
     setSortKey(key);
-    setSortDirection("asc");
+    setSortDirection(
+      "asc"
+    );
   }
 
   function SortIcon({
@@ -1117,7 +1179,9 @@ export default function Inspections() {
   }: {
     column: SortKey;
   }) {
-    if (sortKey !== column) {
+    if (
+      sortKey !== column
+    ) {
       return (
         <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
       );
@@ -1139,7 +1203,9 @@ export default function Inspections() {
     window.print();
   }
 
-  if (!savedStateLoaded) {
+  if (
+    !savedStateLoaded
+  ) {
     return (
       <div className="space-y-6">
         <Card className="p-8">
@@ -1164,7 +1230,8 @@ export default function Inspections() {
         </div>
 
         <div className="mt-1 text-sm">
-          {mode === "summary"
+          {mode ===
+          "summary"
             ? "Informe Resumen"
             : "Informe Matriz"}
         </div>
@@ -1195,10 +1262,13 @@ export default function Inspections() {
             <input
               value={q}
               onChange={e =>
-                setQ(e.target.value)
+                setQ(
+                  e.target.value
+                )
               }
               placeholder={
-                mode === "summary"
+                mode ===
+                "summary"
                   ? "Buscar centro..."
                   : "Buscar centro o elemento..."
               }
@@ -1210,8 +1280,12 @@ export default function Inspections() {
           <Select
             value={country}
             onChange={value => {
-              setCountry(value);
-              setCategory("Todas");
+              setCountry(
+                value
+              );
+              setCategory(
+                "Todas"
+              );
             }}
           >
             <option value="España">
@@ -1224,9 +1298,13 @@ export default function Inspections() {
           </Select>
 
           <Select
-            value={String(year)}
+            value={String(
+              year
+            )}
             onChange={value =>
-              setYear(Number(value))
+              setYear(
+                Number(value)
+              )
             }
           >
             <option value="2026">
@@ -1259,10 +1337,13 @@ export default function Inspections() {
             </option>
           </Select>
 
-          {mode === "matrix" && (
+          {mode ===
+            "matrix" && (
             <Select
               value={category}
-              onChange={setCategory}
+              onChange={
+                setCategory
+              }
             >
               {categories.map(
                 categoryName => (
@@ -1274,7 +1355,9 @@ export default function Inspections() {
                       categoryName
                     }
                   >
-                    {categoryName}
+                    {
+                      categoryName
+                    }
                   </option>
                 )
               )}
@@ -1283,12 +1366,15 @@ export default function Inspections() {
 
           <Button
             variant={
-              mode === "summary"
+              mode ===
+              "summary"
                 ? "primary"
                 : "secondary"
             }
             onClick={() =>
-              setMode("summary")
+              setMode(
+                "summary"
+              )
             }
           >
             <List className="mr-2 inline h-4 w-4" />
@@ -1297,12 +1383,15 @@ export default function Inspections() {
 
           <Button
             variant={
-              mode === "matrix"
+              mode ===
+              "matrix"
                 ? "primary"
                 : "secondary"
             }
             onClick={() =>
-              setMode("matrix")
+              setMode(
+                "matrix"
+              )
             }
           >
             <LayoutGrid className="mr-2 inline h-4 w-4" />
@@ -1311,7 +1400,9 @@ export default function Inspections() {
 
           <Button
             variant="secondary"
-            onClick={exportPdf}
+            onClick={
+              exportPdf
+            }
           >
             <FileDown className="mr-2 inline h-4 w-4" />
             Exportar PDF
@@ -1326,12 +1417,16 @@ export default function Inspections() {
           </div>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+
             <input
               type="checkbox"
-              checked={showLast}
+              checked={
+                showLast
+              }
               onChange={e =>
                 setShowLast(
-                  e.target.checked
+                  e.target
+                    .checked
                 )
               }
               className="h-4 w-4 rounded border-slate-300"
@@ -1340,15 +1435,20 @@ export default function Inspections() {
             <span>
               Última revisión
             </span>
+
           </label>
 
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+
             <input
               type="checkbox"
-              checked={showNext}
+              checked={
+                showNext
+              }
               onChange={e =>
                 setShowNext(
-                  e.target.checked
+                  e.target
+                    .checked
                 )
               }
               className="h-4 w-4 rounded border-slate-300"
@@ -1357,9 +1457,11 @@ export default function Inspections() {
             <span>
               Próxima revisión
             </span>
+
           </label>
 
-          {mode === "matrix" &&
+          {mode ===
+            "matrix" &&
             (showLast ||
               showNext) && (
               <div className="text-xs text-slate-400">
@@ -1375,7 +1477,8 @@ export default function Inspections() {
        * RESUMEN
        * ===================================================== */}
 
-      {mode === "summary" && (
+      {mode ===
+        "summary" && (
         <Card className="p-6 summary-report">
 
           <div className="mb-5 flex items-center justify-between gap-4">
@@ -1386,14 +1489,18 @@ export default function Inspections() {
               </div>
 
               <div className="mt-1 text-xs text-slate-500">
-                {country} · {period}{" "}
+                {country} ·{" "}
+                {period}{" "}
                 {year}
               </div>
             </div>
 
             <div className="no-print">
               <Badge>
-                {rows.length} centros
+                {
+                  rows.length
+                }{" "}
+                centros
               </Badge>
             </div>
 
@@ -1411,7 +1518,9 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort("code")
+                        handleSort(
+                          "code"
+                        )
                       }
                       className="flex items-center gap-1"
                     >
@@ -1424,7 +1533,9 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort("name")
+                        handleSort(
+                          "name"
+                        )
                       }
                       className="flex items-center gap-1"
                     >
@@ -1441,7 +1552,9 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort("score")
+                        handleSort(
+                          "score"
+                        )
                       }
                       className="flex items-center gap-1"
                     >
@@ -1454,7 +1567,9 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort("apto")
+                        handleSort(
+                          "apto"
+                        )
                       }
                       className="mx-auto flex items-center gap-1"
                     >
@@ -1482,7 +1597,9 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort("noApto")
+                        handleSort(
+                          "noApto"
+                        )
                       }
                       className="mx-auto flex items-center gap-1"
                     >
@@ -1495,7 +1612,9 @@ export default function Inspections() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleSort("pendiente")
+                        handleSort(
+                          "pendiente"
+                        )
                       }
                       className="mx-auto flex items-center gap-1"
                     >
@@ -1525,115 +1644,150 @@ export default function Inspections() {
 
               <tbody>
 
-                {rows.map(row => {
-                  const pending =
-                    row.summary
-                      .pendingConfirmation;
+                {rows.map(
+                  row => {
+                    const pending =
+                      row
+                        .summary
+                        .pendingConfirmation;
 
-                  return (
-                    <tr
-                      key={row.c.id}
-                      className="border-t border-slate-100 hover:bg-slate-50"
-                    >
-
-                      <td className="px-3 py-3 align-middle font-mono text-sm font-black text-slate-700">
-                        {row.c.code}
-                      </td>
-
-                      <td className="px-3 py-3 align-middle">
-
-                        <Link
-                          href={`/centers/${encodeURIComponent(
-                            row.c.id
-                          )}`}
-                          className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
-                        >
-                          {row.c.name}
-                        </Link>
-
-                      </td>
-
-                      <td className="px-3 py-3 align-middle">
-
-                        {row.review?.confirmed ? (
-                          <Badge tone="success">
-                            CONFIRMADA
-                          </Badge>
-                        ) : (
-                          <Badge tone="warning">
-                            EN CURSO
-                          </Badge>
-                        )}
-
-                      </td>
-
-                      <td className="px-3 py-3 align-middle">
-
-                        <span className="text-lg font-black">
-                          {row.summary.score}%
-                        </span>
-
-                      </td>
-
-                      <td className="px-3 py-3 text-center align-middle font-semibold text-emerald-700">
-                        {
-                          row.summary.counts[
-                            "APTO"
-                          ]
+                    return (
+                      <tr
+                        key={
+                          row.c.id
                         }
-                      </td>
+                        className="border-t border-slate-100 hover:bg-slate-50"
+                      >
 
-                      <td className="px-3 py-3 text-center align-middle font-semibold text-amber-700">
-                        {
-                          row.summary.counts[
-                            "APTO CONDICIONADO"
-                          ]
-                        }
-                      </td>
+                        <td className="px-3 py-3 align-middle font-mono text-sm font-black text-slate-700">
+                          {
+                            row.c
+                              .code
+                          }
+                        </td>
 
-                      <td className="px-3 py-3 text-center align-middle font-semibold text-red-700">
-                        {
-                          row.summary.counts[
-                            "NO APTO"
-                          ]
-                        }
-                      </td>
+                        <td className="px-3 py-3 align-middle">
 
-                      <td className="px-3 py-3 text-center align-middle font-semibold text-orange-700">
-                        {
-                          row.summary.counts[
-                            "PENDIENTE"
-                          ]
-                        } +
-                        {
-                          row.summary.counts[
-                            "SIN INFORMACIÓN"
-                          ]
-                        }
-                      </td>
+                          <Link
+                            href={`/centers/${encodeURIComponent(
+                              row.c.id
+                            )}`}
+                            className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
+                          >
+                            {
+                              row.c
+                                .name
+                            }
+                          </Link>
 
-                      <td className="px-3 py-3 align-middle">
+                        </td>
 
-                        {pending === 0 ? (
-                          <Badge tone="success">
-                            Completa
-                          </Badge>
-                        ) : (
-                          <Badge tone="warning">
-                            {pending} pendientes
-                          </Badge>
-                        )}
+                        <td className="px-3 py-3 align-middle">
 
-                      </td>
+                          {row.review
+                            ?.confirmed ? (
+                            <Badge tone="success">
+                              CONFIRMADA
+                            </Badge>
+                          ) : (
+                            <Badge tone="warning">
+                              EN CURSO
+                            </Badge>
+                          )}
 
-                    </tr>
-                  );
-                })}
+                        </td>
 
-                {rows.length === 0 && (
+                        <td className="px-3 py-3 align-middle">
+
+                          <span className="text-lg font-black">
+                            {
+                              row
+                                .summary
+                                .score
+                            }
+                            %
+                          </span>
+
+                        </td>
+
+                        <td className="px-3 py-3 text-center align-middle font-semibold text-emerald-700">
+                          {
+                            row
+                              .summary
+                              .counts[
+                              "APTO"
+                            ]
+                          }
+                        </td>
+
+                        <td className="px-3 py-3 text-center align-middle font-semibold text-amber-700">
+                          {
+                            row
+                              .summary
+                              .counts[
+                              "APTO CONDICIONADO"
+                            ]
+                          }
+                        </td>
+
+                        <td className="px-3 py-3 text-center align-middle font-semibold text-red-700">
+                          {
+                            row
+                              .summary
+                              .counts[
+                              "NO APTO"
+                            ]
+                          }
+                        </td>
+
+                        <td className="px-3 py-3 text-center align-middle font-semibold text-orange-700">
+                          {
+                            row
+                              .summary
+                              .counts[
+                              "PENDIENTE"
+                            ]
+                          }{" "}
+                          +
+                          {
+                            row
+                              .summary
+                              .counts[
+                              "SIN INFORMACIÓN"
+                            ]
+                          }
+                        </td>
+
+                        <td className="px-3 py-3 align-middle">
+
+                          {pending ===
+                          0 ? (
+                            <Badge tone="success">
+                              Completa
+                            </Badge>
+                          ) : (
+                            <Badge tone="warning">
+                              {
+                                pending
+                              }{" "}
+                              pendientes
+                            </Badge>
+                          )}
+
+                        </td>
+
+                      </tr>
+                    );
+                  }
+                )}
+
+                {rows.length ===
+                  0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={
+                        9
+                      }
                       className="px-6 py-12 text-center text-sm text-slate-400"
                     >
                       No hay centros que coincidan con los filtros seleccionados.
@@ -1652,7 +1806,9 @@ export default function Inspections() {
             <span>
               País:{" "}
               <b className="text-slate-600">
-                {country}
+                {
+                  country
+                }
               </b>
             </span>
 
@@ -1661,7 +1817,8 @@ export default function Inspections() {
             <span>
               Periodo:{" "}
               <b className="text-slate-600">
-                {period} {year}
+                {period}{" "}
+                {year}
               </b>
             </span>
 
@@ -1685,7 +1842,8 @@ export default function Inspections() {
        * MATRIZ
        * ===================================================== */}
 
-      {mode === "matrix" && (
+      {mode ===
+        "matrix" && (
         <Card className="p-6 matrix-report">
 
           <div className="mb-5 flex items-center justify-between gap-4">
@@ -1696,7 +1854,8 @@ export default function Inspections() {
               </div>
 
               <div className="mt-1 text-xs text-slate-500">
-                {country} · {period}{" "}
+                {country} ·{" "}
+                {period}{" "}
                 {year}
                 {category !==
                   "Todas" &&
@@ -1707,11 +1866,17 @@ export default function Inspections() {
             <div className="flex flex-wrap items-center gap-2 no-print">
 
               <Badge>
-                {rows.length} centros
+                {
+                  rows.length
+                }{" "}
+                centros
               </Badge>
 
               <Badge>
-                {matrixItems.length} elementos
+                {
+                  matrixItems.length
+                }{" "}
+                elementos
               </Badge>
 
             </div>
@@ -1776,17 +1941,26 @@ export default function Inspections() {
                   </th>
 
                   {matrixItems.map(
-                    (item: any) => (
+                    (
+                      item: any
+                    ) => (
                       <th
-                        key={item.id}
+                        key={
+                          item.id
+                        }
                         className="matrix-element-header h-52 w-14 min-w-14 border-r border-white/20 bg-[#002A54] p-0 align-bottom"
                         title={`${item.code} · ${item.installation} · ${item.action}`}
                       >
                         <div className="flex h-52 w-14 items-center justify-center overflow-hidden">
 
                           <div className="matrix-vertical-text">
-                            {item.code} ·{" "}
-                            {item.installation}
+                            {
+                              item.code
+                            }{" "}
+                            ·{" "}
+                            {
+                              item.installation
+                            }
                             {item.category
                               ? ` · ${item.category}`
                               : ""}
@@ -1801,12 +1975,16 @@ export default function Inspections() {
 
                 <tr>
                   {matrixItems.map(
-                    (item: any) => (
+                    (
+                      item: any
+                    ) => (
                       <th
                         key={`sub-${item.id}`}
                         className="hidden"
                       >
-                        {item.code}
+                        {
+                          item.code
+                        }
                       </th>
                     )
                   )}
@@ -1816,145 +1994,169 @@ export default function Inspections() {
 
               <tbody>
 
-                {rows.map(row => (
-                  <tr
-                    key={row.c.id}
-                    className="border-t border-slate-200"
-                  >
+                {rows.map(
+                  row => (
+                    <tr
+                      key={
+                        row.c.id
+                      }
+                      className="border-t border-slate-200"
+                    >
 
-                    <td className="matrix-fixed-cell sticky left-0 z-20 w-24 min-w-24 border-r border-slate-200 bg-white px-2 py-3 text-center font-mono text-xs font-black text-slate-700">
+                      <td className="matrix-fixed-cell sticky left-0 z-20 w-24 min-w-24 border-r border-slate-200 bg-white px-2 py-3 text-center font-mono text-xs font-black text-slate-700">
 
-                      <Link
-                        href={`/centers/${encodeURIComponent(
-                          row.c.id
-                        )}`}
-                        className="hover:text-[#002A54] hover:underline"
-                      >
-                        {row.c.code}
-                      </Link>
+                        <Link
+                          href={`/centers/${encodeURIComponent(
+                            row.c.id
+                          )}`}
+                          className="hover:text-[#002A54] hover:underline"
+                        >
+                          {
+                            row.c
+                              .code
+                          }
+                        </Link>
 
-                    </td>
+                      </td>
 
-                    <td className="matrix-fixed-cell sticky left-24 z-20 w-48 min-w-48 border-r border-slate-200 bg-white px-3 py-3">
+                      <td className="matrix-fixed-cell sticky left-24 z-20 w-48 min-w-48 border-r border-slate-200 bg-white px-3 py-3">
 
-                      <Link
-                        href={`/centers/${encodeURIComponent(
-                          row.c.id
-                        )}`}
-                        className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
-                      >
-                        {row.c.name}
-                      </Link>
+                        <Link
+                          href={`/centers/${encodeURIComponent(
+                            row.c.id
+                          )}`}
+                          className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
+                        >
+                          {
+                            row.c
+                              .name
+                          }
+                        </Link>
 
-                    </td>
+                      </td>
 
-                    {matrixItems.map(
-                      (item: any) => {
-                        const cell =
-                          getMatrixCell(
-                            row.c.id,
-                            item
-                          );
+                      {matrixItems.map(
+                        (
+                          item: any
+                        ) => {
+                          const cell =
+                            getMatrixCell(
+                              row.c
+                                .id,
+                              item
+                            );
 
-                        if (!cell.active) {
+                          if (
+                            !cell.active
+                          ) {
+                            return (
+                              <td
+                                key={
+                                  item.id
+                                }
+                                className="w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-1 py-2 text-center align-middle"
+                                title="Elemento no activo"
+                              >
+                                <span className="text-lg font-light text-slate-300">
+                                  —
+                                </span>
+                              </td>
+                            );
+                          }
+
+                          const status =
+                            cell
+                              .itemReview
+                              .status;
+
+                          const statusVisual =
+                            getStatusClasses(
+                              status
+                            );
+
+                          const hasLast =
+                            Boolean(
+                              cell
+                                .lastReview
+                                ?.date
+                            );
+
+                          const hasNext =
+                            Boolean(
+                              cell.nextReview
+                            );
+
                           return (
                             <td
-                              key={item.id}
-                              className="w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-1 py-2 text-center align-middle"
-                              title="Elemento no activo"
+                              key={
+                                item.id
+                              }
+                              className="w-14 min-w-14 border-r border-slate-100 px-1 py-1 text-center align-middle"
+                              title={`${item.code} · ${item.installation}`}
                             >
-                              <span className="text-lg font-light text-slate-300">
-                                —
-                              </span>
+
+                              <div className="flex min-h-[70px] flex-col items-center justify-center gap-1">
+
+                                <span
+                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black ${statusVisual.badge}`}
+                                  title={
+                                    status
+                                  }
+                                >
+                                  {
+                                    statusVisual.letter
+                                  }
+                                </span>
+
+                                {showLast && (
+                                  <div
+                                    className={`whitespace-nowrap text-[9px] font-semibold ${
+                                      hasLast
+                                        ? "text-slate-600"
+                                        : "text-slate-300"
+                                    }`}
+                                  >
+                                    U:{" "}
+                                    {hasLast
+                                      ? formatMonthYear(
+                                          cell
+                                            .lastReview!
+                                            .date
+                                        )
+                                      : "—"}
+                                  </div>
+                                )}
+
+                                {showNext && (
+                                  <div
+                                    className={`whitespace-nowrap text-[9px] font-semibold ${
+                                      hasNext
+                                        ? "text-slate-600"
+                                        : "text-slate-300"
+                                    }`}
+                                  >
+                                    P:{" "}
+                                    {hasNext
+                                      ? formatMonthYear(
+                                          cell.nextReview
+                                        )
+                                      : "—"}
+                                  </div>
+                                )}
+
+                              </div>
+
                             </td>
                           );
                         }
+                      )}
 
-                        const status =
-                          cell.itemReview
-                            .status;
+                    </tr>
+                  )
+                )}
 
-                        const statusVisual =
-                          getStatusClasses(
-                            status
-                          );
-
-                        const hasLast =
-                          Boolean(
-                            cell.lastReview
-                              ?.date
-                          );
-
-                        const hasNext =
-                          Boolean(
-                            cell.nextReview
-                          );
-
-                        return (
-                          <td
-                            key={item.id}
-                            className="w-14 min-w-14 border-r border-slate-100 px-1 py-1 text-center align-middle"
-                            title={`${item.code} · ${item.installation}`}
-                          >
-
-                            <div className="flex min-h-[70px] flex-col items-center justify-center gap-1">
-
-                              <span
-                                className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black ${statusVisual.badge}`}
-                                title={status}
-                              >
-                                {
-                                  statusVisual.letter
-                                }
-                              </span>
-
-                              {showLast && (
-                                <div
-                                  className={`whitespace-nowrap text-[9px] font-semibold ${
-                                    hasLast
-                                      ? "text-slate-600"
-                                      : "text-slate-300"
-                                  }`}
-                                >
-                                  U:{" "}
-                                  {hasLast
-                                    ? formatMonthYear(
-                                        cell
-                                          .lastReview!
-                                          .date
-                                      )
-                                    : "—"}
-                                </div>
-                              )}
-
-                              {showNext && (
-                                <div
-                                  className={`whitespace-nowrap text-[9px] font-semibold ${
-                                    hasNext
-                                      ? "text-slate-600"
-                                      : "text-slate-300"
-                                  }`}
-                                >
-                                  P:{" "}
-                                  {hasNext
-                                    ? formatMonthYear(
-                                        cell.nextReview
-                                      )
-                                    : "—"}
-                                </div>
-                              )}
-
-                            </div>
-
-                          </td>
-                        );
-                      }
-                    )}
-
-                  </tr>
-                ))}
-
-                {rows.length === 0 && (
+                {rows.length ===
+                  0 && (
                   <tr>
                     <td
                       colSpan={
