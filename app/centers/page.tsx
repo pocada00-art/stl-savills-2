@@ -43,11 +43,11 @@ type CenterOverride = {
 type CenterListItem = {
   id: string;
   name: string;
-  code: string | number;
+  code: string;
   shortCode?: string;
-  country: V1Country;
-  property?: string;
-  manager?: string;
+  country: string;
+  property?: string | null;
+  manager?: string | null;
   stl?: string;
   status?: string;
 };
@@ -76,8 +76,8 @@ export default function Centers() {
    * - propiedad
    * - responsable
    *
-   * El resto de información continúa procediendo
-   * de demo.centers.
+   * Los datos que no hayan sido modificados
+   * continúan procediendo de demo.centers.
    */
   const state: V1State = loadState();
 
@@ -99,14 +99,14 @@ export default function Centers() {
 
   /*
    * Construimos la lista aplicando los valores
-   * modificados en la ficha del centro.
+   * modificados desde la ficha del centro.
    *
    * IMPORTANTE:
    *
    * c.code NO se modifica.
    *
-   * El número de centro es el número real
-   * definido para cada centro.
+   * El número de centro continúa siendo el
+   * número real definido para cada centro.
    */
   const list = useMemo(() => {
     const arr: CenterListItem[] =
@@ -120,8 +120,9 @@ export default function Centers() {
             ...c,
 
             /*
-             * Si el nombre ha sido modificado
-             * desde la ficha, utilizamos ese nombre.
+             * Nombre modificado desde la ficha.
+             * Si no existe modificación, se conserva
+             * el nombre original.
              */
             name:
               overrides.name ??
