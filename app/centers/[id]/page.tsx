@@ -218,12 +218,6 @@ function getResultVisual(result: string) {
 
 /**
  * Convierte la frecuencia a meses.
- *
- * IMPORTANTE:
- * Se comprueban primero las frecuencias
- * específicas como bimensual para evitar
- * que "bimensual" sea interpretado como
- * "mensual".
  */
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
@@ -341,11 +335,14 @@ function calculateNextReview(
     return "";
   }
 
-  const months = parseFrequency(frequency);
+  const parsedFrequency =
+    parseFrequency(frequency);
 
-  if (!months) {
+  if (!parsedFrequency) {
     return "";
   }
+
+  const months = parsedFrequency.months;
 
   const match = date.match(
     /^(\d{4})-(\d{2})-(\d{2})$/
@@ -382,7 +379,7 @@ function calculateNextReview(
   }
 
   const targetMonthIndex =
-    month - 1 + months.months;
+    month - 1 + months;
 
   const targetYear =
     year +
@@ -576,15 +573,6 @@ export default function CenterDetail() {
 
   const id = String(params.id);
 
-  const center =
-    demo.centers.find(
-      c => c.id === id
-    ) ||
-    demo.centers.find(
-      c =>
-        encodeURIComponent(c.id) === id
-    );
-
   const [state, setState] =
     useState<V1State>({
       role: "ADMIN",
@@ -664,82 +652,17 @@ export default function CenterDetail() {
     };
   }, []);
 
-  const currentYear =
-    new Date().getFullYear();
+  const rawCenter =
+    demo.centers.find(
+      c => c.id === id
+    ) ||
+    demo.centers.find(
+      c =>
+        encodeURIComponent(c.id) === id
+    ) ||
+    null;
 
-  const reviewYears =
-    useMemo(() => {
-      const years =
-        new Set<number>();
-
-      for (
-        let y = 2024;
-        y <= currentYear;
-        y++
-      ) {
-        years.add(y);
-      }
-
-      Object.keys(
-        state.reviews
-      ).forEach(
-        reviewId => {
-          const match =
-            reviewId.match(
-              /:(\d{4}):(S1|S2)$/
-            );
-
-          if (match) {
-            const reviewYear =
-              Number(match[1]);
-
-            if (
-              reviewYear <=
-              currentYear
-            ) {
-              years.add(
-                reviewYear
-              );
-            }
-          }
-        }
-      );
-
-      return Array.from(
-        years
-      ).sort(
-        (a, b) => a - b
-      );
-    }, [
-      state.reviews,
-      currentYear,
-    ]);
-
-  /*
-   * CENTRO RESUELTO
-   *
-   * La resolución de los datos del centro
-   * se realiza exclusivamente mediante
-   * resolveCenter(), centralizado en
-   * lib/v1-state.ts.
-   *
-   * Regla:
-   *
-   *   datos originales
-   *        +
-   *   overrides de state.centers
-   *        =
-   *   currentCenter
-   */
-  const currentCenter =
-    center
-      ? resolveCenter(
-          center,
-          state
-        )
-      : null;
-
-  if (!currentCenter) {
+  if (!rawCenter) {
     return (
       <Card className="p-8">
         <h2 className="text-xl font-bold">
@@ -756,6 +679,19 @@ export default function CenterDetail() {
     );
   }
 
+  /*
+   * A partir de este punto rawCenter está
+   * garantizado como no nulo.
+   *
+   * Además, la resolución de los datos del centro
+   * se centraliza en lib/v1-state.ts.
+   */
+  const currentCenter =
+    resolveCenter(
+      rawCenter,
+      state
+    );
+
   const catalog =
     currentCenter.country === "España"
       ? demo.esCatalog
@@ -766,14 +702,6 @@ export default function CenterDetail() {
       currentCenter.id
     ] || {}) as CenterOverride;
 
-  /*
-   * Los datos principales se obtienen
-   * directamente del centro resuelto.
-   *
-   * Los overrides solo se mantienen
-   * para campos que no requieren una
-   * segunda lógica de resolución.
-   */
   const centerName =
     currentCenter.name ?? "";
 
@@ -861,6 +789,57 @@ export default function CenterDetail() {
           )
     );
 
+  const currentYear =
+    new Date().getFullYear();
+
+  const reviewYears =
+    useMemo(() => {
+      const years =
+        new Set<number>();
+
+      for (
+        let y = 2024;
+        y <= currentYear;
+        y++
+      ) {
+        years.add(y);
+      }
+
+      Object.keys(
+        state.reviews
+      ).forEach(
+        reviewId => {
+          const match =
+            reviewId.match(
+              /:(\d{4}):(S1|S2)$/
+            );
+
+          if (match) {
+            const reviewYear =
+              Number(match[1]);
+
+            if (
+              reviewYear <=
+              currentYear
+            ) {
+              years.add(
+                reviewYear
+              );
+            }
+          }
+        }
+      );
+
+      return Array.from(
+        years
+      ).sort(
+        (a, b) => a - b
+      );
+    }, [
+      state.reviews,
+      currentYear,
+    ]);
+
   function updateState(
     next: V1State
   ) {
@@ -888,7 +867,7 @@ export default function CenterDetail() {
           [field]: value,
         },
       },
-    } as V1State);
+    });
   }
 
   function setActive(
@@ -1076,9 +1055,9 @@ export default function CenterDetail() {
 
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
 
-              {currentCenter.logoUrl ? (
+              {overrides.logoUrl ? (
                 <img
-                  src={currentCenter.logoUrl}
+                  src={overrides.logoUrl}
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1131,9 +1110,9 @@ export default function CenterDetail() {
 
           <div className="flex items-center justify-center bg-white/5 p-4">
 
-            {currentCenter.imageUrl ? (
+            {overrides.imageUrl ? (
               <img
-                src={currentCenter.imageUrl}
+                src={overrides.imageUrl}
                 alt={centerName}
                 className="h-32 w-full rounded-xl object-cover"
               />
