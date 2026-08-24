@@ -29,6 +29,10 @@ import {
   Button,
 } from "@/components/ui";
 
+/* =========================================================
+ * TIPOS
+ * ========================================================= */
+
 type SortKey =
   | "name"
   | "code"
@@ -64,7 +68,6 @@ type NewCenterForm = {
 
   stl: V1STL | "";
 
-  framework: string;
   status: V1CenterStatus;
 
   property: string;
@@ -77,13 +80,27 @@ type NewCenterForm = {
   technicalResponsiblePhone: string;
   technicalResponsibleEmail: string;
 
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-
   imageUrl: string;
   logoUrl: string;
 };
+
+/* =========================================================
+ * OPCIONES V1
+ * ========================================================= */
+
+const STL_OPTIONS: V1STL[] = [
+  "STL_ES_2026_V1",
+  "STL_PT_2026_V1",
+];
+
+const STATUS_OPTIONS: V1CenterStatus[] = [
+  "Activo",
+  "Inactivo",
+];
+
+/* =========================================================
+ * FORMULARIO VACÍO
+ * ========================================================= */
 
 const EMPTY_FORM: NewCenterForm = {
   name: "",
@@ -98,7 +115,6 @@ const EMPTY_FORM: NewCenterForm = {
 
   stl: "",
 
-  framework: "",
   status: "Activo",
 
   property: "",
@@ -111,23 +127,13 @@ const EMPTY_FORM: NewCenterForm = {
   technicalResponsiblePhone: "",
   technicalResponsibleEmail: "",
 
-  contactName: "",
-  contactEmail: "",
-  contactPhone: "",
-
   imageUrl: "",
   logoUrl: "",
 };
 
-const STL_OPTIONS: V1STL[] = [
-  "STL ESPAÑA",
-  "STL PORTUGAL",
-];
-
-const CENTER_STATUS_OPTIONS: V1CenterStatus[] = [
-  "Activo",
-  "Inactivo",
-];
+/* =========================================================
+ * COMPONENTE PRINCIPAL
+ * ========================================================= */
 
 export default function Centers() {
   const [q, setQ] = useState("");
@@ -147,12 +153,9 @@ export default function Centers() {
     useState(false);
 
   const [newCenter, setNewCenter] =
-    useState<NewCenterForm>(
-      EMPTY_FORM
-    );
+    useState<NewCenterForm>(EMPTY_FORM);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
   /*
    * Cargamos el estado persistido.
@@ -175,13 +178,10 @@ export default function Centers() {
       ? country
       : userCountry || "Todos";
 
-  /*
-   * Construimos la lista de centros existentes.
-   *
-   * Los centros del demo se mantienen como catálogo
-   * base y los overrides persistidos sustituyen sus
-   * datos cuando existen.
-   */
+  /* =======================================================
+   * LISTADO DE CENTROS
+   * ======================================================= */
+
   const list = useMemo(() => {
     const arr: CenterListItem[] =
       demo.centers
@@ -277,11 +277,14 @@ export default function Centers() {
     state.centers,
   ]);
 
-  function toggle(
-    key: SortKey
-  ) {
+  /* =======================================================
+   * ORDENACIÓN
+   * ======================================================= */
+
+  function toggle(key: SortKey) {
     setSort((current) => ({
       key,
+
       dir:
         current.key === key &&
         current.dir === "asc"
@@ -290,16 +293,15 @@ export default function Centers() {
     }));
   }
 
-  /*
-   * Actualiza un campo del formulario.
-   *
-   * Los campos tipados como V1STL o V1CenterStatus
-   * se actualizan mediante sus respectivos handlers
-   * para conservar el tipado estricto.
-   */
-  function updateNewCenter(
-    field: keyof NewCenterForm,
-    value: string
+  /* =======================================================
+   * ACTUALIZAR FORMULARIO
+   * ======================================================= */
+
+  function updateNewCenter<
+    K extends keyof NewCenterForm
+  >(
+    field: K,
+    value: NewCenterForm[K]
   ) {
     setNewCenter((current) => ({
       ...current,
@@ -307,33 +309,10 @@ export default function Centers() {
     }));
   }
 
-  function updateNewCenterStatus(
-    value: V1CenterStatus
-  ) {
-    setNewCenter((current) => ({
-      ...current,
-      status: value,
-    }));
-  }
+  /* =======================================================
+   * ID INTERNO
+   * ======================================================= */
 
-  function updateNewCenterSTL(
-    value: V1STL | ""
-  ) {
-    setNewCenter((current) => ({
-      ...current,
-      stl: value,
-    }));
-  }
-
-  /*
-   * Genera un identificador interno único.
-   *
-   * IMPORTANTE:
-   * este ID no sustituye al número oficial
-   * del centro.
-   *
-   * El número oficial es newCenter.code.
-   */
   function generateCenterId() {
     return (
       `center-${Date.now()}-${Math.random()
@@ -342,9 +321,10 @@ export default function Centers() {
     );
   }
 
-  /*
-   * Alta de nuevo centro.
-   */
+  /* =======================================================
+   * CREAR CENTRO
+   * ======================================================= */
+
   function createCenter() {
     setError("");
 
@@ -369,9 +349,6 @@ export default function Centers() {
       return;
     }
 
-    /*
-     * El STL es obligatorio.
-     */
     if (!newCenter.stl) {
       setError(
         "El STL del centro es obligatorio."
@@ -379,24 +356,24 @@ export default function Centers() {
       return;
     }
 
-    /*
-     * Evitamos duplicar el número oficial
-     * de centro entre los centros demo.
-     */
+    /* -----------------------------------------------------
+     * Evitar duplicar número oficial
+     * ----------------------------------------------------- */
+
+    const normalizedCode =
+      newCenter.code
+        .trim()
+        .toLowerCase();
+
     const existingCode =
       demo.centers.some(
         (center) =>
           String(center.code)
             .trim()
             .toLowerCase() ===
-          newCenter.code
-            .trim()
-            .toLowerCase()
+          normalizedCode
       );
 
-    /*
-     * Y también entre los centros persistidos.
-     */
     const savedCode =
       Object.values(
         state.centers || {}
@@ -405,9 +382,7 @@ export default function Centers() {
           String(center.code || "")
             .trim()
             .toLowerCase() ===
-          newCenter.code
-            .trim()
-            .toLowerCase()
+          normalizedCode
       );
 
     if (existingCode || savedCode) {
@@ -417,22 +392,21 @@ export default function Centers() {
       return;
     }
 
+    /* -----------------------------------------------------
+     * ID interno
+     * ----------------------------------------------------- */
+
     const id =
       generateCenterId();
 
-    /*
+    /* -----------------------------------------------------
+     * Override persistido
+     *
      * IMPORTANTE:
-     *
-     * Aquí status ya es V1CenterStatus.
-     *
-     * Por tanto no hacemos:
-     *
-     * status: newCenter.status.trim()
-     *
-     * porque trim() devuelve string.
-     *
-     * Conservamos directamente el valor tipado.
-     */
+     * Este objeto contiene exclusivamente propiedades
+     * admitidas por CenterOverride.
+     * ----------------------------------------------------- */
+
     const override: CenterOverride = {
       id,
 
@@ -460,9 +434,6 @@ export default function Centers() {
       stl:
         newCenter.stl,
 
-      framework:
-        newCenter.framework.trim(),
-
       status:
         newCenter.status,
 
@@ -487,15 +458,6 @@ export default function Centers() {
       technicalResponsibleEmail:
         newCenter.technicalResponsibleEmail.trim(),
 
-      contactName:
-        newCenter.contactName.trim(),
-
-      contactEmail:
-        newCenter.contactEmail.trim(),
-
-      contactPhone:
-        newCenter.contactPhone.trim(),
-
       imageUrl:
         newCenter.imageUrl.trim(),
 
@@ -503,13 +465,10 @@ export default function Centers() {
         newCenter.logoUrl.trim(),
     };
 
-    /*
-     * Guardamos el nuevo centro.
-     *
-     * activeItems se inicializa para que la ficha
-     * pueda gestionar posteriormente los elementos
-     * activos/no activos de ese centerId.
-     */
+    /* -----------------------------------------------------
+     * Guardar centro
+     * ----------------------------------------------------- */
+
     const nextState: V1State = {
       ...state,
 
@@ -526,22 +485,29 @@ export default function Centers() {
 
     saveState(nextState);
 
-    /*
-     * Cerramos el formulario y limpiamos.
-     */
-    setShowNewCenter(false);
-    setNewCenter(EMPTY_FORM);
+    /* -----------------------------------------------------
+     * Limpiar formulario
+     * ----------------------------------------------------- */
 
-    /*
-     * Abrimos directamente la ficha del centro.
-     */
+    setShowNewCenter(false);
+    setNewCenter({
+      ...EMPTY_FORM,
+      country:
+        userCountry || "España",
+    });
+
+    /* -----------------------------------------------------
+     * Abrir ficha
+     * ----------------------------------------------------- */
+
     window.location.href =
       `/centers/${encodeURIComponent(id)}`;
   }
 
-  /*
-   * Cabecera ordenable.
-   */
+  /* =======================================================
+   * CABECERA ORDENABLE
+   * ======================================================= */
+
   const th = (
     key: SortKey,
     label: string
@@ -570,6 +536,10 @@ export default function Centers() {
     </th>
   );
 
+  /* =======================================================
+   * RENDER
+   * ======================================================= */
+
   return (
     <div className="space-y-6">
 
@@ -584,6 +554,7 @@ export default function Centers() {
 
               setNewCenter({
                 ...EMPTY_FORM,
+
                 country:
                   userCountry ||
                   "España",
@@ -597,6 +568,10 @@ export default function Centers() {
           </Button>
         }
       />
+
+      {/* ===================================================
+       * FILTROS
+       * =================================================== */}
 
       <Card className="p-4">
 
@@ -652,6 +627,10 @@ export default function Centers() {
 
       </Card>
 
+      {/* ===================================================
+       * TABLA
+       * =================================================== */}
+
       <div className="table-wrap">
 
         <table className="table">
@@ -659,24 +638,37 @@ export default function Centers() {
           <thead>
             <tr>
               {th("code", "Nº")}
-              {th("name", "Centro")}
+
+              {th(
+                "name",
+                "Centro"
+              )}
+
               {th(
                 "shortCode",
                 "Código"
               )}
+
               {th(
                 "country",
                 "País"
               )}
+
               {th(
                 "property",
                 "Propiedad"
               )}
+
               {th(
                 "manager",
                 "Responsable"
               )}
-              {th("stl", "STL")}
+
+              {th(
+                "stl",
+                "STL"
+              )}
+
               {th(
                 "status",
                 "Estado"
@@ -706,6 +698,7 @@ export default function Centers() {
                 </td>
 
                 <td>
+
                   <Link
                     href={`/centers/${encodeURIComponent(
                       c.id
@@ -719,6 +712,7 @@ export default function Centers() {
                       {c.name}
                     </div>
                   </Link>
+
                 </td>
 
                 <td className="font-mono text-xs">
@@ -741,6 +735,7 @@ export default function Centers() {
                 </td>
 
                 <td>
+
                   <Badge
                     tone={
                       c.country ===
@@ -752,12 +747,23 @@ export default function Centers() {
                     {c.stl ||
                       "—"}
                   </Badge>
+
                 </td>
 
                 <td>
-                  <Badge tone="success">
-                    {c.status}
+
+                  <Badge
+                    tone={
+                      c.status ===
+                      "Activo"
+                        ? "success"
+                        : "neutral"
+                    }
+                  >
+                    {c.status ||
+                      "—"}
                   </Badge>
+
                 </td>
 
               </tr>
@@ -766,6 +772,7 @@ export default function Centers() {
 
             {list.length === 0 && (
               <tr>
+
                 <td
                   colSpan={8}
                   className="px-6 py-12 text-center text-sm text-slate-400"
@@ -774,6 +781,7 @@ export default function Centers() {
                   coincidan con la
                   búsqueda.
                 </td>
+
               </tr>
             )}
 
@@ -783,14 +791,24 @@ export default function Centers() {
 
       </div>
 
+      {/* ===================================================
+       * MODAL NUEVO CENTRO
+       * =================================================== */}
+
       {showNewCenter && (
+
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
 
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
 
+            {/* ------------------------------------------------
+             * CABECERA MODAL
+             * ------------------------------------------------ */}
+
             <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-4">
 
               <div>
+
                 <h2 className="text-xl font-bold text-slate-900">
                   Nuevo centro
                 </h2>
@@ -798,6 +816,7 @@ export default function Centers() {
                 <p className="mt-1 text-sm text-slate-500">
                   Introduce todos los datos necesarios para definir el centro.
                 </p>
+
               </div>
 
               <button
@@ -815,13 +834,22 @@ export default function Centers() {
 
             <div className="space-y-6 p-6">
 
+              {/* ------------------------------------------------
+               * ERROR
+               * ------------------------------------------------ */}
+
               {error && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                   {error}
                 </div>
               )}
 
+              {/* =================================================
+               * IDENTIFICACIÓN
+               * ================================================= */}
+
               <section>
+
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
                   Identificación del centro
                 </h3>
@@ -831,7 +859,9 @@ export default function Centers() {
                   <Field
                     label="Nº de centro"
                     required
-                    value={newCenter.code}
+                    value={
+                      newCenter.code
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "code",
@@ -843,7 +873,9 @@ export default function Centers() {
                   <Field
                     label="Nombre del centro"
                     required
-                    value={newCenter.name}
+                    value={
+                      newCenter.name
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "name",
@@ -854,7 +886,9 @@ export default function Centers() {
 
                   <Field
                     label="Código / abreviatura"
-                    value={newCenter.shortCode}
+                    value={
+                      newCenter.shortCode
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "shortCode",
@@ -864,9 +898,15 @@ export default function Centers() {
                   />
 
                 </div>
+
               </section>
 
+              {/* =================================================
+               * LOCALIZACIÓN
+               * ================================================= */}
+
               <section>
+
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
                   Localización
                 </h3>
@@ -874,20 +914,25 @@ export default function Centers() {
                 <div className="grid gap-4 md:grid-cols-3">
 
                   <div>
+
                     <label className="mb-1 block text-sm font-semibold text-slate-700">
                       País *
                     </label>
 
                     <select
-                      value={newCenter.country}
+                      value={
+                        newCenter.country
+                      }
                       onChange={(e) =>
                         updateNewCenter(
                           "country",
-                          e.target.value
+                          e.target
+                            .value as V1Country
                         )
                       }
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
                     >
+
                       <option value="España">
                         España
                       </option>
@@ -895,12 +940,16 @@ export default function Centers() {
                       <option value="Portugal">
                         Portugal
                       </option>
+
                     </select>
+
                   </div>
 
                   <Field
                     label="Ciudad"
-                    value={newCenter.city}
+                    value={
+                      newCenter.city
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "city",
@@ -911,7 +960,9 @@ export default function Centers() {
 
                   <Field
                     label="Provincia"
-                    value={newCenter.province}
+                    value={
+                      newCenter.province
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "province",
@@ -921,9 +972,12 @@ export default function Centers() {
                   />
 
                   <div className="md:col-span-3">
+
                     <Field
                       label="Dirección"
-                      value={newCenter.address}
+                      value={
+                        newCenter.address
+                      }
                       onChange={(value) =>
                         updateNewCenter(
                           "address",
@@ -931,12 +985,19 @@ export default function Centers() {
                         )
                       }
                     />
+
                   </div>
 
                 </div>
+
               </section>
 
+              {/* =================================================
+               * DATOS DE GESTIÓN
+               * ================================================= */}
+
               <section>
+
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
                   Datos de gestión
                 </h3>
@@ -945,7 +1006,9 @@ export default function Centers() {
 
                   <Field
                     label="Propiedad"
-                    value={newCenter.property}
+                    value={
+                      newCenter.property
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "property",
@@ -954,22 +1017,30 @@ export default function Centers() {
                     }
                   />
 
+                  {/* STL */}
+
                   <div>
+
                     <label className="mb-1 block text-sm font-semibold text-slate-700">
                       STL *
                     </label>
 
                     <select
-                      value={newCenter.stl}
+                      value={
+                        newCenter.stl
+                      }
                       onChange={(e) =>
-                        updateNewCenterSTL(
-                          e.target.value as
+                        updateNewCenter(
+                          "stl",
+                          e.target
+                            .value as
                             | V1STL
                             | ""
                         )
                       }
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
                     >
+
                       <option value="">
                         Seleccionar STL
                       </option>
@@ -984,35 +1055,34 @@ export default function Centers() {
                           </option>
                         )
                       )}
+
                     </select>
+
                   </div>
 
-                  <Field
-                    label="Framework"
-                    value={newCenter.framework}
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "framework",
-                        value
-                      )
-                    }
-                  />
+                  {/* ESTADO */}
 
                   <div>
+
                     <label className="mb-1 block text-sm font-semibold text-slate-700">
                       Estado
                     </label>
 
                     <select
-                      value={newCenter.status}
+                      value={
+                        newCenter.status
+                      }
                       onChange={(e) =>
-                        updateNewCenterStatus(
-                          e.target.value as V1CenterStatus
+                        updateNewCenter(
+                          "status",
+                          e.target
+                            .value as V1CenterStatus
                         )
                       }
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
                     >
-                      {CENTER_STATUS_OPTIONS.map(
+
+                      {STATUS_OPTIONS.map(
                         (status) => (
                           <option
                             key={status}
@@ -1022,13 +1092,21 @@ export default function Centers() {
                           </option>
                         )
                       )}
+
                     </select>
+
                   </div>
 
                 </div>
+
               </section>
 
+              {/* =================================================
+               * RESPONSABLE DE GESTIÓN
+               * ================================================= */}
+
               <section>
+
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
                   Responsable de gestión
                 </h3>
@@ -1037,7 +1115,9 @@ export default function Centers() {
 
                   <Field
                     label="Responsable"
-                    value={newCenter.manager}
+                    value={
+                      newCenter.manager
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "manager",
@@ -1048,7 +1128,9 @@ export default function Centers() {
 
                   <Field
                     label="Teléfono"
-                    value={newCenter.managerPhone}
+                    value={
+                      newCenter.managerPhone
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "managerPhone",
@@ -1060,7 +1142,9 @@ export default function Centers() {
                   <Field
                     label="Email"
                     type="email"
-                    value={newCenter.managerEmail}
+                    value={
+                      newCenter.managerEmail
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "managerEmail",
@@ -1070,9 +1154,15 @@ export default function Centers() {
                   />
 
                 </div>
+
               </section>
 
+              {/* =================================================
+               * RESPONSABLE TÉCNICO
+               * ================================================= */}
+
               <section>
+
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
                   Responsable técnico
                 </h3>
@@ -1120,53 +1210,15 @@ export default function Centers() {
                   />
 
                 </div>
+
               </section>
 
-              <section>
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Contacto
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-3">
-
-                  <Field
-                    label="Nombre de contacto"
-                    value={newCenter.contactName}
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "contactName",
-                        value
-                      )
-                    }
-                  />
-
-                  <Field
-                    label="Teléfono"
-                    value={newCenter.contactPhone}
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "contactPhone",
-                        value
-                      )
-                    }
-                  />
-
-                  <Field
-                    label="Email"
-                    type="email"
-                    value={newCenter.contactEmail}
-                    onChange={(value) =>
-                      updateNewCenter(
-                        "contactEmail",
-                        value
-                      )
-                    }
-                  />
-
-                </div>
-              </section>
+              {/* =================================================
+               * IMAGEN Y LOGOTIPO
+               * ================================================= */}
 
               <section>
+
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
                   Imagen y logotipo
                 </h3>
@@ -1175,7 +1227,9 @@ export default function Centers() {
 
                   <Field
                     label="URL de imagen"
-                    value={newCenter.imageUrl}
+                    value={
+                      newCenter.imageUrl
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "imageUrl",
@@ -1186,7 +1240,9 @@ export default function Centers() {
 
                   <Field
                     label="URL de logotipo"
-                    value={newCenter.logoUrl}
+                    value={
+                      newCenter.logoUrl
+                    }
                     onChange={(value) =>
                       updateNewCenter(
                         "logoUrl",
@@ -1196,9 +1252,14 @@ export default function Centers() {
                   />
 
                 </div>
+
               </section>
 
             </div>
+
+            {/* =================================================
+             * BOTONES
+             * ================================================= */}
 
             <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t bg-white px-6 py-4">
 
@@ -1213,7 +1274,9 @@ export default function Centers() {
 
               <Button
                 type="button"
-                onClick={createCenter}
+                onClick={
+                  createCenter
+                }
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Crear centro
@@ -1231,7 +1294,7 @@ export default function Centers() {
 }
 
 /* =========================================================
- * COMPONENTE CAMPO
+ * COMPONENTE FIELD
  * ========================================================= */
 
 function Field({
@@ -1243,13 +1306,17 @@ function Field({
 }: {
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (
+    value: string
+  ) => void;
   required?: boolean;
   type?: string;
 }) {
   return (
     <div>
+
       <label className="mb-1 block text-sm font-semibold text-slate-700">
+
         {label}
 
         {required && (
@@ -1257,6 +1324,7 @@ function Field({
             *
           </span>
         )}
+
       </label>
 
       <input
@@ -1269,6 +1337,7 @@ function Field({
         }
         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
       />
+
     </div>
   );
 }
