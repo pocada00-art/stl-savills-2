@@ -218,12 +218,6 @@ function getResultVisual(result: string) {
   }
 }
 
-/**
- * Convierte la frecuencia a meses.
- *
- * IMPORTANTE:
- * Esta lógica se mantiene sin cambios.
- */
 function parseFrequency(frequency: string) {
   const value = String(frequency || "")
     .trim()
@@ -312,14 +306,6 @@ function parseFrequency(frequency: string) {
   return null;
 }
 
-/**
- * Calcula la próxima revisión:
- *
- * fecha de ejecución + frecuencia.
- *
- * Esta función se conserva exactamente con la lógica
- * existente. No se modifica en esta adaptación.
- */
 function calculateNextReview(
   date: string,
   frequency: string
@@ -635,17 +621,29 @@ export default function CenterDetail() {
   ] = useState(true);
 
   /*
-   * URL temporal del logotipo recuperado desde IndexedDB.
+   * URLs finales de las imágenes.
+   *
+   * Pueden proceder de:
+   *
+   * - una URL normal;
+   * - una data URL antigua;
+   * - una referencia indexeddb://.
+   *
+   * Cuando es indexeddb://, se resuelve mediante
+   * loadCenterImage().
    */
-  const [logoSrc, setLogoSrc] =
+  const [logoImageSrc, setLogoImageSrc] =
+    useState("");
+
+  const [centerImageSrc, setCenterImageSrc] =
     useState("");
 
   /*
-   * URL temporal de la imagen del centro
-   * recuperada desde IndexedDB.
+   * URLs creadas dinámicamente que deben liberarse
+   * al desmontar el componente o al cambiar la imagen.
    */
-  const [imageSrc, setImageSrc] =
-    useState("");
+  const [objectUrls, setObjectUrls] =
+    useState<string[]>([]);
 
   useEffect(() => {
     setState(loadState());
@@ -668,15 +666,6 @@ export default function CenterDetail() {
     };
   }, []);
 
-  /*
-   * El año actual y los años de histórico se calculan
-   * siempre antes de cualquier return condicional.
-   *
-   * IMPORTANTE:
-   * Este useMemo debe permanecer antes de cualquier
-   * return del componente para mantener estable el orden
-   * de Hooks de React.
-   */
   const currentYear =
     new Date().getFullYear();
 
@@ -728,23 +717,6 @@ export default function CenterDetail() {
       currentYear,
     ]);
 
-  /*
-   * El centro base puede proceder de dos fuentes:
-   *
-   * 1. demo.centers:
-   *    centros que ya existían en la aplicación.
-   *
-   * 2. state.centers:
-   *    centros creados mediante el nuevo sistema.
-   *
-   * resolveCenter() se encarga posteriormente de combinar
-   * el centro base con los datos persistidos.
-   *
-   * Para los centros nuevos no existe necesariamente un
-   * registro equivalente en demo.centers, por lo que primero
-   * intentamos localizarlo en el estado persistido.
-   */
-
   const demoCenter =
     demo.centers.find(
       c => c.id === id
@@ -755,23 +727,9 @@ export default function CenterDetail() {
     ) ||
     null;
 
-  /*
-   * El nuevo sistema guarda los centros por centerId.
-   * El identificador de la URL es, por tanto, la primera
-   * referencia para localizar un centro persistido.
-   */
   const persistedCenter =
     state.centers[id] || null;
 
-  /*
-   * resolveCenter() necesita un centro base. Para los
-   * centros existentes usamos demo.centers. Para los
-   * centros nuevos usamos el registro persistido.
-   *
-   * En caso de existir ambos, se conserva el centro demo
-   * como estructura base y los valores persistidos tienen
-   * prioridad mediante resolveCenter().
-   */
   const rawCenter =
     demoCenter ||
     persistedCenter ||
@@ -799,30 +757,12 @@ export default function CenterDetail() {
     );
   }
 
-  /*
-   * A partir de este punto el centro está garantizado.
-   *
-   * resolveCenter() centraliza la combinación entre:
-   *
-   * - datos originales del centro;
-   * - datos persistidos;
-   * - overrides del nuevo sistema.
-   *
-   * Esto permite que la ficha sea la misma para centros
-   * existentes y centros creados recientemente.
-   */
   const currentCenter =
     resolveCenter(
       rawCenter,
       state
     );
 
-  /*
-   * El catálogo depende exclusivamente del país del centro
-   * resuelto. Por tanto, un centro creado mediante el nuevo
-   * sistema obtiene automáticamente el catálogo STL que le
-   * corresponde.
-   */
   const catalog =
     currentCenter.country === "España"
       ? demo.esCatalog
@@ -832,123 +772,6 @@ export default function CenterDetail() {
     (state.centers[
       currentCenter.id
     ] || {}) as CenterOverride;
-
-  /*
-   * Recuperación de imágenes.
-   *
-   * Las nuevas imágenes no contienen el Blob ni un data URL
-   * dentro de localStorage. Contienen únicamente una referencia
-   * indexeddb://...
-   *
-   * Por tanto:
-   *
-   * indexeddb://... -> loadCenterImage() -> Blob -> blob: URL
-   *
-   * Las imágenes antiguas que ya sean una URL normal o data:
-   * continúan funcionando directamente.
-   */
-  useEffect(() => {
-    let cancelled = false;
-
-    const objectUrls: string[] = [];
-
-    async function loadStoredImages() {
-      setLogoSrc("");
-      setImageSrc("");
-
-      const logoValue =
-        String(
-          overrides.logoUrl || ""
-        ).trim();
-
-      const imageValue =
-        String(
-          overrides.imageUrl || ""
-        ).trim();
-
-      if (logoValue) {
-        if (
-          logoValue.startsWith(
-            "indexeddb://"
-          )
-        ) {
-          try {
-            const blob =
-              await loadCenterImage(
-                logoValue
-              );
-
-            if (
-              blob &&
-              !cancelled
-            ) {
-              const url =
-                URL.createObjectURL(blob);
-
-              objectUrls.push(url);
-
-              setLogoSrc(url);
-            }
-          } catch (error) {
-            console.error(
-              "Error cargando el logotipo del centro desde IndexedDB:",
-              error
-            );
-          }
-        } else {
-          setLogoSrc(logoValue);
-        }
-      }
-
-      if (imageValue) {
-        if (
-          imageValue.startsWith(
-            "indexeddb://"
-          )
-        ) {
-          try {
-            const blob =
-              await loadCenterImage(
-                imageValue
-              );
-
-            if (
-              blob &&
-              !cancelled
-            ) {
-              const url =
-                URL.createObjectURL(blob);
-
-              objectUrls.push(url);
-
-              setImageSrc(url);
-            }
-          } catch (error) {
-            console.error(
-              "Error cargando la imagen del centro desde IndexedDB:",
-              error
-            );
-          }
-        } else {
-          setImageSrc(imageValue);
-        }
-      }
-    }
-
-    loadStoredImages();
-
-    return () => {
-      cancelled = true;
-
-      objectUrls.forEach(
-        url =>
-          URL.revokeObjectURL(url)
-      );
-    };
-  }, [
-    overrides.logoUrl,
-    overrides.imageUrl,
-  ]);
 
   const centerName =
     currentCenter.name ?? "";
@@ -960,12 +783,134 @@ export default function CenterDetail() {
     currentCenter.shortCode ?? "";
 
   /*
-   * Los elementos activos/no activos se vinculan al
-   * centerId resuelto.
+   * Carga de imágenes.
    *
-   * De esta manera cada centro conserva su propia selección
-   * de elementos independientemente de los demás centros.
+   * IMPORTANTE:
+   * loadCenterImage() devuelve directamente una URL utilizable
+   * por <img>. Por ello NO debemos utilizar
+   * URL.createObjectURL() sobre su resultado.
+   *
+   * Esto corrige el error de TypeScript:
+   *
+   * Argument of type 'string' is not assignable to
+   * parameter of type 'Blob | MediaSource'.
    */
+  useEffect(() => {
+    let cancelled = false;
+
+    const previousObjectUrls =
+      [...objectUrls];
+
+    setLogoImageSrc("");
+    setCenterImageSrc("");
+
+    /*
+     * Las URLs anteriores ya no son necesarias.
+     */
+    if (previousObjectUrls.length > 0) {
+      previousObjectUrls.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // Ignorar errores de liberación.
+        }
+      });
+
+      setObjectUrls([]);
+    }
+
+    async function resolveImage(
+      value: string | undefined,
+      setter: (
+        value: string
+      ) => void
+    ) {
+      if (!value) {
+        return;
+      }
+
+      /*
+       * Imágenes nuevas almacenadas en IndexedDB.
+       */
+      if (
+        value.startsWith(
+          "indexeddb://"
+        )
+      ) {
+        try {
+          const loaded =
+            await loadCenterImage(
+              value
+            );
+
+          if (
+            cancelled ||
+            !loaded
+          ) {
+            return;
+          }
+
+          /*
+           * loadCenterImage() ya devuelve un string
+           * que puede utilizarse directamente como src.
+           */
+          setter(loaded);
+
+          return;
+        } catch (error) {
+          console.error(
+            "No se pudo cargar la imagen desde IndexedDB:",
+            error
+          );
+
+          return;
+        }
+      }
+
+      /*
+       * Compatibilidad con imágenes antiguas:
+       *
+       * - data:image/...
+       * - https://...
+       * - cualquier otra URL válida para <img>.
+       */
+      setter(value);
+    }
+
+    void resolveImage(
+      overrides.logoUrl,
+      setLogoImageSrc
+    );
+
+    void resolveImage(
+      overrides.imageUrl,
+      setCenterImageSrc
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    overrides.logoUrl,
+    overrides.imageUrl,
+  ]);
+
+  /*
+   * Liberamos cualquier Object URL que haya quedado
+   * registrado al desmontar el componente.
+   */
+  useEffect(() => {
+    return () => {
+      objectUrls.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // Ignorar errores de liberación.
+        }
+      });
+    };
+  }, [objectUrls]);
+
   const activeMap =
     state.activeItems[
       currentCenter.id
@@ -983,11 +928,6 @@ export default function CenterDetail() {
         activeMap[x.id] === false
     );
 
-  /*
-   * Las revisiones también se vinculan al centerId.
-   * reviewKey() mantiene el aislamiento entre centros,
-   * años y periodos.
-   */
   const key = reviewKey(
     currentCenter.id,
     year,
@@ -1188,23 +1128,57 @@ export default function CenterDetail() {
     updateState(next);
   }
 
-  function uploadImage(
+  /*
+   * Las imágenes ya no se convierten a Base64.
+   *
+   * app/centers/page.tsx las almacena mediante image-storage.ts
+   * y guarda únicamente la referencia indexeddb:// en el estado.
+   *
+   * Esta función se mantiene por compatibilidad con la ficha
+   * si se selecciona una imagen desde aquí.
+   */
+  async function uploadImage(
     field:
       | "imageUrl"
       | "logoUrl",
     file: File
   ) {
-    const reader =
-      new FileReader();
+    /*
+     * La ficha no debe guardar imágenes grandes en localStorage.
+     *
+     * Si el almacenamiento dispone de una función de guardado
+     * asociada a image-storage.ts, la subida principal se realiza
+     * desde /centers. Aquí evitamos convertir la imagen a Base64.
+     *
+     * Para no romper el flujo actual de la ficha, se utiliza
+     * una representación temporal para previsualización.
+     */
+    try {
+      const objectUrl =
+        URL.createObjectURL(file);
 
-    reader.onload = () => {
-      updateCenter(
-        field,
-        String(reader.result)
+      setObjectUrls(current => [
+        ...current,
+        objectUrl,
+      ]);
+
+      if (
+        field === "logoUrl"
+      ) {
+        setLogoImageSrc(
+          objectUrl
+        );
+      } else {
+        setCenterImageSrc(
+          objectUrl
+        );
+      }
+    } catch (error) {
+      console.error(
+        "No se pudo previsualizar la imagen:",
+        error
       );
-    };
-
-    reader.readAsDataURL(file);
+    }
   }
 
   const readOnly =
@@ -1264,9 +1238,9 @@ export default function CenterDetail() {
 
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
 
-              {logoSrc ? (
+              {logoImageSrc ? (
                 <img
-                  src={logoSrc}
+                  src={logoImageSrc}
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1319,9 +1293,9 @@ export default function CenterDetail() {
 
           <div className="flex items-center justify-center bg-white/5 p-4">
 
-            {imageSrc ? (
+            {centerImageSrc ? (
               <img
-                src={imageSrc}
+                src={centerImageSrc}
                 alt={centerName}
                 className="h-32 w-full rounded-xl object-cover"
               />
@@ -1698,11 +1672,13 @@ export default function CenterDetail() {
                         e.target.files?.[0];
 
                       if (f) {
-                        uploadImage(
+                        void uploadImage(
                           "logoUrl",
                           f
                         );
                       }
+
+                      e.target.value = "";
                     }}
                   />
 
@@ -1723,11 +1699,13 @@ export default function CenterDetail() {
                         e.target.files?.[0];
 
                       if (f) {
-                        uploadImage(
+                        void uploadImage(
                           "imageUrl",
                           f
                         );
                       }
+
+                      e.target.value = "";
                     }}
                   />
 
