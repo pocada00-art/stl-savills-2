@@ -68,6 +68,27 @@ export type ReviewState = {
  * ========================================================= */
 
 /**
+ * Países disponibles para los centros.
+ */
+export type V1Country =
+  | "España"
+  | "Portugal";
+
+/**
+ * Versiones STL disponibles.
+ */
+export type V1STL =
+  | "STL_ES_2026_V1"
+  | "STL_PT_2026_V1";
+
+/**
+ * Estados disponibles para un centro.
+ */
+export type V1CenterStatus =
+  | "Activo"
+  | "Inactivo";
+
+/**
  * Datos modificables de un centro.
  *
  * Estos campos representan únicamente los cambios
@@ -76,37 +97,64 @@ export type ReviewState = {
  *
  * Los campos son opcionales porque state.centers[id]
  * solo almacena aquello que haya sido modificado.
+ *
+ * Se han eliminado expresamente:
+ *
+ * - framework
+ * - contactName
+ * - contactEmail
+ * - contactPhone
  */
 export type CenterOverride = {
   id?: string;
 
+  /*
+   * Identificación del centro.
+   */
   name?: string;
   code?: string;
   shortCode?: string;
 
+  /*
+   * Ubicación y clasificación.
+   */
+  country?: V1Country;
   address?: string;
-  country?: string;
   city?: string;
   province?: string;
 
-  stl?: string;
-  framework?: string;
-  status?: string;
-
+  /*
+   * Propiedad.
+   */
   property?: string | null;
 
+  /*
+   * Versión del STL.
+   */
+  stl?: V1STL;
+
+  /*
+   * Estado del centro.
+   */
+  status?: V1CenterStatus;
+
+  /*
+   * Responsable.
+   */
   manager?: string | null;
   managerPhone?: string;
   managerEmail?: string;
 
+  /*
+   * Responsable técnico.
+   */
   technicalResponsible?: string;
   technicalResponsiblePhone?: string;
   technicalResponsibleEmail?: string;
 
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-
+  /*
+   * Recursos gráficos.
+   */
   imageUrl?: string;
   logoUrl?: string;
 };
@@ -124,41 +172,56 @@ export type CenterOverride = {
 export type ResolvedCenter = {
   id: string;
 
+  /*
+   * Identificación.
+   */
   name: string;
   code: string;
   shortCode?: string;
 
+  /*
+   * Ubicación y clasificación.
+   */
+  country: V1Country;
   address?: string;
-  country: string;
+  city?: string;
+  province?: string;
 
-  stl: string;
-  framework?: string;
-  status: string;
-
+  /*
+   * Propiedad.
+   */
   property?: string | null;
 
+  /*
+   * STL.
+   */
+  stl: V1STL;
+
+  /*
+   * Estado.
+   */
+  status: V1CenterStatus;
+
+  /*
+   * Responsable.
+   */
   manager?: string | null;
   managerPhone?: string;
   managerEmail?: string;
 
+  /*
+   * Responsable técnico.
+   */
   technicalResponsible?: string;
   technicalResponsiblePhone?: string;
   technicalResponsibleEmail?: string;
 
-  contactName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-
-  city?: string;
-  province?: string;
-
+  /*
+   * Recursos gráficos.
+   */
   imageUrl?: string;
   logoUrl?: string;
 };
-
-export type V1Country =
-  | "España"
-  | "Portugal";
 
 /* =========================================================
  * ESTADO GLOBAL V1
@@ -237,8 +300,10 @@ export const CURRENT_PERIOD: Period =
  *
  * El ID interno nunca se modifica.
  *
- * El código/número del centro procede del dato original
- * salvo que exista explícitamente un override guardado.
+ * El número de centro NO se genera.
+ * Se conserva el número oficial existente en los
+ * datos originales salvo que el usuario lo modifique
+ * explícitamente mediante un override.
  *
  * Esta función debe ser utilizada por las distintas
  * pantallas de la aplicación que necesiten mostrar
@@ -264,7 +329,7 @@ export function resolveCenter<
     id: center.id,
 
     /*
-     * El nombre sí puede ser modificado.
+     * Nombre del centro.
      */
     name:
       overrides.name !== undefined
@@ -272,8 +337,9 @@ export function resolveCenter<
         : String(center.name ?? ""),
 
     /*
-     * El número de centro es el oficial,
-     * salvo que exista un override explícito.
+     * Número oficial del centro.
+     *
+     * No se genera ningún número correlativo.
      */
     code:
       overrides.code !== undefined
@@ -281,7 +347,7 @@ export function resolveCenter<
         : String(center.code ?? ""),
 
     /*
-     * Código corto / abreviatura.
+     * Código / abreviatura.
      */
     shortCode:
       overrides.shortCode !== undefined
@@ -290,27 +356,35 @@ export function resolveCenter<
 
     /*
      * País.
+     *
+     * Solo se contemplan los valores definidos
+     * por V1Country.
      */
     country:
       overrides.country !== undefined
-        ? String(overrides.country)
-        : String(center.country ?? ""),
+        ? overrides.country
+        : (center.country as V1Country),
 
     /*
      * STL.
+     *
+     * Solo se contemplan las versiones definidas
+     * por V1STL.
      */
     stl:
       overrides.stl !== undefined
-        ? String(overrides.stl)
-        : String(center.stl ?? ""),
+        ? overrides.stl
+        : (center.stl as V1STL),
 
     /*
-     * Estado.
+     * Estado del centro.
+     *
+     * Solo se contemplan Activo e Inactivo.
      */
     status:
       overrides.status !== undefined
-        ? String(overrides.status)
-        : String(center.status ?? ""),
+        ? overrides.status
+        : (center.status as V1CenterStatus),
   } as T & ResolvedCenter;
 }
 
