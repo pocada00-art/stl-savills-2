@@ -26,14 +26,11 @@ import {
 } from "@/lib/v1-state";
 
 /**
- * Abreviaturas para los nombres de los elementos de la matriz.
- *
- * Se intenta mantener un texto corto y fácilmente identificable,
- * ya que los nombres aparecen en vertical en las cabeceras.
+ * Abreviación de los nombres de las instalaciones
+ * para las cabeceras verticales de la matriz.
  */
 function getShortItemName(item: any): string {
   const name = String(item.installation || "").trim();
-
   const normalized = name.toLowerCase();
 
   if (
@@ -107,18 +104,81 @@ function getShortItemName(item: any): string {
   return name;
 }
 
+/**
+ * Convierte una fecha a MM/AA.
+ *
+ * Ejemplo:
+ * 15/01/2026 -> 01/26
+ *
+ * Admite también fechas ISO:
+ * 2026-01-15 -> 01/26
+ */
+function formatShortDate(date: string | undefined): string {
+  if (!date) {
+    return "";
+  }
+
+  const value = String(date).trim();
+
+  if (!value) {
+    return "";
+  }
+
+  const isoMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})/
+  );
+
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const month = isoMatch[2];
+
+    return `${month}/${year.slice(-2)}`;
+  }
+
+  const spanishMatch = value.match(
+    /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/
+  );
+
+  if (spanishMatch) {
+    const month = spanishMatch[2].padStart(2, "0");
+    const year = spanishMatch[3];
+
+    return `${month}/${year.slice(-2)}`;
+  }
+
+  const yearMonthMatch = value.match(
+    /^(\d{4})[\/.-](\d{1,2})$/
+  );
+
+  if (yearMonthMatch) {
+    const year = yearMonthMatch[1];
+    const month = yearMonthMatch[2].padStart(2, "0");
+
+    return `${month}/${year.slice(-2)}`;
+  }
+
+  return "";
+}
+
 export default function Inspections() {
   const [country, setCountry] = useState("España");
   const [q, setQ] = useState("");
-  const [period, setPeriod] = useState<Period>("S2");
+  const [period, setPeriod] =
+    useState<Period>("S2");
   const [year, setYear] = useState(2026);
-  const [mode, setMode] = useState<"summary" | "matrix">("summary");
+  const [mode, setMode] = useState<
+    "summary" | "matrix"
+  >("summary");
 
   /**
-   * Estas opciones pertenecen exclusivamente a la vista Matriz.
+   * Estos controles solamente aparecen
+   * y funcionan en la vista Matriz.
    */
-  const [showLast, setShowLast] = useState(false);
-  const [showNext, setShowNext] = useState(false);
+  const [showLast, setShowLast] =
+    useState(false);
+
+  const [showNext, setShowNext] =
+    useState(false);
 
   const [state, setState] = useState(loadState());
 
@@ -141,14 +201,17 @@ export default function Inspections() {
     () =>
       centers
         .filter((c) =>
-          `${c.name} ${c.code} ${c.shortCode || ""}`
+          `${c.name} ${c.code} ${
+            c.shortCode || ""
+          }`
             .toLowerCase()
             .includes(q.toLowerCase())
         )
         .map((c) => {
           const active = catalog.filter(
             (x: any) =>
-              state.activeItems[c.id]?.[x.id] !== false
+              state.activeItems[c.id]?.[x.id] !==
+              false
           );
 
           const review =
@@ -178,16 +241,23 @@ export default function Inspections() {
     ]
   );
 
-  /**
-   * El catálogo completo se utiliza en la matriz.
-   */
   const shortItems = catalog;
 
   /**
-   * Imprime la página actual.
+   * Imprime la vista actual.
    */
   const handlePrint = () => {
     window.print();
+  };
+
+  /**
+   * Cambiar de vista no modifica el estado
+   * de los filtros de la matriz.
+   */
+  const handleModeChange = (
+    newMode: "summary" | "matrix"
+  ) => {
+    setMode(newMode);
   };
 
   return (
@@ -204,7 +274,9 @@ export default function Inspections() {
 
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) =>
+                setQ(e.target.value)
+              }
               placeholder="Buscar centro..."
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
             />
@@ -220,7 +292,9 @@ export default function Inspections() {
 
           <Select
             value={String(year)}
-            onChange={(v) => setYear(Number(v))}
+            onChange={(v) =>
+              setYear(Number(v))
+            }
           >
             <option>2026</option>
             <option>2027</option>
@@ -243,7 +317,9 @@ export default function Inspections() {
                 ? "primary"
                 : "secondary"
             }
-            onClick={() => setMode("summary")}
+            onClick={() =>
+              handleModeChange("summary")
+            }
           >
             <List className="mr-2 inline h-4 w-4" />
             Resumen
@@ -255,7 +331,9 @@ export default function Inspections() {
                 ? "primary"
                 : "secondary"
             }
-            onClick={() => setMode("matrix")}
+            onClick={() =>
+              handleModeChange("matrix")
+            }
           >
             <LayoutGrid className="mr-2 inline h-4 w-4" />
             Matriz
@@ -272,24 +350,28 @@ export default function Inspections() {
 
         {mode === "matrix" && (
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
-            <label>
+            <label className="cursor-pointer">
               <input
                 type="checkbox"
                 checked={showLast}
                 onChange={(e) =>
-                  setShowLast(e.target.checked)
+                  setShowLast(
+                    e.target.checked
+                  )
                 }
                 className="mr-1"
               />
               Última revisión
             </label>
 
-            <label>
+            <label className="cursor-pointer">
               <input
                 type="checkbox"
                 checked={showNext}
                 onChange={(e) =>
-                  setShowNext(e.target.checked)
+                  setShowNext(
+                    e.target.checked
+                  )
                 }
                 className="mr-1"
               />
@@ -386,7 +468,8 @@ export default function Inspections() {
 
                     <td>
                       {r.summary
-                        .pendingConfirmation === 0 ? (
+                        .pendingConfirmation ===
+                      0 ? (
                         <Badge tone="success">
                           Completa
                         </Badge>
@@ -412,47 +495,129 @@ export default function Inspections() {
             <ArrowUpDown className="h-4 w-4" />
 
             <span>
-              Matriz horizontal. Pulsa una celda para
-              abrir la ficha del centro.
+              Matriz horizontal. Pulsa una celda
+              para abrir la ficha del centro.
             </span>
           </div>
 
           <div className="overflow-auto rounded-xl border border-slate-200">
-            <table className="min-w-max text-xs">
+            <table className="min-w-max border-collapse text-xs">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="sticky left-0 z-10 min-w-52 bg-slate-50 px-3 py-3 text-left">
-                    Centro
+                  {/*
+                   * CENTROS:
+                   * - columna extremadamente estrecha
+                   * - texto vertical
+                   * - centrado horizontalmente
+                   * - alineado en la parte inferior
+                   */}
+                  <th
+                    className="sticky left-0 z-20 w-10 min-w-10 max-w-10 bg-slate-50 p-0"
+                    style={{
+                      width: "40px",
+                      minWidth: "40px",
+                      maxWidth: "40px",
+                    }}
+                  >
+                    <div
+                      className="flex h-40 w-full items-end justify-center pb-2"
+                    >
+                      <span
+                        className="whitespace-nowrap font-bold text-slate-700"
+                        style={{
+                          writingMode:
+                            "vertical-rl",
+                          transform:
+                            "rotate(180deg)",
+                          textAlign: "left",
+                        }}
+                      >
+                        CENTROS
+                      </span>
+                    </div>
                   </th>
 
-                  {shortItems.map((x: any) => (
-                    <th
-                      key={x.id}
-                      className="min-w-20 px-2 py-3 align-bottom"
-                    >
-                      <div
-                        className="flex h-36 items-end justify-start"
+                  {shortItems.map((x: any) => {
+                    const shortName =
+                      getShortItemName(x);
+
+                    return (
+                      <th
+                        key={x.id}
+                        className="w-12 min-w-12 max-w-12 bg-slate-50 p-0 align-bottom"
+                        style={{
+                          width: "48px",
+                          minWidth: "48px",
+                          maxWidth: "48px",
+                        }}
                         title={x.installation}
                       >
-                        <span
-                          className="whitespace-nowrap text-left"
-                          style={{
-                            writingMode:
-                              "vertical-rl",
-                            transform:
-                              "rotate(180deg)",
-                            textAlign: "left",
-                          }}
-                        >
-                          {getShortItemName(x)}
-                        </span>
-                      </div>
+                        <div className="flex h-40 w-full flex-col items-center justify-end pb-1">
+                          {/*
+                           * Nombre del elemento:
+                           * vertical, centrado y empezando
+                           * desde la parte inferior.
+                           */}
+                          <div
+                            className="flex items-end justify-center"
+                            style={{
+                              height: "110px",
+                            }}
+                          >
+                            <span
+                              className="whitespace-nowrap font-semibold text-slate-700"
+                              style={{
+                                writingMode:
+                                  "vertical-rl",
+                                transform:
+                                  "rotate(180deg)",
+                                textAlign:
+                                  "left",
+                              }}
+                            >
+                              {shortName}
+                            </span>
+                          </div>
 
-                      <div className="mt-2 text-left font-normal text-slate-400">
-                        {x.code}
-                      </div>
-                    </th>
-                  ))}
+                          {/*
+                           * Código del elemento.
+                           */}
+                          <div className="mt-1 text-center text-[9px] leading-none text-slate-400">
+                            {x.code}
+                          </div>
+
+                          {/*
+                           * Última revisión:
+                           * se muestra solamente si la
+                           * casilla está activada.
+                           */}
+                          {showLast && (
+                            <div className="mt-1 whitespace-nowrap text-center text-[8px] font-medium leading-none text-slate-500">
+                              {formatShortDate(
+                                undefined
+                              ) || ""}
+                            </div>
+                          )}
+
+                          {/*
+                           * Próxima revisión:
+                           * se muestra solamente si la
+                           * casilla está activada.
+                           *
+                           * Las fechas reales se muestran
+                           * en las celdas de cada centro,
+                           * donde existe la información
+                           * concreta de la revisión.
+                           */}
+                          {showNext && (
+                            <div className="mt-1 whitespace-nowrap text-center text-[8px] font-medium leading-none text-slate-500">
+                              {""}
+                            </div>
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
 
@@ -462,15 +627,30 @@ export default function Inspections() {
                     key={r.c.id}
                     className="border-t border-slate-100"
                   >
-                    <td className="sticky left-0 z-10 bg-white px-3 py-3">
+                    {/*
+                     * Primera columna:
+                     * mismo ancho reducido que el
+                     * encabezado CENTROS.
+                     */}
+                    <td
+                      className="sticky left-0 z-10 bg-white p-1"
+                      style={{
+                        width: "40px",
+                        minWidth: "40px",
+                        maxWidth: "40px",
+                      }}
+                    >
                       <Link
                         href={`/centers/${r.c.id}`}
-                        className="font-bold"
+                        className="block truncate font-bold"
+                        title={r.c.name}
                       >
-                        {r.c.name}
+                        {r.c.shortCode ||
+                          r.c.code ||
+                          r.c.name}
                       </Link>
 
-                      <div className="text-xs text-slate-400">
+                      <div className="text-[9px] text-slate-400">
                         {r.summary.score}%
                       </div>
                     </td>
@@ -485,41 +665,86 @@ export default function Inspections() {
                           r.c.id
                         ]?.[x.id] !== false;
 
+                      const lastDate =
+                        formatShortDate(
+                          item.date
+                        );
+
+                      const nextDate =
+                        formatShortDate(
+                          item.secondReviewDate
+                        );
+
                       return (
                         <td
                           key={x.id}
-                          className="px-2 py-2 text-center"
+                          className="w-12 min-w-12 max-w-12 px-1 py-1 text-center align-middle"
+                          style={{
+                            width: "48px",
+                            minWidth: "48px",
+                            maxWidth: "48px",
+                          }}
                         >
                           {!active ? (
                             <span className="text-slate-300">
                               —
                             </span>
                           ) : (
-                            <span
-                              className={`inline-flex rounded-full px-2 py-1 font-bold ${
-                                item.status ===
+                            <div className="flex min-h-[38px] flex-col items-center justify-center">
+                              {/*
+                               * Estado de la revisión.
+                               */}
+                              <span
+                                className={`inline-flex rounded-full px-1.5 py-1 text-[10px] font-bold ${
+                                  item.status ===
+                                  "APTO"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : item.status ===
+                                      "APTO CONDICIONADO"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : item.status ===
+                                      "NO APTO"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-slate-100 text-slate-500"
+                                }`}
+                              >
+                                {item.status ===
                                 "APTO"
-                                  ? "bg-emerald-100 text-emerald-700"
+                                  ? "A"
                                   : item.status ===
                                     "APTO CONDICIONADO"
-                                  ? "bg-amber-100 text-amber-700"
+                                  ? "C"
                                   : item.status ===
                                     "NO APTO"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {item.status ===
-                              "APTO"
-                                ? "A"
-                                : item.status ===
-                                  "APTO CONDICIONADO"
-                                ? "C"
-                                : item.status ===
-                                  "NO APTO"
-                                ? "N"
-                                : "P"}
-                            </span>
+                                  ? "N"
+                                  : "P"}
+                              </span>
+
+                              {/*
+                               * Última revisión.
+                               *
+                               * Se recupera de item.date
+                               * y se muestra como MM/AA.
+                               */}
+                              {showLast && (
+                                <span className="mt-1 whitespace-nowrap text-[8px] font-medium leading-none text-slate-500">
+                                  {lastDate || "—"}
+                                </span>
+                              )}
+
+                              {/*
+                               * Próxima revisión.
+                               *
+                               * Se recupera de
+                               * item.secondReviewDate
+                               * y se muestra como MM/AA.
+                               */}
+                              {showNext && (
+                                <span className="mt-1 whitespace-nowrap text-[8px] font-medium leading-none text-slate-500">
+                                  {nextDate || "—"}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                       );
