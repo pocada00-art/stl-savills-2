@@ -81,6 +81,10 @@ export type V1CenterStatus =
  * Datos modificables de un centro.
  *
  * También se utiliza para almacenar centros nuevos.
+ *
+ * La propiedad "id" identifica siempre el centro
+ * internamente y no debe utilizarse para cambiar el
+ * identificador de un centro existente.
  */
 export type CenterOverride = {
   id?: string;
@@ -114,6 +118,11 @@ export type CenterOverride = {
 
 /**
  * Centro resuelto utilizado por las distintas vistas.
+ *
+ * Es el resultado final después de combinar:
+ *
+ * 1. Los datos originales de demo.centers.
+ * 2. Los datos modificados almacenados en state.centers.
  */
 export type ResolvedCenter = {
   id: string;
@@ -176,6 +185,14 @@ export type V1State = {
 
   /**
    * Revisiones históricas.
+   *
+   * La clave tiene el formato:
+   *
+   * centroId:año:periodo
+   *
+   * Ejemplo:
+   *
+   * centro-001:2026:S2
    */
   reviews: Record<
     string,
@@ -206,8 +223,14 @@ export const CURRENT_PERIOD: Period =
  *
  * Puede recibir:
  *
- * - un centro original de demo.centers
+ * - un centro original procedente de demo.centers
  * - un centro nuevo procedente de state.centers
+ *
+ * IMPORTANTE:
+ *
+ * El ID interno del centro original siempre tiene prioridad.
+ * Los overrides nunca pueden cambiar el ID de un centro
+ * existente.
  */
 export function resolveCenter<
   T extends Record<string, any>
@@ -215,130 +238,177 @@ export function resolveCenter<
   center: T,
   state: V1State
 ): T & ResolvedCenter {
+  const centerId =
+    String(
+      center.id ?? ""
+    );
+
   const overrides =
-    (state.centers?.[center.id] ||
-      {}) as CenterOverride;
+    (
+      state.centers?.[
+        centerId
+      ] || {}
+    ) as CenterOverride;
 
   const resolved = {
     ...center,
     ...overrides,
 
     /*
-     * El ID interno nunca cambia.
+     * El ID interno es inmutable.
+     *
+     * Aunque un override contenga otro "id",
+     * siempre utilizamos el ID del centro recibido.
      */
-    id: center.id,
+    id: centerId,
 
-    /*
-     * Identificación.
-     */
+    /* -----------------------------------------------------
+     * IDENTIFICACIÓN
+     * ----------------------------------------------------- */
+
     name:
-      overrides.name !== undefined
-        ? String(overrides.name)
-        : String(center.name ?? ""),
+      overrides.name !==
+      undefined
+        ? String(
+            overrides.name
+          )
+        : String(
+            center.name ??
+              ""
+          ),
 
     code:
-      overrides.code !== undefined
-        ? String(overrides.code)
-        : String(center.code ?? ""),
+      overrides.code !==
+      undefined
+        ? String(
+            overrides.code
+          )
+        : String(
+            center.code ??
+              ""
+          ),
 
     shortCode:
-      overrides.shortCode !== undefined
+      overrides.shortCode !==
+      undefined
         ? overrides.shortCode
         : center.shortCode,
 
-    /*
-     * Localización.
-     */
+    /* -----------------------------------------------------
+     * LOCALIZACIÓN
+     * ----------------------------------------------------- */
+
     country:
-      overrides.country !== undefined
+      overrides.country !==
+      undefined
         ? overrides.country
         : (center.country as V1Country),
 
     address:
-      overrides.address !== undefined
+      overrides.address !==
+      undefined
         ? overrides.address
         : center.address,
 
     city:
-      overrides.city !== undefined
+      overrides.city !==
+      undefined
         ? overrides.city
         : center.city,
 
     province:
-      overrides.province !== undefined
+      overrides.province !==
+      undefined
         ? overrides.province
         : center.province,
 
-    /*
-     * Propiedad.
-     */
+    /* -----------------------------------------------------
+     * PROPIEDAD
+     * ----------------------------------------------------- */
+
     property:
-      overrides.property !== undefined
+      overrides.property !==
+      undefined
         ? overrides.property
         : center.property,
 
-    /*
-     * STL.
-     */
+    /* -----------------------------------------------------
+     * STL
+     * ----------------------------------------------------- */
+
     stl:
-      overrides.stl !== undefined
+      overrides.stl !==
+      undefined
         ? overrides.stl
         : (center.stl as V1STL),
 
-    /*
-     * Estado.
-     */
+    /* -----------------------------------------------------
+     * ESTADO
+     * ----------------------------------------------------- */
+
     status:
-      overrides.status !== undefined
+      overrides.status !==
+      undefined
         ? overrides.status
         : (center.status as V1CenterStatus),
 
-    /*
-     * Responsable.
-     */
+    /* -----------------------------------------------------
+     * RESPONSABLE
+     * ----------------------------------------------------- */
+
     manager:
-      overrides.manager !== undefined
+      overrides.manager !==
+      undefined
         ? overrides.manager
         : center.manager,
 
     managerPhone:
-      overrides.managerPhone !== undefined
+      overrides.managerPhone !==
+      undefined
         ? overrides.managerPhone
         : center.managerPhone,
 
     managerEmail:
-      overrides.managerEmail !== undefined
+      overrides.managerEmail !==
+      undefined
         ? overrides.managerEmail
         : center.managerEmail,
 
-    /*
-     * Responsable técnico.
-     */
+    /* -----------------------------------------------------
+     * RESPONSABLE TÉCNICO
+     * ----------------------------------------------------- */
+
     technicalResponsible:
-      overrides.technicalResponsible !== undefined
+      overrides.technicalResponsible !==
+      undefined
         ? overrides.technicalResponsible
         : center.technicalResponsible,
 
     technicalResponsiblePhone:
-      overrides.technicalResponsiblePhone !== undefined
+      overrides.technicalResponsiblePhone !==
+      undefined
         ? overrides.technicalResponsiblePhone
         : center.technicalResponsiblePhone,
 
     technicalResponsibleEmail:
-      overrides.technicalResponsibleEmail !== undefined
+      overrides.technicalResponsibleEmail !==
+      undefined
         ? overrides.technicalResponsibleEmail
         : center.technicalResponsibleEmail,
 
-    /*
-     * Recursos gráficos.
-     */
+    /* -----------------------------------------------------
+     * RECURSOS GRÁFICOS
+     * ----------------------------------------------------- */
+
     imageUrl:
-      overrides.imageUrl !== undefined
+      overrides.imageUrl !==
+      undefined
         ? overrides.imageUrl
         : center.imageUrl,
 
     logoUrl:
-      overrides.logoUrl !== undefined
+      overrides.logoUrl !==
+      undefined
         ? overrides.logoUrl
         : center.logoUrl,
   };
@@ -361,6 +431,10 @@ export function resolveCenter<
  *    en demo.centers.
  *
  * Los centros se identifican siempre por su ID interno.
+ *
+ * Si un centro existe tanto en demo.centers como en
+ * state.centers, se utiliza un único centro y se aplican
+ * sus overrides.
  */
 export function resolveCenters<
   T extends Record<string, any>
@@ -371,30 +445,38 @@ export function resolveCenters<
   /*
    * Mapa único por ID.
    *
-   * Primero introducimos los centros originales.
+   * Primero introducimos todos los centros originales.
    */
   const byId =
     new Map<string, T>();
 
   for (const center of centers) {
     if (
-      center &&
-      typeof center.id ===
+      !center ||
+      typeof center.id !==
         "string"
     ) {
-      byId.set(
-        center.id,
-        center
-      );
+      continue;
     }
+
+    byId.set(
+      center.id,
+      center
+    );
   }
 
   /*
    * Incorporamos los centros persistidos.
    *
-   * Si ya existe el centro en demo, NO creamos otro.
+   * Si el ID ya existe en demo.centers:
    *
-   * Si no existe, significa que es un centro nuevo.
+   *   - NO creamos otro centro.
+   *   - resolveCenter() aplicará posteriormente
+   *     los overrides.
+   *
+   * Si el ID no existe:
+   *
+   *   - se trata de un centro nuevo.
    */
   for (const [
     id,
@@ -411,13 +493,12 @@ export function resolveCenters<
     /*
      * Centro nuevo.
      *
-     * Aquí no podemos afirmar directamente que el objeto
-     * tiene el tipo genérico T, porque T puede contener
-     * campos adicionales.
+     * Construimos una estructura base con los datos
+     * disponibles en CenterOverride.
      *
-     * La conversión mediante unknown es intencionada:
-     * posteriormente resolveCenter() añadirá los campos
-     * necesarios de ResolvedCenter.
+     * Se utiliza unknown antes de convertir a T porque
+     * T puede contener campos adicionales propios del
+     * catálogo original.
      */
     const persistedCenter =
       {
@@ -435,7 +516,8 @@ export function resolveCenters<
           override.shortCode,
 
         country:
-          override.country,
+          override.country ??
+          "España",
 
         address:
           override.address,
@@ -450,10 +532,12 @@ export function resolveCenters<
           override.property,
 
         stl:
-          override.stl,
+          override.stl ??
+          "STL_ES_2026_V1",
 
         status:
-          override.status,
+          override.status ??
+          "Activo",
 
         manager:
           override.manager,
@@ -488,11 +572,19 @@ export function resolveCenters<
 
   /*
    * Todos los centros pasan por el mismo resolver.
+   *
+   * Esto garantiza que:
+   *
+   * - centros originales
+   * - centros modificados
+   * - centros nuevos
+   *
+   * terminan teniendo exactamente la misma estructura.
    */
   return Array.from(
     byId.values()
   ).map(
-    (center) =>
+    center =>
       resolveCenter(
         center,
         state
@@ -512,24 +604,48 @@ export function blankItem(): ItemReview {
     status:
       "SIN INFORMACIÓN",
 
-    date: "",
-    company: "",
+    date:
+      "",
 
-    equipmentId: "",
-    observations: "",
-    comment: "",
-    secondReviewDate: "",
+    company:
+      "",
 
-    apto: false,
-    condicionado: false,
-    noApto: false,
+    equipmentId:
+      "",
 
-    confirmed: false,
+    observations:
+      "",
+
+    comment:
+      "",
+
+    secondReviewDate:
+      "",
+
+    apto:
+      false,
+
+    condicionado:
+      false,
+
+    noApto:
+      false,
+
+    confirmed:
+      false,
   };
 }
 
 /**
  * Genera la clave única de una revisión.
+ *
+ * Formato:
+ *
+ * centroId:año:periodo
+ *
+ * Ejemplo:
+ *
+ * centro-001:2026:S2
  */
 export function reviewKey(
   centerId: string,
@@ -573,6 +689,9 @@ function getEmptyState(): V1State {
  * Carga el estado V1 desde localStorage.
  *
  * En servidor devuelve el estado inicial.
+ *
+ * También normaliza estructuras antiguas o incompletas
+ * para evitar errores cuando se añadan nuevas propiedades.
  */
 export function loadState(): V1State {
   if (
@@ -594,9 +713,6 @@ export function loadState(): V1State {
           raw
         ) as Partial<V1State>;
 
-      /*
-       * Normalizamos estructuras antiguas.
-       */
       return {
         role:
           parsed.role ??
@@ -691,6 +807,9 @@ export function scoreForV1Status(
 
 /**
  * Calcula el resumen de una revisión.
+ *
+ * Solo se tienen en cuenta los elementos activos
+ * recibidos mediante activeIds.
  */
 export function reviewSummary(
   review:
@@ -700,7 +819,7 @@ export function reviewSummary(
 ) {
   const items =
     activeIds.map(
-      (id) =>
+      id =>
         review?.items?.[id] ??
         blankItem()
     );
@@ -708,35 +827,35 @@ export function reviewSummary(
   const counts = {
     APTO:
       items.filter(
-        (item) =>
+        item =>
           item.status ===
           "APTO"
       ).length,
 
     "APTO CONDICIONADO":
       items.filter(
-        (item) =>
+        item =>
           item.status ===
           "APTO CONDICIONADO"
       ).length,
 
     "NO APTO":
       items.filter(
-        (item) =>
+        item =>
           item.status ===
           "NO APTO"
       ).length,
 
     PENDIENTE:
       items.filter(
-        (item) =>
+        item =>
           item.status ===
           "PENDIENTE"
       ).length,
 
     "SIN INFORMACIÓN":
       items.filter(
-        (item) =>
+        item =>
           item.status ===
           "SIN INFORMACIÓN"
       ).length,
@@ -744,13 +863,16 @@ export function reviewSummary(
 
   const confirmed =
     items.filter(
-      (item) =>
+      item =>
         item.confirmed
     ).length;
 
   const points =
     items.reduce(
-      (sum, item) =>
+      (
+        sum,
+        item
+      ) =>
         sum +
         scoreForV1Status(
           item.status
@@ -781,7 +903,8 @@ export function reviewSummary(
     score:
       max
         ? Math.round(
-            (points / max) *
+            (points /
+              max) *
               100
           )
         : 0,
