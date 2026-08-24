@@ -33,10 +33,8 @@ type CenterReviewRow = {
 };
 
 /**
- * Devuelve una fecha en formato MM/AA.
- *
- * Se utiliza únicamente para mostrar las fechas de la matriz.
- * La fecha no se calcula aquí.
+ * Formato compacto de fecha:
+ * 15/01/2026 -> 01/26
  */
 function formatShortDate(value: unknown): string {
   if (!value) return "";
@@ -58,13 +56,9 @@ function formatShortDate(value: unknown): string {
 }
 
 /**
- * Busca la fecha de última revisión ya existente en los datos
- * del centro / elemento.
+ * Obtiene la última revisión ya existente en los datos.
  *
- * IMPORTANTE:
- * No se calcula ninguna fecha aquí.
- * Se intenta localizar únicamente información que ya venga
- * definida en demo-data.json.
+ * No calcula ninguna fecha.
  */
 function getLastReviewDate(center: any, item: any): string {
   const possibleValues = [
@@ -77,22 +71,21 @@ function getLastReviewDate(center: any, item: any): string {
   ];
 
   const value = possibleValues.find(
-    (v) => v !== undefined && v !== null && String(v).trim() !== ""
+    (v) =>
+      v !== undefined &&
+      v !== null &&
+      String(v).trim() !== ""
   );
 
   return value ? String(value) : "";
 }
 
 /**
- * Busca la fecha de próxima revisión ya calculada en los datos
- * del centro / elemento.
+ * Obtiene la próxima revisión YA CALCULADA en los datos.
  *
- * NO utiliza secondReviewDate.
- * NO suma frecuencias.
- * NO realiza ningún cálculo.
- *
- * La responsabilidad de calcular la próxima revisión permanece
- * en el archivo de centros / datos origen.
+ * IMPORTANTE:
+ * No se calcula aquí.
+ * No se utiliza secondReviewDate.
  */
 function getNextReviewDate(center: any, item: any): string {
   const possibleValues = [
@@ -105,42 +98,47 @@ function getNextReviewDate(center: any, item: any): string {
   ];
 
   const value = possibleValues.find(
-    (v) => v !== undefined && v !== null && String(v).trim() !== ""
+    (v) =>
+      v !== undefined &&
+      v !== null &&
+      String(v).trim() !== ""
   );
 
   return value ? String(value) : "";
 }
 
 /**
- * Texto corto para mostrar verticalmente en la cabecera.
+ * Reduce visualmente algunos nombres largos del catálogo.
  *
- * El nombre completo del catálogo se conserva en los datos.
- * Aquí solamente se acorta visualmente para que la matriz sea
- * más compacta.
+ * El dato original NO se modifica.
  */
 function getShortInstallationName(item: any): string {
-  const installation = String(item?.installation || "").trim();
+  const installation = String(
+    item?.installation || ""
+  ).trim();
 
   if (!installation) return "";
 
-  const replacements: Array<[RegExp, string]> = [
-    [/^ascensores?\s+y\s+montacargas?,?\s*/i, "Asc. y mont. "],
-    [/^ascensores?\s+montacargas?,?\s*/i, "Asc. y mont. "],
-    [/^aparatos\s+elevadores?,?\s*/i, ""],
-  ];
-
   let result = installation;
 
-  for (const [pattern, replacement] of replacements) {
-    result = result.replace(pattern, replacement);
-  }
+  result = result.replace(
+    /^ascensores?\s+y\s+montacargas?,?\s*/i,
+    "Asc. y mont. "
+  );
+
+  result = result.replace(
+    /^ascensores?\s+montacargas?,?\s*/i,
+    "Asc. y mont. "
+  );
+
+  result = result.replace(
+    /^aparatos\s+elevadores?,?\s*/i,
+    ""
+  );
 
   return result.trim();
 }
 
-/**
- * Obtiene el identificador del elemento.
- */
 function getItemId(item: any): string {
   return String(item?.id ?? "");
 }
@@ -150,10 +148,12 @@ export default function Inspections() {
   const [q, setQ] = useState("");
   const [period, setPeriod] = useState<Period>("S2");
   const [year, setYear] = useState(2026);
-  const [mode, setMode] = useState<"summary" | "matrix">("summary");
+  const [mode, setMode] = useState<
+    "summary" | "matrix"
+  >("summary");
 
-  /**
-   * Estas dos opciones SOLO existen en la matriz.
+  /*
+   * Estas opciones solamente existen en la MATRIZ.
    */
   const [showLast, setShowLast] = useState(false);
   const [showNext, setShowNext] = useState(false);
@@ -178,7 +178,9 @@ export default function Inspections() {
   const rows = useMemo<CenterReviewRow[]>(() => {
     return centers
       .filter((c: any) =>
-        `${c.name} ${c.code} ${c.shortCode || ""}`
+        `${c.name} ${c.code} ${
+          c.shortCode || ""
+        }`
           .toLowerCase()
           .includes(q.toLowerCase())
       )
@@ -216,9 +218,6 @@ export default function Inspections() {
 
   const shortItems = catalog;
 
-  /**
-   * Imprimir la matriz / pantalla actual.
-   */
   function handlePrint() {
     window.print();
   }
@@ -435,7 +434,6 @@ export default function Inspections() {
         <Card className="p-6">
           <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
             <ArrowUpDown className="h-4 w-4" />
-
             Matriz horizontal. Pulsa una celda para
             abrir la ficha del centro.
           </div>
@@ -444,28 +442,8 @@ export default function Inspections() {
             <table className="min-w-max border-collapse text-xs">
               <thead className="bg-slate-50">
                 <tr>
-                  {/*
-                   * Columna CENTROS:
-                   * - anchura mínima
-                   * - texto vertical
-                   * - centrado horizontal
-                   * - alineado en la parte inferior
-                   */}
                   <th
-                    className="
-                      sticky
-                      left-0
-                      z-10
-                      w-8
-                      min-w-8
-                      max-w-8
-                      bg-slate-50
-                      px-1
-                      py-2
-                      align-bottom
-                      text-center
-                      font-bold
-                    "
+                    className="sticky left-0 z-10 w-8 min-w-8 max-w-8 bg-slate-50 px-0 py-2 text-center align-bottom"
                     style={{
                       writingMode: "vertical-rl",
                       transform: "rotate(180deg)",
@@ -479,27 +457,13 @@ export default function Inspections() {
                   {shortItems.map((x: any) => (
                     <th
                       key={x.id}
-                      className="
-                        min-w-20
-                        max-w-20
-                        px-1
-                        py-2
-                        text-center
-                        align-bottom
-                      "
+                      className="min-w-20 max-w-20 px-1 py-2 text-center align-bottom"
                     >
                       <div
-                        className="
-                          flex
-                          min-h-[130px]
-                          items-end
-                          justify-center
-                        "
+                        className="flex min-h-[130px] items-end justify-center"
                         style={{
-                          writingMode:
-                            "vertical-rl",
-                          transform:
-                            "rotate(180deg)",
+                          writingMode: "vertical-rl",
+                          transform: "rotate(180deg)",
                         }}
                       >
                         <span className="font-bold">
@@ -512,28 +476,6 @@ export default function Inspections() {
                           )}
                         </span>
                       </div>
-
-                      {showLast || showNext ? (
-                        <div className="mt-2 space-y-0.5 text-[9px] leading-tight text-slate-400">
-                          {showLast && (
-                            <div>
-                              <span className="font-semibold">
-                                Últ.:
-                              </span>{" "}
-                              {/* La fecha procede de los datos existentes */}
-                            </div>
-                          )}
-
-                          {showNext && (
-                            <div>
-                              <span className="font-semibold">
-                                Próx.:
-                              </span>{" "}
-                              {/* La fecha procede de los datos existentes */}
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
                     </th>
                   ))}
                 </tr>
@@ -545,42 +487,17 @@ export default function Inspections() {
                     key={r.c.id}
                     className="border-t border-slate-100"
                   >
-                    {/*
-                     * Nombre COMPLETO del centro.
-                     * Nunca se utiliza shortCode aquí.
-                     */}
-                    <td
-                      className="
-                        sticky
-                        left-0
-                        z-10
-                        w-8
-                        min-w-8
-                        max-w-8
-                        bg-white
-                        px-1
-                        py-2
-                        text-center
-                        align-bottom
-                      "
-                    >
+                    <td className="sticky left-0 z-10 w-8 min-w-8 max-w-8 bg-white px-0 py-2 text-center align-bottom">
                       <div
-                        className="
-                          flex
-                          min-h-[130px]
-                          items-end
-                          justify-center
-                        "
+                        className="flex min-h-[130px] items-end justify-center"
                         style={{
-                          writingMode:
-                            "vertical-rl",
-                          transform:
-                            "rotate(180deg)",
+                          writingMode: "vertical-rl",
+                          transform: "rotate(180deg)",
                         }}
                       >
                         <Link
                           href={`/centers/${r.c.id}`}
-                          className="font-bold whitespace-nowrap"
+                          className="whitespace-nowrap font-bold"
                           title={r.c.name}
                         >
                           {r.c.name}
@@ -589,19 +506,21 @@ export default function Inspections() {
                     </td>
 
                     {shortItems.map((x: any) => {
-                      const itemId =
-                        getItemId(x);
+                      const itemId = getItemId(x);
 
                       const item =
-                        r.review?.items[
-                          itemId
-                        ] || blankItem();
+                        r.review?.items[itemId] ||
+                        blankItem();
 
                       const active =
                         state.activeItems[
                           r.c.id
                         ]?.[itemId] !== false;
 
+                      /*
+                       * Las fechas se extraen de los datos
+                       * existentes. No se calculan aquí.
+                       */
                       const lastReviewDate =
                         getLastReviewDate(
                           r.c,
@@ -617,14 +536,7 @@ export default function Inspections() {
                       return (
                         <td
                           key={itemId}
-                          className="
-                            min-w-20
-                            max-w-20
-                            px-1
-                            py-2
-                            text-center
-                            align-bottom
-                          "
+                          className="min-w-20 max-w-20 px-1 py-2 text-center align-bottom"
                         >
                           {!active ? (
                             <div className="flex min-h-[130px] flex-col items-center justify-end">
@@ -639,25 +551,19 @@ export default function Inspections() {
                                 className="inline-flex"
                               >
                                 <span
-                                  className={`
-                                    inline-flex
-                                    rounded-full
-                                    px-2
-                                    py-1
-                                    font-bold
-                                    ${
-                                      item.status ===
-                                      "APTO"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : item.status ===
-                                          "APTO CONDICIONADO"
-                                        ? "bg-amber-100 text-amber-700"
-                                        : item.status ===
-                                          "NO APTO"
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-slate-100 text-slate-500"
-                                    }
-                                  `}
+                                  className={
+                                    "inline-flex rounded-full px-2 py-1 font-bold " +
+                                    (item.status ===
+                                    "APTO"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : item.status ===
+                                        "APTO CONDICIONADO"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : item.status ===
+                                        "NO APTO"
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-slate-100 text-slate-500")
+                                  }
                                 >
                                   {item.status ===
                                   "APTO"
@@ -708,31 +614,6 @@ export default function Inspections() {
           </p>
         </Card>
       )}
-
-      {/*
-       * Estilos específicos de impresión.
-       * El botón "Imprimir" no aparece en la impresión.
-       */}
-      <style jsx global>{`
-        @media print {
-          body {
-            background: white !important;
-          }
-
-          button {
-            display: none !important;
-          }
-
-          input,
-          select {
-            display: none !important;
-          }
-
-          .print-hidden {
-            display: none !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
