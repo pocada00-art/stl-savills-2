@@ -1405,7 +1405,7 @@ export default function Inspections() {
             }
           >
             <FileDown className="mr-2 inline h-4 w-4" />
-            Exportar PDF
+            Imprimir
           </Button>
 
         </div>
