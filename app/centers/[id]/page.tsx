@@ -626,7 +626,7 @@ function calculateResult(
    */
   if (
     status === "PENDIENTE" ||
-    status === "SIN INFORMACION"
+    status === "SIN INFORMACIÓN"
   ) {
     return status;
   }
