@@ -214,6 +214,39 @@ export const CURRENT_PERIOD: Period =
   "S2";
 
 /* =========================================================
+ * IMÁGENES INDEXEDDB
+ * ========================================================= */
+
+/**
+ * Carga una imagen almacenada en IndexedDB.
+ *
+ * Esta función se reexporta desde v1-state para que las
+ * páginas que trabajan con el estado V1 puedan resolver
+ * directamente referencias del tipo:
+ *
+ * indexeddb://center/<centerId>/image
+ * indexeddb://center/<centerId>/logo
+ *
+ * La implementación real se encuentra en:
+ *
+ * lib/image-storage.ts
+ *
+ * y devuelve:
+ *
+ * Promise<string | null>
+ *
+ * donde la cadena resultante es una URL blob: preparada
+ * para utilizarse directamente en <img src="...">.
+ *
+ * IMPORTANTE:
+ *
+ * No debe aplicarse URL.createObjectURL() al resultado.
+ */
+export {
+  loadCenterImage,
+} from "@/lib/image-storage";
+
+/* =========================================================
  * RESOLVER UN CENTRO
  * ========================================================= */
 
@@ -274,7 +307,7 @@ export function resolveCenter<
           )
         : String(
             center.name ??
-              ""
+            ""
           ),
 
     code:
@@ -285,7 +318,7 @@ export function resolveCenter<
           )
         : String(
             center.code ??
-              ""
+            ""
           ),
 
     shortCode:
