@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import {
   ArrowLeft,
   ImagePlus,
@@ -38,7 +43,6 @@ import {
 import {
   loadState,
   saveState,
-  loadCenterImage,
   reviewKey,
   reviewSummary,
   blankItem,
@@ -49,6 +53,10 @@ import {
   type CenterOverride,
 } from "@/lib/v1-state";
 
+import {
+  loadCenterImage,
+} from "@/lib/image-storage";
+
 const STATUSES: V1Status[] = [
   "APTO",
   "APTO CONDICIONADO",
@@ -57,9 +65,14 @@ const STATUSES: V1Status[] = [
   "SIN INFORMACIÓN",
 ];
 
-type IconComponent = React.ComponentType<{
-  className?: string;
-}>;
+type IconComponent =
+  React.ComponentType<{
+    className?: string;
+  }>;
+
+/* =========================================================
+ * UTILIDADES VISUALES
+ * ========================================================= */
 
 function getInstallationVisual(
   installation = "",
@@ -69,7 +82,8 @@ function getInstallationVisual(
   wrapper: string;
   icon: string;
 } {
-  const value = `${installation} ${category}`.toLowerCase();
+  const value =
+    `${installation} ${category}`.toLowerCase();
 
   if (
     value.includes("ascensor") ||
@@ -78,7 +92,8 @@ function getInstallationVisual(
   ) {
     return {
       Icon: Building2,
-      wrapper: "bg-blue-50 border-blue-100",
+      wrapper:
+        "bg-blue-50 border-blue-100",
       icon: "text-blue-600",
     };
   }
@@ -91,7 +106,8 @@ function getInstallationVisual(
   ) {
     return {
       Icon: Zap,
-      wrapper: "bg-amber-50 border-amber-100",
+      wrapper:
+        "bg-amber-50 border-amber-100",
       icon: "text-amber-600",
     };
   }
@@ -102,7 +118,8 @@ function getInstallationVisual(
   ) {
     return {
       Icon: Flame,
-      wrapper: "bg-red-50 border-red-100",
+      wrapper:
+        "bg-red-50 border-red-100",
       icon: "text-red-600",
     };
   }
@@ -115,7 +132,8 @@ function getInstallationVisual(
   ) {
     return {
       Icon: Droplets,
-      wrapper: "bg-cyan-50 border-cyan-100",
+      wrapper:
+        "bg-cyan-50 border-cyan-100",
       icon: "text-cyan-600",
     };
   }
@@ -128,7 +146,8 @@ function getInstallationVisual(
   ) {
     return {
       Icon: ShieldCheck,
-      wrapper: "bg-violet-50 border-violet-100",
+      wrapper:
+        "bg-violet-50 border-violet-100",
       icon: "text-violet-600",
     };
   }
@@ -140,19 +159,23 @@ function getInstallationVisual(
   ) {
     return {
       Icon: Settings,
-      wrapper: "bg-emerald-50 border-emerald-100",
+      wrapper:
+        "bg-emerald-50 border-emerald-100",
       icon: "text-emerald-600",
     };
   }
 
   return {
     Icon: Building2,
-    wrapper: "bg-slate-50 border-slate-200",
+    wrapper:
+      "bg-slate-50 border-slate-200",
     icon: "text-slate-500",
   };
 }
 
-function getStatusClasses(status: V1Status) {
+function getStatusClasses(
+  status: V1Status
+) {
   switch (status) {
     case "APTO":
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -171,7 +194,9 @@ function getStatusClasses(status: V1Status) {
   }
 }
 
-function getResultVisual(result: string) {
+function getResultVisual(
+  result: string
+) {
   switch (result) {
     case "FAVORABLE":
       return {
@@ -217,8 +242,16 @@ function getResultVisual(result: string) {
   }
 }
 
-function parseFrequency(frequency: string) {
-  const value = String(frequency || "")
+/* =========================================================
+ * FRECUENCIAS
+ * ========================================================= */
+
+function parseFrequency(
+  frequency: string
+) {
+  const value = String(
+    frequency || ""
+  )
     .trim()
     .toLowerCase();
 
@@ -227,43 +260,65 @@ function parseFrequency(frequency: string) {
   }
 
   if (value.includes("bimensual")) {
-    return { months: 2 };
+    return {
+      months: 2,
+    };
   }
 
   if (value.includes("mensual")) {
-    return { months: 1 };
+    return {
+      months: 1,
+    };
   }
 
   if (value.includes("trimestral")) {
-    return { months: 3 };
+    return {
+      months: 3,
+    };
   }
 
   if (value.includes("cuatrimestral")) {
-    return { months: 4 };
+    return {
+      months: 4,
+    };
   }
 
   if (value.includes("semestral")) {
-    return { months: 6 };
+    return {
+      months: 6,
+    };
   }
 
   if (value.includes("bienal")) {
-    return { months: 24 };
+    return {
+      months: 24,
+    };
   }
 
   if (value.includes("anual")) {
-    return { months: 12 };
+    return {
+      months: 12,
+    };
   }
 
-  const numericWithUnit = value.match(
-    /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)$/
-  );
-
-  if (numericWithUnit) {
-    const amount = Number(
-      numericWithUnit[1].replace(",", ".")
+  const numericWithUnit =
+    value.match(
+      /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)$/
     );
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+  if (numericWithUnit) {
+    const amount =
+      Number(
+        numericWithUnit[1].replace(
+          ",",
+          "."
+        )
+      );
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
       return null;
     }
 
@@ -272,7 +327,9 @@ function parseFrequency(frequency: string) {
       value.includes("años")
     ) {
       return {
-        months: Math.round(amount * 12),
+        months: Math.round(
+          amount * 12
+        ),
       };
     }
 
@@ -281,14 +338,16 @@ function parseFrequency(frequency: string) {
     };
   }
 
-  const numericOnly = value.match(
-    /^\d+(?:[.,]\d+)?$/
-  );
+  const numericOnly =
+    value.match(
+      /^\d+(?:[.,]\d+)?$/
+    );
 
   if (numericOnly) {
-    const years = Number(
-      value.replace(",", ".")
-    );
+    const years =
+      Number(
+        value.replace(",", ".")
+      );
 
     if (
       !Number.isFinite(years) ||
@@ -298,12 +357,18 @@ function parseFrequency(frequency: string) {
     }
 
     return {
-      months: Math.round(years * 12),
+      months: Math.round(
+        years * 12
+      ),
     };
   }
 
   return null;
 }
+
+/* =========================================================
+ * PRÓXIMA REVISIÓN
+ * ========================================================= */
 
 function calculateNextReview(
   date: string,
@@ -313,13 +378,15 @@ function calculateNextReview(
     return "";
   }
 
-  const normalizedFrequency = String(
-    frequency
-  )
-    .trim()
-    .toLowerCase();
+  const normalizedFrequency =
+    String(frequency)
+      .trim()
+      .toLowerCase();
 
-  if (normalizedFrequency === "inicial") {
+  if (
+    normalizedFrequency ===
+    "inicial"
+  ) {
     return "";
   }
 
@@ -330,19 +397,26 @@ function calculateNextReview(
     return "";
   }
 
-  const months = parsedFrequency.months;
+  const months =
+    parsedFrequency.months;
 
-  const match = date.match(
-    /^(\d{4})-(\d{2})-(\d{2})$/
-  );
+  const match =
+    date.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    );
 
   if (!match) {
     return "";
   }
 
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
+  const year =
+    Number(match[1]);
+
+  const month =
+    Number(match[2]);
+
+  const day =
+    Number(match[3]);
 
   if (
     !Number.isInteger(year) ||
@@ -354,15 +428,25 @@ function calculateNextReview(
 
   const originalDay = day;
 
-  const result = new Date(
-    year,
-    month - 1,
-    day
+  const result =
+    new Date(
+      year,
+      month - 1,
+      day
+    );
+
+  result.setHours(
+    0,
+    0,
+    0,
+    0
   );
 
-  result.setHours(0, 0, 0, 0);
-
-  if (Number.isNaN(result.getTime())) {
+  if (
+    Number.isNaN(
+      result.getTime()
+    )
+  ) {
     return "";
   }
 
@@ -371,10 +455,13 @@ function calculateNextReview(
 
   const targetYear =
     year +
-    Math.floor(targetMonthIndex / 12);
+    Math.floor(
+      targetMonthIndex / 12
+    );
 
   const targetMonth =
-    ((targetMonthIndex % 12) + 12) % 12;
+    ((targetMonthIndex % 12) + 12) %
+    12;
 
   const lastDayOfTargetMonth =
     new Date(
@@ -383,36 +470,53 @@ function calculateNextReview(
       0
     ).getDate();
 
-  const targetDay = Math.min(
-    originalDay,
-    lastDayOfTargetMonth
+  const targetDay =
+    Math.min(
+      originalDay,
+      lastDayOfTargetMonth
+    );
+
+  const finalDate =
+    new Date(
+      targetYear,
+      targetMonth,
+      targetDay
+    );
+
+  finalDate.setHours(
+    0,
+    0,
+    0,
+    0
   );
 
-  const finalDate = new Date(
-    targetYear,
-    targetMonth,
-    targetDay
-  );
-
-  finalDate.setHours(0, 0, 0, 0);
-
-  if (Number.isNaN(finalDate.getTime())) {
+  if (
+    Number.isNaN(
+      finalDate.getTime()
+    )
+  ) {
     return "";
   }
 
   const finalYear =
     finalDate.getFullYear();
 
-  const finalMonth = String(
-    finalDate.getMonth() + 1
-  ).padStart(2, "0");
+  const finalMonth =
+    String(
+      finalDate.getMonth() + 1
+    ).padStart(2, "0");
 
-  const finalDay = String(
-    finalDate.getDate()
-  ).padStart(2, "0");
+  const finalDay =
+    String(
+      finalDate.getDate()
+    ).padStart(2, "0");
 
   return `${finalYear}-${finalMonth}-${finalDay}`;
 }
+
+/* =========================================================
+ * RESULTADO
+ * ========================================================= */
 
 function calculateResult(
   status: V1Status,
@@ -421,13 +525,15 @@ function calculateResult(
   nextReviewDate: string,
   frequency: string
 ) {
-  const normalizedFrequency = String(
-    frequency || ""
-  )
-    .trim()
-    .toLowerCase();
+  const normalizedFrequency =
+    String(frequency || "")
+      .trim()
+      .toLowerCase();
 
-  if (normalizedFrequency === "inicial") {
+  if (
+    normalizedFrequency ===
+    "inicial"
+  ) {
     switch (status) {
       case "APTO":
         return "FAVORABLE";
@@ -471,13 +577,20 @@ function calculateResult(
       return "CONDICIONADO";
     }
 
-    const today = new Date();
+    const today =
+      new Date();
 
-    today.setHours(0, 0, 0, 0);
-
-    const secondDate = new Date(
-      `${secondReviewDate}T00:00:00`
+    today.setHours(
+      0,
+      0,
+      0,
+      0
     );
+
+    const secondDate =
+      new Date(
+        `${secondReviewDate}T00:00:00`
+      );
 
     if (
       !Number.isNaN(
@@ -499,13 +612,20 @@ function calculateResult(
       return "ERROR";
     }
 
-    const today = new Date();
+    const today =
+      new Date();
 
-    today.setHours(0, 0, 0, 0);
-
-    const nextDate = new Date(
-      `${nextReviewDate}T00:00:00`
+    today.setHours(
+      0,
+      0,
+      0,
+      0
     );
+
+    const nextDate =
+      new Date(
+        `${nextReviewDate}T00:00:00`
+      );
 
     if (
       Number.isNaN(
@@ -538,16 +658,27 @@ function calculateResult(
   return "ERROR";
 }
 
-function formatDate(value: string) {
+/* =========================================================
+ * FECHAS
+ * ========================================================= */
+
+function formatDate(
+  value: string
+) {
   if (!value) {
     return "—";
   }
 
-  const d = new Date(
-    `${value}T00:00:00`
-  );
+  const d =
+    new Date(
+      `${value}T00:00:00`
+    );
 
-  if (Number.isNaN(d.getTime())) {
+  if (
+    Number.isNaN(
+      d.getTime()
+    )
+  ) {
     return "—";
   }
 
@@ -556,12 +687,25 @@ function formatDate(value: string) {
   );
 }
 
+/* =========================================================
+ * COMPONENTE
+ * ========================================================= */
+
 export default function CenterDetail() {
-  const params = useParams();
+  const params =
+    useParams();
 
-  const id = String(params.id);
+  const id =
+    String(params.id);
 
-  const [state, setState] =
+  /* -------------------------------------------------------
+   * ESTADO
+   * ------------------------------------------------------- */
+
+  const [
+    state,
+    setState,
+  ] =
     useState<V1State>({
       role: "ADMIN",
       country: undefined,
@@ -571,71 +715,117 @@ export default function CenterDetail() {
       reviews: {},
     });
 
-  const [period, setPeriod] =
+  const [
+    period,
+    setPeriod,
+  ] =
     useState<Period>("S2");
 
-  const [year, setYear] =
+  const [
+    year,
+    setYear,
+  ] =
     useState(2026);
 
-  const [q, setQ] =
+  const [
+    q,
+    setQ,
+  ] =
     useState("");
 
-  const [category, setCategory] =
+  const [
+    category,
+    setCategory,
+  ] =
     useState("Todas");
 
-  const [saved, setSaved] =
+  const [
+    saved,
+    setSaved,
+  ] =
     useState(false);
 
-  const [participant, setParticipant] =
+  const [
+    participant,
+    setParticipant,
+  ] =
     useState("");
 
   const [
     showAddElement,
     setShowAddElement,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     addElementSearch,
     setAddElementSearch,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     openCenterData,
     setOpenCenterData,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     openHistory,
     setOpenHistory,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     openReview,
     setOpenReview,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     openInstallations,
     setOpenInstallations,
-  ] = useState(true);
+  ] =
+    useState(true);
 
-  /*
-   * URLs visuales de imágenes almacenadas en IndexedDB.
+  /* -------------------------------------------------------
+   * IMÁGENES RESUELTAS
    *
-   * Las referencias indexeddb:// no pueden utilizarse
-   * directamente como src de <img>. Se resuelven mediante
-   * loadCenterImage() y se convierten temporalmente en
-   * object URLs.
-   */
-  const [
-    resolvedLogoUrl,
-    setResolvedLogoUrl,
-  ] = useState<string>("");
+   * Estas dos variables son las que realmente utilizaremos
+   * en <img src>.
+   *
+   * Si el valor original es:
+   *
+   * indexeddb://center/<id>/image
+   *
+   * o:
+   *
+   * indexeddb://center/<id>/logo
+   *
+   * se resuelve mediante loadCenterImage().
+   *
+   * Si es una URL normal o data:image, se utiliza
+   * directamente.
+   * ------------------------------------------------------- */
 
   const [
     resolvedImageUrl,
     setResolvedImageUrl,
-  ] = useState<string>("");
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    resolvedLogoUrl,
+    setResolvedLogoUrl,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  /* -------------------------------------------------------
+   * CARGA DEL ESTADO
+   * ------------------------------------------------------- */
 
   useEffect(() => {
     setState(loadState());
@@ -643,7 +833,9 @@ export default function CenterDetail() {
 
   useEffect(() => {
     const h = () =>
-      setState(loadState());
+      setState(
+        loadState()
+      );
 
     window.addEventListener(
       "stl-role-change",
@@ -658,224 +850,13 @@ export default function CenterDetail() {
     };
   }, []);
 
-  /*
-   * Centro base.
-   */
-  const demoCenter =
-    demo.centers.find(
-      c => c.id === id
-    ) ||
-    demo.centers.find(
-      c =>
-        encodeURIComponent(c.id) === id
-    ) ||
-    null;
-
-  const persistedCenter =
-    state.centers[id] || null;
-
-  const rawCenter =
-    demoCenter ||
-    persistedCenter ||
-    null;
-
-  /*
-   * Si el centro no existe, devolvemos antes de ejecutar
-   * el resto de lógica dependiente del centro.
-   */
-  if (!rawCenter) {
-    return (
-      <Card className="p-8">
-        <h2 className="text-xl font-bold">
-          Centro no encontrado
-        </h2>
-
-        <p className="mt-2 text-sm text-slate-500">
-          El centro no existe ni en el catálogo demo ni
-          entre los centros creados mediante el nuevo sistema.
-        </p>
-
-        <Link
-          href="/centers"
-          className="mt-4 inline-block text-sm underline"
-        >
-          Volver
-        </Link>
-      </Card>
-    );
-  }
-
-  const currentCenter =
-    resolveCenter(
-      rawCenter,
-      state
-    );
-
-  /*
-   * FIX TYPESCRIPT:
+  /* -------------------------------------------------------
+   * AÑO ACTUAL / HISTÓRICO
    *
-   * resolveCenter() puede estar tipado como Center | null.
-   * Una vez comprobado el resultado, creamos una referencia
-   * estable y explícitamente segura para utilizarla dentro
-   * de funciones anidadas.
-   */
-  if (!currentCenter) {
-    return (
-      <Card className="p-8">
-        <h2 className="text-xl font-bold">
-          Centro no encontrado
-        </h2>
+   * Este useMemo se ejecuta siempre antes de cualquier
+   * return condicional.
+   * ------------------------------------------------------- */
 
-        <p className="mt-2 text-sm text-slate-500">
-          No ha sido posible resolver los datos del centro.
-        </p>
-
-        <Link
-          href="/centers"
-          className="mt-4 inline-block text-sm underline"
-        >
-          Volver
-        </Link>
-      </Card>
-    );
-  }
-
-  const centerId = currentCenter.id;
-
-  /*
-   * Resolución de imágenes IndexedDB.
-   *
-   * Cada vez que cambia el centro o sus referencias de
-   * imagen/logo, se comprueba si la URL es:
-   *
-   * - indexeddb://... -> cargar mediante loadCenterImage()
-   * - URL normal/data URL -> utilizar directamente.
-   *
-   * Los object URLs creados se revocan al desmontar o
-   * cuando cambia la imagen para evitar fugas de memoria.
-   */
-  useEffect(() => {
-    let cancelled = false;
-
-    const objectUrls: string[] = [];
-
-    async function resolveImages() {
-      const logoSource =
-        currentCenter.logoUrl ||
-        "";
-
-      const imageSource =
-        currentCenter.imageUrl ||
-        "";
-
-      let nextLogoUrl = logoSource;
-      let nextImageUrl = imageSource;
-
-      try {
-        if (
-          logoSource.startsWith(
-            "indexeddb://"
-          )
-        ) {
-          const blob =
-            await loadCenterImage(
-              logoSource
-            );
-
-          if (
-            blob &&
-            blob instanceof Blob
-          ) {
-            const url =
-              URL.createObjectURL(blob);
-
-            objectUrls.push(url);
-
-            nextLogoUrl = url;
-          } else {
-            nextLogoUrl = "";
-          }
-        }
-
-        if (
-          imageSource.startsWith(
-            "indexeddb://"
-          )
-        ) {
-          const blob =
-            await loadCenterImage(
-              imageSource
-            );
-
-          if (
-            blob &&
-            blob instanceof Blob
-          ) {
-            const url =
-              URL.createObjectURL(blob);
-
-            objectUrls.push(url);
-
-            nextImageUrl = url;
-          } else {
-            nextImageUrl = "";
-          }
-        }
-
-        if (!cancelled) {
-          setResolvedLogoUrl(
-            nextLogoUrl
-          );
-
-          setResolvedImageUrl(
-            nextImageUrl
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Error cargando imágenes del centro:",
-          error
-        );
-
-        if (!cancelled) {
-          setResolvedLogoUrl(
-            logoSource.startsWith(
-              "indexeddb://"
-            )
-              ? ""
-              : logoSource
-          );
-
-          setResolvedImageUrl(
-            imageSource.startsWith(
-              "indexeddb://"
-            )
-              ? ""
-              : imageSource
-          );
-        }
-      }
-    }
-
-    resolveImages();
-
-    return () => {
-      cancelled = true;
-
-      objectUrls.forEach(
-        url => {
-          URL.revokeObjectURL(url);
-        }
-      );
-    };
-  }, [
-    currentCenter.logoUrl,
-    currentCenter.imageUrl,
-  ]);
-
-  /*
-   * El año actual y los años de histórico.
-   */
   const currentYear =
     new Date().getFullYear();
 
@@ -903,7 +884,9 @@ export default function CenterDetail() {
 
           if (match) {
             const reviewYear =
-              Number(match[1]);
+              Number(
+                match[1]
+              );
 
             if (
               reviewYear <=
@@ -920,63 +903,300 @@ export default function CenterDetail() {
       return Array.from(
         years
       ).sort(
-        (a, b) => a - b
+        (a, b) =>
+          a - b
       );
     }, [
       state.reviews,
       currentYear,
     ]);
 
+  /* -------------------------------------------------------
+   * CENTRO BASE
+   * ------------------------------------------------------- */
+
+  const demoCenter =
+    demo.centers.find(
+      c => c.id === id
+    ) ||
+    demo.centers.find(
+      c =>
+        encodeURIComponent(
+          c.id
+        ) === id
+    ) ||
+    null;
+
+  const persistedCenter =
+    state.centers[id] ||
+    null;
+
+  const rawCenter =
+    demoCenter ||
+    persistedCenter ||
+    null;
+
   /*
-   * Catálogo correspondiente al país del centro.
+   * IMPORTANTE:
+   *
+   * No hacemos return aquí.
+   *
+   * El componente todavía tiene Hooks que deben ejecutarse
+   * en todos los renders para evitar React error #310.
    */
+
+  const currentCenter =
+    rawCenter
+      ? resolveCenter(
+          rawCenter,
+          state
+        )
+      : null;
+
+  /* -------------------------------------------------------
+   * RESOLUCIÓN DE IMÁGENES INDEXEDDB
+   *
+   * Este Hook está deliberadamente ANTES del return
+   * "Centro no encontrado".
+   *
+   * Así React ejecuta siempre los mismos Hooks en el mismo
+   * orden.
+   * ------------------------------------------------------- */
+
+  useEffect(() => {
+    let cancelled =
+      false;
+
+    const urlsToRevoke: string[] =
+      [];
+
+    async function resolveImage(
+      source:
+        | string
+        | undefined,
+      setter:
+        React.Dispatch<
+          React.SetStateAction<
+            string | null
+          >
+        >
+    ) {
+      if (!source) {
+        setter(null);
+        return;
+      }
+
+      /*
+       * Imagen normal:
+       *
+       * - https://...
+       * - /images/...
+       * - data:image/...
+       * - blob:...
+       *
+       * Se utiliza directamente.
+       */
+      if (
+        !source.startsWith(
+          "indexeddb://"
+        )
+      ) {
+        setter(source);
+        return;
+      }
+
+      try {
+        /*
+         * loadCenterImage() devuelve directamente una URL
+         * preparada para <img src>.
+         *
+         * NO utilizar URL.createObjectURL() aquí.
+         */
+        const loaded =
+          await loadCenterImage(
+            source
+          );
+
+        if (
+          cancelled
+        ) {
+          if (
+            loaded &&
+            loaded.startsWith(
+              "blob:"
+            )
+          ) {
+            urlsToRevoke.push(
+              loaded
+            );
+          }
+
+          return;
+        }
+
+        if (
+          loaded &&
+          loaded.startsWith(
+            "blob:"
+          )
+        ) {
+          urlsToRevoke.push(
+            loaded
+          );
+        }
+
+        setter(
+          loaded || null
+        );
+      } catch (error) {
+        console.error(
+          "No se pudo cargar la imagen desde IndexedDB:",
+          source,
+          error
+        );
+
+        if (!cancelled) {
+          setter(null);
+        }
+      }
+    }
+
+    const imageSource =
+      currentCenter?.imageUrl;
+
+    const logoSource =
+      currentCenter?.logoUrl;
+
+    void resolveImage(
+      imageSource,
+      setResolvedImageUrl
+    );
+
+    void resolveImage(
+      logoSource,
+      setResolvedLogoUrl
+    );
+
+    return () => {
+      cancelled = true;
+
+      urlsToRevoke.forEach(
+        url => {
+          try {
+            URL.revokeObjectURL(
+              url
+            );
+          } catch {
+            /*
+             * No hacemos nada.
+             *
+             * El navegador puede ignorar la revocación si
+             * la URL ya no existe.
+             */
+          }
+        }
+      );
+    };
+  }, [
+    currentCenter?.id,
+    currentCenter?.imageUrl,
+    currentCenter?.logoUrl,
+  ]);
+
+  /*
+   * -------------------------------------------------------
+   * RETURN CONDICIONAL
+   *
+   * A partir de aquí todos los Hooks ya se han ejecutado.
+   * -------------------------------------------------------
+   */
+
+  if (!currentCenter) {
+    return (
+      <Card className="p-8">
+        <h2 className="text-xl font-bold">
+          Centro no encontrado
+        </h2>
+
+        <p className="mt-2 text-sm text-slate-500">
+          El centro no existe ni en el catálogo demo ni
+          entre los centros creados mediante el nuevo sistema.
+        </p>
+
+        <Link
+          href="/centers"
+          className="mt-4 inline-block text-sm underline"
+        >
+          Volver
+        </Link>
+      </Card>
+    );
+  }
+
+  /* -------------------------------------------------------
+   * CATÁLOGO
+   * ------------------------------------------------------- */
+
   const catalog =
-    currentCenter.country === "España"
+    currentCenter.country ===
+    "España"
       ? demo.esCatalog
       : demo.ptCatalog;
 
   const overrides =
-    (state.centers[
-      centerId
-    ] || {}) as CenterOverride;
+    (
+      state.centers[
+        currentCenter.id
+      ] || {}
+    ) as CenterOverride;
 
   const centerName =
-    currentCenter.name ?? "";
+    currentCenter.name ??
+    "";
 
   const centerCode =
-    currentCenter.code ?? "";
+    currentCenter.code ??
+    "";
 
   const centerShortCode =
-    currentCenter.shortCode ?? "";
+    currentCenter.shortCode ??
+    "";
 
-  /*
-   * Elementos activos/no activos.
-   */
+  /* -------------------------------------------------------
+   * ELEMENTOS
+   * ------------------------------------------------------- */
+
   const activeMap =
     state.activeItems[
-      centerId
+      currentCenter.id
     ] || {};
 
   const activeItems =
     catalog.filter(
       (x: any) =>
-        activeMap[x.id] !== false
+        activeMap[
+          x.id
+        ] !== false
     );
 
   const inactiveItems =
     catalog.filter(
       (x: any) =>
-        activeMap[x.id] === false
+        activeMap[
+          x.id
+        ] === false
     );
 
-  /*
-   * Revisión actual.
-   */
-  const key = reviewKey(
-    centerId,
-    year,
-    period
-  );
+  /* -------------------------------------------------------
+   * REVISIÓN
+   * ------------------------------------------------------- */
+
+  const key =
+    reviewKey(
+      currentCenter.id,
+      year,
+      period
+    );
 
   const review =
     state.reviews[key] || {
@@ -991,7 +1211,8 @@ export default function CenterDetail() {
     reviewSummary(
       review,
       activeItems.map(
-        (x: any) => x.id
+        (x: any) =>
+          x.id
       )
     );
 
@@ -1013,8 +1234,10 @@ export default function CenterDetail() {
     activeItems.filter(
       (x: any) =>
         (
-          category === "Todas" ||
-          x.category === category
+          category ===
+            "Todas" ||
+          x.category ===
+            category
         ) &&
         `${x.code} ${x.installation} ${x.action} ${x.category}`
           .toLowerCase()
@@ -1033,6 +1256,10 @@ export default function CenterDetail() {
           )
     );
 
+  /* -------------------------------------------------------
+   * ACTUALIZACIÓN DE ESTADO
+   * ------------------------------------------------------- */
+
   function updateState(
     next: V1State
   ) {
@@ -1048,14 +1275,19 @@ export default function CenterDetail() {
   }
 
   function updateCenter(
-    field: keyof CenterOverride,
+    field:
+      keyof CenterOverride,
     value: string
   ) {
     /*
-     * Se utiliza centerId en lugar de currentCenter.id
-     * para evitar que TypeScript vuelva a perder el
-     * narrowing dentro de esta función.
+     * currentCenter está garantizado por el return
+     * condicional anterior.
+     *
+     * Por tanto TypeScript ya puede tratarlo como no nulo.
      */
+    const centerId =
+      currentCenter.id;
+
     updateState({
       ...state,
       centers: {
@@ -1076,7 +1308,7 @@ export default function CenterDetail() {
       ...state,
       activeItems: {
         ...state.activeItems,
-        [centerId]: {
+        [currentCenter.id]: {
           ...activeMap,
           [itemId]: active,
         },
@@ -1098,7 +1330,9 @@ export default function CenterDetail() {
   function updateItem(
     itemId: string,
     patch: Partial<
-      ReturnType<typeof blankItem>
+      ReturnType<
+        typeof blankItem
+      >
     >
   ) {
     const current =
@@ -1127,7 +1361,8 @@ export default function CenterDetail() {
   function confirmReview() {
     if (
       state.role !== "ADMIN" ||
-      summary.pendingConfirmation > 0
+      summary.pendingConfirmation >
+        0
     ) {
       return;
     }
@@ -1152,8 +1387,11 @@ export default function CenterDetail() {
             "ADMINISTRADOR",
           signed: true,
         },
-        ...(review.participants || []).filter(
-          p => p.role === "OTRO"
+        ...(review.participants ||
+          []).filter(
+          p =>
+            p.role ===
+            "OTRO"
         ),
       ],
     };
@@ -1183,25 +1421,44 @@ export default function CenterDetail() {
       | "logoUrl",
     file: File
   ) {
+    /*
+     * La imagen nueva se almacena como data URL mediante
+     * el comportamiento existente.
+     *
+     * Si el alta de centros utiliza indexeddb://, esta
+     * pantalla también es capaz de resolverlo mediante
+     * loadCenterImage().
+     */
     const reader =
       new FileReader();
 
     reader.onload = () => {
       updateCenter(
         field,
-        String(reader.result)
+        String(
+          reader.result
+        )
       );
     };
 
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(
+      file
+    );
   }
 
   const readOnly =
-    state.role === "LECTURA" ||
-    currentCenter.status !== "Activo";
+    state.role ===
+      "LECTURA" ||
+    currentCenter.status !==
+      "Activo";
 
   const admin =
-    state.role === "ADMIN";
+    state.role ===
+    "ADMIN";
+
+  /* -------------------------------------------------------
+   * TOGGLE DE SECCIONES
+   * ------------------------------------------------------- */
 
   function SectionToggle({
     open,
@@ -1230,10 +1487,19 @@ export default function CenterDetail() {
     );
   }
 
+  /* =======================================================
+   * RENDER
+   * ======================================================= */
+
   return (
     <div className="space-y-6">
 
+      {/* ===================================================
+          CABECERA
+          =================================================== */}
+
       <div className="flex items-center gap-3">
+
         <Link
           href="/centers"
           className="rounded-xl border border-slate-200 p-2 hover:bg-slate-50"
@@ -1244,9 +1510,15 @@ export default function CenterDetail() {
         <div className="text-sm text-slate-400">
           Centros / Ficha
         </div>
+
       </div>
 
+      {/* ===================================================
+          CABECERA DEL CENTRO
+          =================================================== */}
+
       <Card className="overflow-hidden">
+
         <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
 
           <div className="flex items-center gap-5 p-6">
@@ -1255,7 +1527,9 @@ export default function CenterDetail() {
 
               {resolvedLogoUrl ? (
                 <img
-                  src={resolvedLogoUrl}
+                  src={
+                    resolvedLogoUrl
+                  }
                   alt="Logo"
                   className="h-full w-full object-contain"
                 />
@@ -1271,8 +1545,13 @@ export default function CenterDetail() {
             <div>
 
               <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {currentCenter.country} ·{" "}
-                {currentCenter.stl}
+                {
+                  currentCenter.country
+                }{" "}
+                ·{" "}
+                {
+                  currentCenter.stl
+                }
               </div>
 
               <h1 className="mt-2 text-3xl font-black">
@@ -1280,24 +1559,31 @@ export default function CenterDetail() {
               </h1>
 
               <p className="mt-2 text-sm text-white/70">
-                {currentCenter.address ||
-                  "Dirección pendiente"}
+                {
+                  currentCenter.address ||
+                  "Dirección pendiente"
+                }
               </p>
 
               <div className="mt-3 flex gap-2">
 
                 <Badge tone="success">
-                  {currentCenter.status}
+                  {
+                    currentCenter.status
+                  }
                 </Badge>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
                   Código{" "}
-                  {centerShortCode ||
-                    "—"}
+                  {
+                    centerShortCode ||
+                    "—"
+                  }
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº {centerCode}
+                  Nº{" "}
+                  {centerCode}
                 </span>
 
               </div>
@@ -1310,7 +1596,9 @@ export default function CenterDetail() {
 
             {resolvedImageUrl ? (
               <img
-                src={resolvedImageUrl}
+                src={
+                  resolvedImageUrl
+                }
                 alt={centerName}
                 className="h-32 w-full rounded-xl object-cover"
               />
@@ -1323,7 +1611,12 @@ export default function CenterDetail() {
           </div>
 
         </div>
+
       </Card>
+
+      {/* ===================================================
+          KPIs
+          =================================================== */}
 
       <div className="grid gap-4 md:grid-cols-5">
 
@@ -1342,7 +1635,9 @@ export default function CenterDetail() {
           ],
           [
             "No aptos",
-            summary.counts["NO APTO"],
+            summary.counts[
+              "NO APTO"
+            ],
           ],
           [
             "Condicionados",
@@ -1350,22 +1645,28 @@ export default function CenterDetail() {
               "APTO CONDICIONADO"
             ],
           ],
-        ].map(([t, v]) => (
-          <Card
-            key={String(t)}
-            className="p-5"
-          >
-            <div className="text-2xl font-black">
-              {v}
-            </div>
+        ].map(
+          ([t, v]) => (
+            <Card
+              key={String(t)}
+              className="p-5"
+            >
+              <div className="text-2xl font-black">
+                {v}
+              </div>
 
-            <div className="mt-1 text-sm text-slate-500">
-              {t}
-            </div>
-          </Card>
-        ))}
+              <div className="mt-1 text-sm text-slate-500">
+                {t}
+              </div>
+            </Card>
+          )
+        )}
 
       </div>
+
+      {/* ===================================================
+          DATOS DEL CENTRO
+          =================================================== */}
 
       <Card className="p-6">
 
@@ -1384,9 +1685,13 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={openCenterData}
+            open={
+              openCenterData
+            }
             onClick={() =>
-              setOpenCenterData(v => !v)
+              setOpenCenterData(
+                v => !v
+              )
             }
           />
 
@@ -1398,13 +1703,18 @@ export default function CenterDetail() {
             <div className="grid gap-4 md:grid-cols-4">
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Nº centro
                 </span>
 
                 <input
-                  disabled={readOnly}
-                  value={centerCode}
+                  disabled={
+                    readOnly
+                  }
+                  value={
+                    centerCode
+                  }
                   onChange={e =>
                     updateCenter(
                       "code",
@@ -1413,16 +1723,22 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Código corto
                 </span>
 
                 <input
-                  disabled={readOnly}
-                  value={centerShortCode}
+                  disabled={
+                    readOnly
+                  }
+                  value={
+                    centerShortCode
+                  }
                   onChange={e =>
                     updateCenter(
                       "shortCode",
@@ -1431,16 +1747,22 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono uppercase outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm md:col-span-2">
+
                 <span className="text-xs text-slate-400">
                   Nombre completo del centro
                 </span>
 
                 <input
-                  disabled={readOnly}
-                  value={centerName}
+                  disabled={
+                    readOnly
+                  }
+                  value={
+                    centerName
+                  }
                   onChange={e =>
                     updateCenter(
                       "name",
@@ -1449,15 +1771,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-semibold outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Propiedad
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.property ??
                     ""
@@ -1470,15 +1796,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm md:col-span-3">
+
                 <span className="text-xs text-slate-400">
                   Dirección
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.address ??
                     ""
@@ -1491,15 +1821,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm md:col-span-2">
+
                 <span className="text-xs text-slate-400">
                   Ciudad
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.city ??
                     ""
@@ -1512,15 +1846,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm md:col-span-2">
+
                 <span className="text-xs text-slate-400">
                   Provincia
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.province ??
                     ""
@@ -1533,15 +1871,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Gerente
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.manager ??
                     ""
@@ -1554,15 +1896,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Teléfono gerente
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.managerPhone ??
                     ""
@@ -1575,15 +1921,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Email gerente
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   type="email"
                   value={
                     currentCenter.managerEmail ??
@@ -1597,17 +1947,21 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <div />
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Responsable técnico
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.technicalResponsible ??
                     ""
@@ -1620,15 +1974,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Teléfono responsable técnico
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   value={
                     currentCenter.technicalResponsiblePhone ??
                     ""
@@ -1641,15 +1999,19 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <label className="text-sm">
+
                 <span className="text-xs text-slate-400">
                   Email responsable técnico
                 </span>
 
                 <input
-                  disabled={readOnly}
+                  disabled={
+                    readOnly
+                  }
                   type="email"
                   value={
                     currentCenter.technicalResponsibleEmail ??
@@ -1663,6 +2025,7 @@ export default function CenterDetail() {
                   }
                   className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
                 />
+
               </label>
 
               <div />
@@ -1730,6 +2093,10 @@ export default function CenterDetail() {
 
       </Card>
 
+      {/* ===================================================
+          HISTÓRICO
+          =================================================== */}
+
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -1740,9 +2107,13 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={openHistory}
+            open={
+              openHistory
+            }
             onClick={() =>
-              setOpenHistory(v => !v)
+              setOpenHistory(
+                v => !v
+              )
             }
           />
 
@@ -1751,82 +2122,90 @@ export default function CenterDetail() {
         {openHistory && (
           <>
 
-            {reviewYears.length === 0 ? (
+            {reviewYears.length ===
+            0 ? (
               <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                 No hay revisiones históricas cargadas.
               </div>
             ) : (
               <div className="mt-5 grid gap-3 md:grid-cols-4">
 
-                {reviewYears.flatMap(y =>
-                  (
-                    ["S1", "S2"] as Period[]
-                  ).map(p => {
-                    const r =
-                      state.reviews[
-                        reviewKey(
-                          centerId,
-                          y,
-                          p
-                        )
-                      ];
+                {reviewYears.flatMap(
+                  y =>
+                    (
+                      [
+                        "S1",
+                        "S2",
+                      ] as Period[]
+                    ).map(p => {
+                      const r =
+                        state
+                          .reviews[
+                          reviewKey(
+                            currentCenter.id,
+                            y,
+                            p
+                          )
+                        ];
 
-                    const historicalActiveIds =
-                      catalog
-                        .filter(
-                          (x: any) =>
-                            activeMap[
+                      const historicalActiveIds =
+                        catalog
+                          .filter(
+                            (x: any) =>
+                              activeMap[
+                                x.id
+                              ] !==
+                              false
+                          )
+                          .map(
+                            (x: any) =>
                               x.id
-                            ] !== false
-                        )
-                        .map(
-                          (x: any) =>
-                            x.id
+                          );
+
+                      const sum =
+                        reviewSummary(
+                          r,
+                          historicalActiveIds
                         );
 
-                    const sum =
-                      reviewSummary(
-                        r,
-                        historicalActiveIds
-                      );
+                      return (
+                        <div
+                          key={`${y}-${p}`}
+                          className="rounded-xl border border-slate-200 p-4"
+                        >
 
-                    return (
-                      <div
-                        key={`${y}-${p}`}
-                        className="rounded-xl border border-slate-200 p-4"
-                      >
+                          <div className="flex items-center justify-between">
 
-                        <div className="flex items-center justify-between">
+                            <div className="text-xs font-semibold text-slate-400">
+                              {p}{" "}
+                              {y}
+                            </div>
 
-                          <div className="text-xs font-semibold text-slate-400">
-                            {p} {y}
+                            {r?.confirmed && (
+                              <Badge tone="success">
+                                Confirmada
+                              </Badge>
+                            )}
+
                           </div>
 
-                          {r?.confirmed && (
-                            <Badge tone="success">
-                              Confirmada
-                            </Badge>
-                          )}
+                          <div className="mt-2 text-xl font-black">
+                            {r
+                              ? `${sum.score}%`
+                              : "—"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-500">
+                            {r
+                              ? r.confirmed
+                                ? "Revisión confirmada"
+                                : "Revisión cargada sin confirmar"
+                              : "Sin revisión cargada"}
+                          </div>
 
                         </div>
-
-                        <div className="mt-2 text-xl font-black">
-                          {r
-                            ? `${sum.score}%`
-                            : "—"}
-                        </div>
-
-                        <div className="mt-1 text-xs text-slate-500">
-                          {r
-                            ? r.confirmed
-                              ? "Revisión confirmada"
-                              : "Revisión cargada sin confirmar"
-                            : "Sin revisión cargada"}
-                        </div>
-
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
 
               </div>
@@ -1845,6 +2224,10 @@ export default function CenterDetail() {
 
       </Card>
 
+      {/* ===================================================
+          REVISIÓN
+          =================================================== */}
+
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -1855,9 +2238,13 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={openReview}
+            open={
+              openReview
+            }
             onClick={() =>
-              setOpenReview(v => !v)
+              setOpenReview(
+                v => !v
+              )
             }
           />
 
@@ -1869,20 +2256,32 @@ export default function CenterDetail() {
             <div className="mt-5 flex flex-wrap gap-2">
 
               <Select
-                value={String(year)}
+                value={String(
+                  year
+                )}
                 onChange={v =>
-                  setYear(Number(v))
+                  setYear(
+                    Number(v)
+                  )
                 }
               >
-                <option>2026</option>
-                <option>2027</option>
-                <option>2028</option>
+                <option>
+                  2026
+                </option>
+                <option>
+                  2027
+                </option>
+                <option>
+                  2028
+                </option>
               </Select>
 
               <Select
                 value={period}
                 onChange={v =>
-                  setPeriod(v as Period)
+                  setPeriod(
+                    v as Period
+                  )
                 }
               >
                 <option value="S1">
@@ -1897,7 +2296,9 @@ export default function CenterDetail() {
               {admin && (
                 <Button
                   variant="secondary"
-                  onClick={resetPeriod}
+                  onClick={
+                    resetPeriod
+                  }
                 >
                   <RotateCcw className="mr-2 inline h-4 w-4" />
                   Reiniciar demo
@@ -1909,6 +2310,7 @@ export default function CenterDetail() {
             <div className="mt-5 grid gap-4 md:grid-cols-4">
 
               <div className="rounded-xl bg-slate-50 p-4">
+
                 <div className="text-xs text-slate-400">
                   Estado
                 </div>
@@ -1918,20 +2320,28 @@ export default function CenterDetail() {
                     ? "CONFIRMADA"
                     : "EN CURSO"}
                 </div>
+
               </div>
 
               <div className="rounded-xl bg-slate-50 p-4">
+
                 <div className="text-xs text-slate-400">
                   Elementos
                 </div>
 
                 <div className="mt-1 font-bold">
-                  {summary.confirmed}/
-                  {summary.total}
+                  {
+                    summary.confirmed
+                  }/
+                  {
+                    summary.total
+                  }
                 </div>
+
               </div>
 
               <div className="rounded-xl bg-amber-50 p-4">
+
                 <div className="text-xs text-amber-700">
                   Pendientes confirmar
                 </div>
@@ -1941,35 +2351,44 @@ export default function CenterDetail() {
                     summary.pendingConfirmation
                   }
                 </div>
+
               </div>
 
               <div className="rounded-xl bg-emerald-50 p-4">
+
                 <div className="text-xs text-emerald-700">
                   Cumplimiento
                 </div>
 
                 <div className="mt-1 text-xl font-black text-emerald-700">
-                  {summary.score}%
+                  {
+                    summary.score
+                  }%
                 </div>
+
               </div>
 
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
 
-              {STATUSES.map(s => (
-                <span
-                  key={s}
-                  className="rounded-full border border-slate-200 px-3 py-1"
-                >
-                  <b>
-                    {
-                      summary.counts[s]
-                    }
-                  </b>{" "}
-                  {s}
-                </span>
-              ))}
+              {STATUSES.map(
+                s => (
+                  <span
+                    key={s}
+                    className="rounded-full border border-slate-200 px-3 py-1"
+                  >
+                    <b>
+                      {
+                        summary.counts[
+                          s
+                        ]
+                      }
+                    </b>{" "}
+                    {s}
+                  </span>
+                )
+              )}
 
             </div>
 
@@ -1979,8 +2398,10 @@ export default function CenterDetail() {
                 <div>
 
                   <div className="font-bold text-emerald-800">
-                    Revisión {period}{" "}
-                    {year} confirmada
+                    Revisión{" "}
+                    {period}{" "}
+                    {year}{" "}
+                    confirmada
                   </div>
 
                   <div className="text-xs text-emerald-700">
@@ -2001,7 +2422,7 @@ export default function CenterDetail() {
                 </div>
 
                 <Link
-                  href={`/centers/${centerId}/certificate?year=${year}&period=${period}`}
+                  href={`/centers/${currentCenter.id}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
@@ -2019,15 +2440,22 @@ export default function CenterDetail() {
 
               <div className="mt-2 space-y-2">
 
-                {(review.participants || []).map(
-                  (p, i) => (
+                {(
+                  review.participants ||
+                  []
+                ).map(
+                  (
+                    p,
+                    i
+                  ) => (
                     <div
                       key={i}
                       className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs"
                     >
 
                       <span>
-                        {p.name} ·{" "}
+                        {p.name}{" "}
+                        ·{" "}
                         {p.role}
                       </span>
 
@@ -2042,15 +2470,20 @@ export default function CenterDetail() {
                           onClick={() => {
                             const participants =
                               [
-                                ...(review.participants ||
-                                  []),
+                                ...(
+                                  review.participants ||
+                                  []
+                                ),
                               ];
 
-                            participants[i] = {
+                            participants[
+                              i
+                            ] = {
                               ...participants[
                                 i
                               ],
-                              signed: true,
+                              signed:
+                                true,
                             };
 
                             updateState({
@@ -2084,7 +2517,9 @@ export default function CenterDetail() {
                   <div className="mt-3 flex gap-2">
 
                     <input
-                      value={participant}
+                      value={
+                        participant
+                      }
                       onChange={e =>
                         setParticipant(
                           e.target.value
@@ -2103,29 +2538,37 @@ export default function CenterDetail() {
                           return;
                         }
 
-                        const nextReview = {
-                          ...review,
-                          participants: [
-                            ...(review.participants ||
-                              []),
-                            {
-                              name:
-                                participant.trim(),
-                              role: "OTRO",
-                              signed: false,
-                            },
-                          ],
-                        };
+                        const nextReview =
+                          {
+                            ...review,
+                            participants:
+                              [
+                                ...(
+                                  review.participants ||
+                                  []
+                                ),
+                                {
+                                  name:
+                                    participant.trim(),
+                                  role: "OTRO",
+                                  signed:
+                                    false,
+                                },
+                              ],
+                          };
 
                         updateState({
                           ...state,
                           reviews: {
                             ...state.reviews,
-                            [key]: nextReview,
+                            [key]:
+                              nextReview,
                           },
                         });
 
-                        setParticipant("");
+                        setParticipant(
+                          ""
+                        );
                       }}
                     >
                       Añadir
@@ -2141,6 +2584,10 @@ export default function CenterDetail() {
 
       </Card>
 
+      {/* ===================================================
+          INSTALACIONES
+          =================================================== */}
+
       <Card className="p-6">
 
         <div className="flex items-center justify-between gap-4">
@@ -2151,9 +2598,13 @@ export default function CenterDetail() {
           />
 
           <SectionToggle
-            open={openInstallations}
+            open={
+              openInstallations
+            }
             onClick={() =>
-              setOpenInstallations(v => !v)
+              setOpenInstallations(
+                v => !v
+              )
             }
           />
 
@@ -2167,8 +2618,11 @@ export default function CenterDetail() {
               <div className="flex flex-wrap items-center gap-2">
 
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+
                   <ClipboardCheck className="h-4 w-4" />
+
                   Leyenda de resultados
+
                 </div>
 
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -2204,7 +2658,9 @@ export default function CenterDetail() {
                 <input
                   value={q}
                   onChange={e =>
-                    setQ(e.target.value)
+                    setQ(
+                      e.target.value
+                    )
                   }
                   placeholder="Buscar código, instalación, actuación..."
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
@@ -2213,17 +2669,23 @@ export default function CenterDetail() {
               </div>
 
               <Select
-                value={category}
-                onChange={setCategory}
+                value={
+                  category
+                }
+                onChange={
+                  setCategory
+                }
               >
-                {categories.map(c => (
-                  <option
-                    key={c}
-                    value={c}
-                  >
-                    {c}
-                  </option>
-                ))}
+                {categories.map(
+                  c => (
+                    <option
+                      key={c}
+                      value={c}
+                    >
+                      {c}
+                    </option>
+                  )
+                )}
               </Select>
 
             </div>
@@ -2299,10 +2761,14 @@ export default function CenterDetail() {
                   <tbody>
 
                     {visible.map(
-                      (x: any) => {
+                      (
+                        x: any
+                      ) => {
 
                         const item =
-                          getItem(x.id);
+                          getItem(
+                            x.id
+                          );
 
                         const locked =
                           readOnly ||
@@ -2318,7 +2784,8 @@ export default function CenterDetail() {
                           calculateNextReview(
                             item.date,
                             String(
-                              x.frequency || ""
+                              x.frequency ||
+                              ""
                             )
                           );
 
@@ -2329,7 +2796,8 @@ export default function CenterDetail() {
                             item.secondReviewDate,
                             nextDate,
                             String(
-                              x.frequency || ""
+                              x.frequency ||
+                              ""
                             )
                           );
 
@@ -2343,7 +2811,9 @@ export default function CenterDetail() {
 
                         return (
                           <tr
-                            key={x.id}
+                            key={
+                              x.id
+                            }
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
@@ -2370,12 +2840,16 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <div className="font-semibold text-slate-800">
-                                {x.installation}
+                                {
+                                  x.installation
+                                }
                               </div>
 
                               {x.category && (
                                 <div className="mt-1 text-xs text-slate-400">
-                                  {x.category}
+                                  {
+                                    x.category
+                                  }
                                 </div>
                               )}
 
@@ -2388,11 +2862,14 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+
                                 <CalendarDays className="h-3 w-3" />
+
                                 {
                                   x.frequency ||
                                   "—"
                                 }
+
                               </span>
 
                             </td>
@@ -2400,7 +2877,9 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <input
-                                disabled={locked}
+                                disabled={
+                                  locked
+                                }
                                 value={
                                   item.equipmentId
                                 }
@@ -2422,7 +2901,9 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <input
-                                disabled={locked}
+                                disabled={
+                                  locked
+                                }
                                 value={
                                   item.company
                                 }
@@ -2444,7 +2925,9 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <select
-                                disabled={locked}
+                                disabled={
+                                  locked
+                                }
                                 value={
                                   item.status
                                 }
@@ -2461,16 +2944,22 @@ export default function CenterDetail() {
                                   item.status
                                 )}`}
                               >
+
                                 {STATUSES.map(
                                   s => (
                                     <option
-                                      key={s}
-                                      value={s}
+                                      key={
+                                        s
+                                      }
+                                      value={
+                                        s
+                                      }
                                     >
                                       {s}
                                     </option>
                                   )
                                 )}
+
                               </select>
 
                             </td>
@@ -2478,7 +2967,9 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <input
-                                disabled={locked}
+                                disabled={
+                                  locked
+                                }
                                 type="date"
                                 value={
                                   item.date
@@ -2505,10 +2996,13 @@ export default function CenterDetail() {
 
                                 {nextDate ? (
                                   <div>
+
                                     <div className="font-semibold text-slate-700">
-                                      {formatDate(
-                                        nextDate
-                                      )}
+                                      {
+                                        formatDate(
+                                          nextDate
+                                        )
+                                      }
                                     </div>
 
                                     <div className="text-[10px] text-slate-400">
@@ -2516,14 +3010,17 @@ export default function CenterDetail() {
                                         ? `Fecha + ${x.frequency}`
                                         : "Calculada automáticamente"}
                                     </div>
+
                                   </div>
                                 ) : (
                                   <div className="text-xs text-slate-400">
+
                                     {!item.date
                                       ? "Introduce fecha"
                                       : !x.frequency
                                       ? "Sin frecuencia"
                                       : "Frecuencia no reconocida"}
+
                                   </div>
                                 )}
 
@@ -2536,7 +3033,9 @@ export default function CenterDetail() {
                               {item.status ===
                               "APTO CONDICIONADO" ? (
                                 <input
-                                  disabled={locked}
+                                  disabled={
+                                    locked
+                                  }
                                   type="date"
                                   value={
                                     item.secondReviewDate
@@ -2570,7 +3069,9 @@ export default function CenterDetail() {
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {result}
+                                {
+                                  result
+                                }
 
                               </span>
 
@@ -2579,7 +3080,9 @@ export default function CenterDetail() {
                             <td className="px-3 py-3 align-top">
 
                               <textarea
-                                disabled={locked}
+                                disabled={
+                                  locked
+                                }
                                 value={
                                   item.comment
                                 }
@@ -2625,14 +3128,19 @@ export default function CenterDetail() {
                       }
                     )}
 
-                    {visible.length === 0 && (
+                    {visible.length ===
+                      0 && (
                       <tr>
+
                         <td
-                          colSpan={15}
+                          colSpan={
+                            15
+                          }
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con la búsqueda.
                         </td>
+
                       </tr>
                     )}
 
@@ -2654,6 +3162,10 @@ export default function CenterDetail() {
 
             </div>
 
+            {/* =================================================
+                ELEMENTOS NO ACTIVOS
+                ================================================= */}
+
             <div className="mt-6 rounded-2xl border border-slate-200 p-5">
 
               <div className="flex items-center justify-between gap-4">
@@ -2667,7 +3179,8 @@ export default function CenterDetail() {
                         variant="secondary"
                         onClick={() =>
                           setShowAddElement(
-                            v => !v
+                            v =>
+                              !v
                           )
                         }
                       >
@@ -2710,12 +3223,15 @@ export default function CenterDetail() {
                     <div className="max-h-80 space-y-2 overflow-y-auto">
 
                       {selectableItems.map(
-                        (x: any) => {
+                        (
+                          x: any
+                        ) => {
 
                           const isActive =
                             activeMap[
                               x.id
-                            ] !== false;
+                            ] !==
+                            false;
 
                           const visual =
                             getInstallationVisual(
@@ -2728,7 +3244,9 @@ export default function CenterDetail() {
 
                           return (
                             <div
-                              key={x.id}
+                              key={
+                                x.id
+                              }
                               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
                             >
 
@@ -2745,15 +3263,23 @@ export default function CenterDetail() {
                                 <div className="min-w-0">
 
                                   <div className="truncate text-sm font-semibold">
-                                    {x.code} ·{" "}
+                                    {
+                                      x.code
+                                    }{" "}
+                                    ·{" "}
                                     {
                                       x.installation
                                     }
                                   </div>
 
                                   <div className="truncate text-xs text-slate-500">
-                                    {x.action} ·{" "}
-                                    {x.frequency}
+                                    {
+                                      x.action
+                                    }{" "}
+                                    ·{" "}
+                                    {
+                                      x.frequency
+                                    }
                                   </div>
 
                                 </div>
@@ -2790,7 +3316,8 @@ export default function CenterDetail() {
 
               <div className="mt-4">
 
-                {inactiveItems.length === 0 ? (
+                {inactiveItems.length ===
+                0 ? (
                   <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
                     No hay elementos no activos actualmente.
                     Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
@@ -2799,7 +3326,9 @@ export default function CenterDetail() {
                   <div className="grid gap-2 md:grid-cols-2">
 
                     {inactiveItems.map(
-                      (x: any) => {
+                      (
+                        x: any
+                      ) => {
 
                         const visual =
                           getInstallationVisual(
@@ -2812,7 +3341,9 @@ export default function CenterDetail() {
 
                         return (
                           <div
-                            key={x.id}
+                            key={
+                              x.id
+                            }
                             className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
                           >
 
@@ -2830,7 +3361,9 @@ export default function CenterDetail() {
 
                                 <div className="truncate">
                                   <b>
-                                    {x.code}
+                                    {
+                                      x.code
+                                    }
                                   </b>{" "}
                                   ·{" "}
                                   {
@@ -2839,7 +3372,9 @@ export default function CenterDetail() {
                                 </div>
 
                                 <div className="truncate text-xs text-slate-500">
-                                  {x.action}
+                                  {
+                                    x.action
+                                  }
                                 </div>
 
                               </div>
