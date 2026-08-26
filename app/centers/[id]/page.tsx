@@ -746,16 +746,16 @@ function HeaderContactRow({
   onEmailChange: (value: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-      <div className="mb-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#FFCC00]">
+    <div className="grid min-w-0 grid-cols-[62px_minmax(0,1fr)] items-center gap-2">
+      <span className="truncate text-[9px] font-bold uppercase tracking-[.12em] text-white/50">
         {label}
-      </div>
-      <div className="grid gap-2 sm:grid-cols-[1.05fr_.7fr_1.25fr]">
+      </span>
+      <div className="grid min-w-0 grid-cols-[1.05fr_.55fr_1.25fr] gap-1.5">
         <input
           disabled={disabled}
           value={name}
           onChange={e => onNameChange(e.target.value)}
-          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-xs font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
           placeholder="NOMBRE"
           aria-label={`${label} nombre`}
         />
@@ -763,7 +763,7 @@ function HeaderContactRow({
           disabled={disabled}
           value={phone}
           onChange={e => onPhoneChange(e.target.value)}
-          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-xs font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
           placeholder="TELÉFONO"
           aria-label={`${label} teléfono`}
         />
@@ -772,7 +772,7 @@ function HeaderContactRow({
           type="email"
           value={email}
           onChange={e => onEmailChange(e.target.value)}
-          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-xs font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
           placeholder="EMAIL"
           aria-label={`${label} email`}
         />
@@ -1572,11 +1572,12 @@ export default function CenterDetail() {
     );
   }
 
+  const isInactive =
+    String(currentCenter.status ?? "Activo").toLowerCase() !== "activo";
+
   const readOnly =
-    state.role ===
-      "LECTURA" ||
-    currentCenter.status !==
-      "Activo";
+    state.role === "LECTURA" ||
+    isInactive;
 
   const admin =
     state.role ===
@@ -1643,57 +1644,47 @@ export default function CenterDetail() {
           CABECERA DEL CENTRO
           =================================================== */}
       <Card className="overflow-hidden">
-        <div className="bg-[#002A54] p-3 text-white sm:p-4 lg:p-5">
-          <div className="grid items-stretch gap-3 lg:grid-cols-[170px_minmax(0,1fr)_250px]">
+        <div
+          className={`bg-[#002A54] px-3 py-2.5 text-white sm:px-4 sm:py-3 ${
+            isInactive ? "grayscale opacity-75" : ""
+          }`}
+        >
+          <div className="grid items-stretch gap-2 lg:grid-cols-[145px_minmax(0,1fr)_205px]">
 
-            {/* -------------------------------------------------
-                ZONA IZQUIERDA — LOGO + IDENTIDAD
-                ------------------------------------------------- */}
-            <div className="flex min-w-0 flex-col gap-2">
-              <label
-                className={`group relative flex min-h-[112px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white ${
-                  readOnly ? "" : "cursor-pointer hover:bg-slate-50"
-                }`}
-                title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
-              >
-                {resolvedLogoUrl ? (
-                  <img
-                    src={resolvedLogoUrl}
-                    alt={`Logo ${centerName}`}
-                    className="h-full w-full object-contain p-3"
-                  />
-                ) : (
-                  <Building2 className="h-16 w-16 text-slate-300" />
-                )}
-                {!readOnly && (
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const f = e.target.files?.[0];
-                      if (f) uploadImage("logoUrl", f);
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                )}
-              </label>
+            {/* LOGO */}
+            <label
+              className={`group relative flex min-h-[116px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white ${
+                readOnly ? "" : "cursor-pointer hover:bg-slate-50"
+              }`}
+              title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
+            >
+              {resolvedLogoUrl ? (
+                <img
+                  src={resolvedLogoUrl}
+                  alt={`Logo ${centerName}`}
+                  className="h-full w-full object-contain p-2"
+                />
+              ) : (
+                <Building2 className="h-14 w-14 text-slate-300" />
+              )}
+              {!readOnly && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage("logoUrl", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              )}
+            </label>
 
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                <div className="text-[9px] font-bold uppercase tracking-[.14em] text-white/45">
-                  Identificación
-                </div>
-                <div className="mt-0.5 text-[11px] font-semibold uppercase text-white/80">
-                  Centro
-                </div>
-              </div>
-            </div>
-
-            {/* -------------------------------------------------
-                ZONA CENTRAL — IDENTIDAD + INFORMACIÓN
-                ------------------------------------------------- */}
-            <div className="flex min-w-0 flex-col justify-between gap-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {/* INFORMACIÓN: 3 FILAS */}
+            <div className="grid min-w-0 grid-rows-[auto_auto_auto] gap-1.5">
+              {/* FILA 1 — IDENTIDAD */}
+              <div className="flex min-w-0 items-center gap-2">
                 <input
                   disabled={readOnly}
                   inputMode="numeric"
@@ -1709,11 +1700,11 @@ export default function CenterDetail() {
                     setCenterCodeDraft(normalized);
                     updateCenter("code", normalized);
                   }}
-                  className={`w-[72px] shrink-0 rounded-xl border bg-transparent px-2 py-1 text-3xl font-black tracking-tight text-white outline-none placeholder:text-white/30 sm:text-4xl ${
+                  className={`w-[58px] shrink-0 rounded-lg border bg-transparent px-1.5 py-0 text-2xl font-black tracking-tight text-white outline-none placeholder:text-white/30 sm:text-3xl ${
                     codeIsOccupied
                       ? "border-red-300 ring-2 ring-red-300/40"
                       : "border-white/20 focus:border-[#FFCC00]"
-                  }`}
+                  } disabled:opacity-60`}
                   aria-label="Número de centro"
                   placeholder="01"
                 />
@@ -1724,7 +1715,7 @@ export default function CenterDetail() {
                   onChange={e =>
                     updateCenter("name", e.target.value.toUpperCase())
                   }
-                  className="min-w-[180px] flex-1 bg-transparent py-1 text-3xl font-black uppercase leading-none tracking-tight text-white outline-none placeholder:text-white/40 sm:text-4xl"
+                  className="min-w-0 flex-1 bg-transparent px-0 py-0 text-2xl font-black uppercase leading-none tracking-tight text-white outline-none placeholder:text-white/40 sm:text-3xl disabled:opacity-60"
                   aria-label="Nombre del centro"
                   placeholder="NOMBRE DEL CENTRO"
                 />
@@ -1735,71 +1726,83 @@ export default function CenterDetail() {
                   onChange={e =>
                     updateCenter("shortCode", e.target.value.toUpperCase())
                   }
-                  className="w-auto min-w-[72px] max-w-[120px] rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-base font-black uppercase tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#FFCC00]"
+                  className="w-[82px] shrink-0 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
                   aria-label="Código corto"
                   placeholder="CÓDIGO"
                 />
-
-                <span className="ml-auto rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white/65">
-                  {String(currentCenter.status || "").toUpperCase() || "ACTIVO"}
-                </span>
               </div>
 
               {codeIsOccupied && (
-                <div className="-mt-2 text-xs font-semibold text-red-200">
+                <div className="text-[10px] font-semibold leading-none text-red-200">
                   Este número de centro ya está ocupado por otro centro.
                 </div>
               )}
 
-              <div className="grid gap-2">
-                <HeaderField
-                  label="Dirección"
-                  value={currentCenter.address ?? ""}
+              {/* FILA 2 — DIRECCIÓN + PAÍS / PROVINCIA / CIUDAD */}
+              <div className="grid min-w-0 grid-cols-[1.35fr_1fr] items-center gap-2">
+                <input
                   disabled={readOnly}
-                  onChange={value => updateCenter("address", value.toUpperCase())}
+                  value={currentCenter.address ?? ""}
+                  onChange={e => updateCenter("address", e.target.value.toUpperCase())}
+                  className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                  placeholder="DIRECCIÓN"
+                  aria-label="Dirección"
                 />
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="min-w-0">
-                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.14em] text-white/45">
-                      País
-                    </span>
-                    <div className="truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold uppercase text-white/80">
-                      {String(currentCenter.country ?? "").toUpperCase() || "—"}
-                    </div>
+                <div className="grid min-w-0 grid-cols-3 gap-1.5">
+                  <div className="min-w-0 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-bold uppercase text-white/75" title={String(currentCenter.country ?? "").toUpperCase()}>
+                    {String(currentCenter.country ?? "").toUpperCase() || "—"}
                   </div>
 
-                  <HeaderField
-                    label="Provincia"
+                  <input
+                    disabled={readOnly}
                     value={currentCenter.province ?? ""}
-                    disabled={readOnly}
-                    onChange={value => updateCenter("province", value.toUpperCase())}
+                    onChange={e => updateCenter("province", e.target.value.toUpperCase())}
+                    className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[10px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                    placeholder="PROVINCIA"
+                    aria-label="Provincia"
                   />
 
-                  <HeaderField
-                    label="Ciudad"
+                  <input
+                    disabled={readOnly}
                     value={currentCenter.city ?? ""}
-                    disabled={readOnly}
-                    onChange={value => updateCenter("city", value.toUpperCase())}
+                    onChange={e => updateCenter("city", e.target.value.toUpperCase())}
+                    className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[10px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                    placeholder="CIUDAD"
+                    aria-label="Ciudad"
                   />
                 </div>
+              </div>
 
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-[.14em] text-white/45">
-                    STL
-                  </span>
-                  <div className="min-w-0 truncate rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-bold uppercase text-white/80">
-                    {String(currentCenter.stl ?? "").toUpperCase() || "—"}
-                  </div>
-                </div>
+              {/* FILA 3 — RESPONSABLES */}
+              <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2">
+                <HeaderContactRow
+                  label="GESTIÓN"
+                  name={String(currentCenter.manager ?? "")}
+                  phone={String(currentCenter.managerPhone ?? "")}
+                  email={String(currentCenter.managerEmail ?? "")}
+                  disabled={readOnly}
+                  onNameChange={value => updateCenter("manager", value.toUpperCase())}
+                  onPhoneChange={value => updateCenter("managerPhone", value)}
+                  onEmailChange={value => updateCenter("managerEmail", value)}
+                />
+
+                <HeaderContactRow
+                  label="TÉCNICO"
+                  name={String(currentCenter.technicalResponsible ?? "")}
+                  phone={String(currentCenter.technicalResponsiblePhone ?? "")}
+                  email={String(currentCenter.technicalResponsibleEmail ?? "")}
+                  disabled={readOnly}
+                  onNameChange={value => updateCenter("technicalResponsible", value.toUpperCase())}
+                  onPhoneChange={value => updateCenter("technicalResponsiblePhone", value)}
+                  onEmailChange={value => updateCenter("technicalResponsibleEmail", value)}
+                />
               </div>
             </div>
 
-            {/* -------------------------------------------------
-                ZONA DERECHA — IMAGEN DEL CENTRO
-                ------------------------------------------------- */}
+            {/* IMAGEN DEL CENTRO */}
             <label
-              className={`group relative flex min-h-[205px] min-w-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/5 ${
+              className={`group relative flex min-h-[116px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5 ${
                 readOnly ? "" : "cursor-pointer hover:bg-white/10"
               }`}
               title={readOnly ? "Imagen del centro" : "Pulsar para cargar o cambiar la imagen del centro"}
@@ -1808,12 +1811,12 @@ export default function CenterDetail() {
                 <img
                   src={resolvedImageUrl}
                   alt={centerName || "Imagen del centro"}
-                  className="h-full min-h-[205px] w-full object-cover"
+                  className="h-full min-h-[116px] w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full min-h-[205px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 text-white/40">
-                  <Building2 className="h-12 w-12" />
-                  <span className="text-[10px] font-semibold uppercase tracking-[.14em]">
+                <div className="flex h-full min-h-[116px] w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-white/20 text-white/40">
+                  <Building2 className="h-9 w-9" />
+                  <span className="text-[9px] font-semibold uppercase tracking-[.12em]">
                     Imagen del centro
                   </span>
                 </div>
@@ -1834,7 +1837,7 @@ export default function CenterDetail() {
           </div>
 
           {saved && (
-            <div className="mt-2 text-right text-xs font-semibold text-[#FFCC00]">
+            <div className="mt-1 text-right text-[10px] font-semibold text-[#FFCC00]">
               Cambios guardados
             </div>
           )}
@@ -1845,9 +1848,9 @@ export default function CenterDetail() {
           REVISIÓN
           =================================================== */}
 
-      <Card className="p-6">
+      <Card className="p-3 sm:p-4">
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
 
           <SectionTitle
             title="Revisión técnico-legal"
@@ -1870,7 +1873,7 @@ export default function CenterDetail() {
         {openReview && (
           <>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
 
               <Select
                 value={String(
@@ -1943,8 +1946,8 @@ export default function CenterDetail() {
             </div>
 
             {openHistory && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                <div className="mb-2 flex items-center justify-between">
                   <div>
                     <div className="text-sm font-bold text-slate-800">
                       Histórico de cumplimiento
@@ -1968,7 +1971,7 @@ export default function CenterDetail() {
                     No hay revisiones históricas cargadas.
                   </div>
                 ) : (
-                  <div className="grid gap-2 md:grid-cols-4">
+                  <div className="grid gap-1.5 md:grid-cols-4">
                     {reviewYears.flatMap(
                       y =>
                         (["S1", "S2"] as Period[]).map(p => {
@@ -1991,7 +1994,7 @@ export default function CenterDetail() {
                           return (
                             <div
                               key={`${y}-${p}`}
-                              className="rounded-xl border border-slate-200 bg-white p-3"
+                              className="rounded-lg border border-slate-200 bg-white p-2"
                             >
                               <div className="flex items-center justify-between">
                                 <div className="text-xs font-semibold text-slate-400">
@@ -2003,10 +2006,10 @@ export default function CenterDetail() {
                                   </Badge>
                                 )}
                               </div>
-                              <div className="mt-1 text-lg font-black">
+                              <div className="mt-0.5 text-base font-black">
                                 {r ? `${sum.score}%` : "—"}
                               </div>
-                              <div className="mt-1 text-xs text-slate-500">
+                              <div className="mt-0.5 text-[10px] text-slate-500">
                                 {r
                                   ? r.confirmed
                                     ? "Revisión confirmada"
@@ -2028,7 +2031,7 @@ export default function CenterDetail() {
             )}
 
             {openInactive && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-bold text-slate-800">
@@ -2165,9 +2168,9 @@ export default function CenterDetail() {
               </div>
             )}
 
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="mt-2 grid gap-1.5 md:grid-cols-4">
 
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="rounded-lg bg-slate-50 p-2.5">
 
                 <div className="text-xs text-slate-400">
                   Estado
@@ -2181,7 +2184,7 @@ export default function CenterDetail() {
 
               </div>
 
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="rounded-lg bg-slate-50 p-2.5">
 
                 <div className="text-xs text-slate-400">
                   Elementos
@@ -2198,13 +2201,13 @@ export default function CenterDetail() {
 
               </div>
 
-              <div className="rounded-xl bg-amber-50 p-4">
+              <div className="rounded-lg bg-amber-50 p-2.5">
 
                 <div className="text-xs text-amber-700">
                   Pendientes confirmar
                 </div>
 
-                <div className="mt-1 text-xl font-black text-amber-700">
+                <div className="mt-0.5 text-lg font-black text-amber-700">
                   {
                     summary.pendingConfirmation
                   }
@@ -2212,13 +2215,13 @@ export default function CenterDetail() {
 
               </div>
 
-              <div className="rounded-xl bg-emerald-50 p-4">
+              <div className="rounded-lg bg-emerald-50 p-2.5">
 
                 <div className="text-xs text-emerald-700">
                   Cumplimiento
                 </div>
 
-                <div className="mt-1 text-xl font-black text-emerald-700">
+                <div className="mt-0.5 text-lg font-black text-emerald-700">
                   {
                     summary.score
                   }%
@@ -2228,13 +2231,13 @@ export default function CenterDetail() {
 
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px]">
 
               {STATUSES.map(
                 s => (
                   <span
                     key={s}
-                    className="rounded-full border border-slate-200 px-3 py-1"
+                    className="rounded-full border border-slate-200 px-2 py-0.5"
                   >
                     <b>
                       {
@@ -2251,7 +2254,7 @@ export default function CenterDetail() {
             </div>
 
             {review.confirmed && (
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
 
                 <div>
 
@@ -2290,13 +2293,13 @@ export default function CenterDetail() {
               </div>
             )}
 
-            <div className="mt-5 rounded-xl border border-slate-200 p-4">
+            <div className="mt-2 rounded-lg border border-slate-200 p-2.5">
 
               <div className="text-sm font-bold">
                 Participantes de la revisión
               </div>
 
-              <div className="mt-2 space-y-2">
+              <div className="mt-1 space-y-1">
 
                 {(
                   review.participants ||
@@ -2446,9 +2449,9 @@ export default function CenterDetail() {
           INSTALACIONES
           =================================================== */}
 
-      <Card className="p-6">
+      <Card className="p-3 sm:p-4">
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
 
           <SectionTitle
             title="Instalaciones y actuaciones"
@@ -2472,11 +2475,11 @@ export default function CenterDetail() {
           <>
 
 
-            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
+            <div className="mb-2 mt-3 flex flex-col gap-2 xl:flex-row">
 
               <div className="relative min-w-0 flex-1">
 
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
 
                 <input
                   value={q}
@@ -2517,65 +2520,65 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="min-w-[1700px] w-full text-sm">
+                <table className="min-w-[1400px] w-full text-xs">
 
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
 
                     <tr>
 
-                      <th className="w-24 px-3 py-3">
+                      <th className="w-24 px-2 py-2">
                         Código
                       </th>
 
-                      <th className="w-16 px-2 py-3 text-center">
+                      <th className="w-16 px-1.5 py-2 text-center">
                         Tipo
                       </th>
 
-                      <th className="min-w-[180px] px-3 py-3">
+                      <th className="min-w-[145px] px-2 py-2">
                         Instalación
                       </th>
 
-                      <th className="min-w-[180px] px-3 py-3">
+                      <th className="min-w-[145px] px-2 py-2">
                         Actuación
                       </th>
 
-                      <th className="w-28 px-3 py-3">
+                      <th className="w-24 px-2 py-2">
                         Frecuencia
                       </th>
 
-                      <th className="w-36 px-3 py-3">
+                      <th className="w-28 px-2 py-2">
                         ID equipo
                       </th>
 
-                      <th className="w-40 px-3 py-3">
+                      <th className="w-28 px-2 py-2">
                         Empresa
                       </th>
 
-                      <th className="w-48 px-3 py-3">
+                      <th className="w-36 px-2 py-2">
                         Estado revisión
                       </th>
 
-                      <th className="w-36 px-3 py-3">
+                      <th className="w-28 px-2 py-2">
                         Fecha
                       </th>
 
-                      <th className="w-40 px-3 py-3">
+                      <th className="w-28 px-2 py-2">
                         Próxima revisión
                       </th>
 
-                      <th className="w-36 px-3 py-3">
+                      <th className="w-28 px-2 py-2">
                         2ª revisión
                       </th>
 
-                      <th className="w-40 px-3 py-3">
+                      <th className="w-28 px-2 py-2">
                         Resultado
                       </th>
 
-                      <th className="min-w-[220px] px-3 py-3">
+                      <th className="min-w-[170px] px-2 py-2">
                         Comentario
                       </th>
 
-                      <th className="w-12 px-3 py-3" />
+                      <th className="w-12 px-2 py-2" />
 
                     </tr>
 
@@ -2640,27 +2643,27 @@ export default function CenterDetail() {
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
-                            <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
+                            <td className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
                               {x.code}
                             </td>
 
-                            <td className="px-2 py-3 align-top">
+                            <td className="px-1.5 py-2 align-top">
 
                               <div
-                                className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                                className={`mx-auto flex h-7 w-7 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 title={
                                   x.category ||
                                   x.installation
                                 }
                               >
                                 <Icon
-                                  className={`h-4 w-4 ${visual.icon}`}
+                                  className={`h-3.5 w-3.5 ${visual.icon}`}
                                 />
                               </div>
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <div className="font-semibold text-slate-800">
                                 {
@@ -2678,11 +2681,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top text-slate-600">
+                            <td className="px-2 py-2 align-top text-slate-600">
                               {x.action}
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
 
@@ -2697,7 +2700,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -2716,12 +2719,12 @@ export default function CenterDetail() {
                                   )
                                 }
                                 placeholder="ID equipo"
-                                className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                className="w-28 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -2740,12 +2743,12 @@ export default function CenterDetail() {
                                   )
                                 }
                                 placeholder="Empresa"
-                                className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                className="w-28 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <select
                                 disabled={
@@ -2763,7 +2766,7 @@ export default function CenterDetail() {
                                     }
                                   )
                                 }
-                                className={`w-44 rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
+                                className={`w-36 rounded-lg border px-1.5 py-1 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
                                   item.status
                                 )}`}
                               >
@@ -2787,7 +2790,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -2806,16 +2809,16 @@ export default function CenterDetail() {
                                     }
                                   )
                                 }
-                                className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                className="w-28 rounded-lg border border-slate-200 px-1.5 py-1 text-xs disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <div className="flex min-h-8 items-center gap-2">
 
-                                <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+                                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
 
                                 {nextDate ? (
                                   <div>
@@ -2851,7 +2854,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               {item.status ===
                               "APTO CONDICIONADO" ? (
@@ -2872,7 +2875,7 @@ export default function CenterDetail() {
                                       }
                                     )
                                   }
-                                  className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                  className="w-28 rounded-lg border border-amber-200 bg-amber-50 px-1.5 py-1 text-xs disabled:bg-slate-50"
                                 />
                               ) : (
                                 <span className="text-xs text-slate-300">
@@ -2882,10 +2885,10 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <span
-                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${resultVisual.className}`}
+                                className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-bold ${resultVisual.className}`}
                               >
 
                                 <span
@@ -2900,7 +2903,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               <textarea
                                 disabled={
@@ -2920,12 +2923,12 @@ export default function CenterDetail() {
                                 }
                                 placeholder="Introducir comentario..."
                                 rows={2}
-                                className="w-52 resize-y rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                className="w-40 resize-y rounded-lg border border-slate-200 px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td className="px-2 py-2 align-top">
 
                               {!readOnly &&
                                 !review.confirmed && (
@@ -2940,7 +2943,7 @@ export default function CenterDetail() {
                                     title="Eliminar del listado activo"
                                     className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
                                   >
-                                    <X className="h-4 w-4" />
+                                    <X className="h-3.5 w-3.5" />
                                   </button>
                                 )}
 
@@ -2975,9 +2978,9 @@ export default function CenterDetail() {
 
             </div>
 
-            <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
+            <div className="mt-2 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-[10px] text-blue-800">
 
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 
               <div>
                 En esta fase, la próxima revisión se calcula exclusivamente como fecha de ejecución + frecuencia. Todavía no se aplican sábados, domingos ni festivos.
