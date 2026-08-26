@@ -10,7 +10,6 @@ import { useParams } from "next/navigation";
 
 import {
   ArrowLeft,
-  ImagePlus,
   Plus,
   RotateCcw,
   Search,
@@ -240,6 +239,18 @@ function getResultVisual(
         dot: "bg-slate-300",
       };
   }
+}
+
+function formatCenterCode(value: string | number | undefined | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "—";
+
+  const numeric = raw.match(/^\d+$/);
+  if (numeric) {
+    return raw.padStart(2, "0");
+  }
+
+  return raw.toUpperCase();
 }
 
 /* =========================================================
@@ -687,6 +698,90 @@ function formatDate(
   );
 }
 
+function HeaderField({
+  label,
+  value,
+  disabled,
+  onChange,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <label className={`min-w-0 ${className}`}>
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.14em] text-white/45">
+        {label}
+      </span>
+      <input
+        disabled={disabled}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full min-w-0 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+        placeholder="—"
+      />
+    </label>
+  );
+}
+
+function HeaderContactRow({
+  label,
+  name,
+  phone,
+  email,
+  disabled,
+  onNameChange,
+  onPhoneChange,
+  onEmailChange,
+}: {
+  label: string;
+  name: string;
+  phone: string;
+  email: string;
+  disabled: boolean;
+  onNameChange: (value: string) => void;
+  onPhoneChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#FFCC00]">
+        {label}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-[1.05fr_.7fr_1.25fr]">
+        <input
+          disabled={disabled}
+          value={name}
+          onChange={e => onNameChange(e.target.value)}
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-xs font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+          placeholder="NOMBRE"
+          aria-label={`${label} nombre`}
+        />
+        <input
+          disabled={disabled}
+          value={phone}
+          onChange={e => onPhoneChange(e.target.value)}
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-xs font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+          placeholder="TELÉFONO"
+          aria-label={`${label} teléfono`}
+        />
+        <input
+          disabled={disabled}
+          type="email"
+          value={email}
+          onChange={e => onEmailChange(e.target.value)}
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-2 text-xs font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+          placeholder="EMAIL"
+          aria-label={`${label} email`}
+        />
+      </div>
+    </div>
+  );
+}
+
 /* =========================================================
  * COMPONENTE
  * ========================================================= */
@@ -752,6 +847,12 @@ export default function CenterDetail() {
     useState("");
 
   const [
+    centerCodeDraft,
+    setCenterCodeDraft,
+  ] =
+    useState("");
+
+  const [
     showAddElement,
     setShowAddElement,
   ] =
@@ -764,16 +865,10 @@ export default function CenterDetail() {
     useState("");
 
   const [
-    openCenterData,
-    setOpenCenterData,
-  ] =
-    useState(true);
-
-  const [
     openHistory,
     setOpenHistory,
   ] =
-    useState(true);
+    useState(false);
 
   const [
     openReview,
@@ -789,6 +884,22 @@ export default function CenterDetail() {
 
   /* -------------------------------------------------------
    * IMÁGENES RESUELTAS
+   *
+   * Estas dos variables son las que realmente utilizaremos
+   * en <img src>.
+   *
+   * Si el valor original es:
+   *
+   * indexeddb://center/<id>/image
+   *
+   * o:
+   *
+   * indexeddb://center/<id>/logo
+   *
+   * se resuelve mediante loadCenterImage().
+   *
+   * Si es una URL normal o data:image, se utiliza
+   * directamente.
    * ------------------------------------------------------- */
 
   const [
@@ -836,6 +947,9 @@ export default function CenterDetail() {
 
   /* -------------------------------------------------------
    * AÑO ACTUAL / HISTÓRICO
+   *
+   * Este useMemo se ejecuta siempre antes de cualquier
+   * return condicional.
    * ------------------------------------------------------- */
 
   const currentYear =
@@ -917,6 +1031,15 @@ export default function CenterDetail() {
     persistedCenter ||
     null;
 
+  /*
+   * IMPORTANTE:
+   *
+   * No hacemos return aquí.
+   *
+   * El componente todavía tiene Hooks que deben ejecutarse
+   * en todos los renders para evitar React error #310.
+   */
+
   const currentCenter =
     rawCenter
       ? resolveCenter(
@@ -925,11 +1048,24 @@ export default function CenterDetail() {
         )
       : null;
 
+  /*
+   * ID estable del centro.
+   *
+   * Se utiliza también dentro de callbacks para evitar que
+   * TypeScript considere currentCenter como posiblemente nulo
+   * al capturar la variable en una función.
+   */
   const centerId =
     currentCenter?.id ?? "";
 
   /* -------------------------------------------------------
    * RESOLUCIÓN DE IMÁGENES INDEXEDDB
+   *
+   * Este Hook está deliberadamente ANTES del return
+   * "Centro no encontrado".
+   *
+   * Así React ejecuta siempre los mismos Hooks en el mismo
+   * orden.
    * ------------------------------------------------------- */
 
   useEffect(() => {
@@ -955,6 +1091,16 @@ export default function CenterDetail() {
         return;
       }
 
+      /*
+       * Imagen normal:
+       *
+       * - https://...
+       * - /images/...
+       * - data:image/...
+       * - blob:...
+       *
+       * Se utiliza directamente.
+       */
       if (
         !source.startsWith(
           "indexeddb://"
@@ -965,6 +1111,12 @@ export default function CenterDetail() {
       }
 
       try {
+        /*
+         * loadCenterImage() devuelve directamente una URL
+         * preparada para <img src>.
+         *
+         * NO utilizar URL.createObjectURL() aquí.
+         */
         const loaded =
           await loadCenterImage(
             source
@@ -1042,6 +1194,9 @@ export default function CenterDetail() {
           } catch {
             /*
              * No hacemos nada.
+             *
+             * El navegador puede ignorar la revocación si
+             * la URL ya no existe.
              */
           }
         }
@@ -1053,9 +1208,13 @@ export default function CenterDetail() {
     currentCenter?.logoUrl,
   ]);
 
-  /* -------------------------------------------------------
+  /*
+   * -------------------------------------------------------
    * RETURN CONDICIONAL
-   * ------------------------------------------------------- */
+   *
+   * A partir de aquí todos los Hooks ya se han ejecutado.
+   * -------------------------------------------------------
+   */
 
   if (!currentCenter) {
     return (
@@ -1097,76 +1256,45 @@ export default function CenterDetail() {
     ) as CenterOverride;
 
   const centerName =
-    currentCenter.name ?? "";
+    currentCenter.name ??
+    "";
 
   const centerCode =
-    currentCenter.code ?? "";
+    currentCenter.code ??
+    "";
 
   const centerShortCode =
-    currentCenter.shortCode ?? "";
+    currentCenter.shortCode ??
+    "";
 
-  /*
-   * PRESENTACIÓN DE DATOS DE CABECERA
-   *
-   * El número se muestra siempre con dos dígitos.
-   * El nombre y la abreviatura se muestran siempre
-   * en mayúsculas.
-   */
-  const displayCenterNumber =
-    (() => {
-      const value =
-        String(centerCode).trim();
+  useEffect(() => {
+    const formatted = formatCenterCode(centerCode);
+    setCenterCodeDraft(formatted === "—" ? "" : formatted);
+  }, [centerId, centerCode]);
 
-      if (
-        /^\d+$/.test(value)
-      ) {
-        return value.padStart(
-          2,
-          "0"
-        );
-      }
+  const normalizedDraftCode =
+    centerCodeDraft.trim().replace(/^0+(?=\d)/, "");
 
-      return value;
-    })();
+  const codeIsOccupied =
+    normalizedDraftCode !== "" &&
+    [
+      ...demo.centers,
+      ...Object.entries(state.centers).map(([key, value]) => ({
+        id: key,
+        ...value,
+      })),
+    ].some(center => {
+      const otherId = String(center.id ?? "");
+      const otherCode = String(center.code ?? "")
+        .trim()
+        .replace(/^0+(?=\d)/, "");
 
-  const displayCenterName =
-    centerName.toLocaleUpperCase(
-      "es-ES"
-    );
-
-  const displayCenterShortCode =
-    centerShortCode.toLocaleUpperCase(
-      "es-ES"
-    );
-
-  const displayCountry =
-    String(
-      currentCenter.country ?? ""
-    ).toLocaleUpperCase(
-      "es-ES"
-    );
-
-  const displayStl =
-    String(
-      currentCenter.stl ?? ""
-    ).toLocaleUpperCase(
-      "es-ES"
-    );
-
-  const displayAddress =
-    String(
-      currentCenter.address ?? ""
-    );
-
-  const displayCity =
-    String(
-      currentCenter.city ?? ""
-    );
-
-  const displayProvince =
-    String(
-      currentCenter.province ?? ""
-    );
+      return (
+        otherId !== centerId &&
+        otherCode !== "" &&
+        otherCode === normalizedDraftCode
+      );
+    });
 
   /* -------------------------------------------------------
    * ELEMENTOS
@@ -1285,6 +1413,12 @@ export default function CenterDetail() {
       keyof CenterOverride,
     value: string
   ) {
+    /*
+     * currentCenter está garantizado por el return
+     * condicional anterior.
+     *
+     * Por tanto TypeScript ya puede tratarlo como no nulo.
+     */
     updateState({
       ...state,
       centers: {
@@ -1418,6 +1552,14 @@ export default function CenterDetail() {
       | "logoUrl",
     file: File
   ) {
+    /*
+     * La imagen nueva se almacena como data URL mediante
+     * el comportamiento existente.
+     *
+     * Si el alta de centros utiliza indexeddb://, esta
+     * pantalla también es capaz de resolverlo mediante
+     * loadCenterImage().
+     */
     const reader =
       new FileReader();
 
@@ -1505,764 +1647,211 @@ export default function CenterDetail() {
       {/* ===================================================
           CABECERA DEL CENTRO
           =================================================== */}
-
       <Card className="overflow-hidden">
+        <div className="bg-[#002A54] p-4 text-white sm:p-5 lg:p-6">
+          <div className="grid gap-5 lg:grid-cols-[minmax(300px,1.15fr)_minmax(420px,1.65fr)_minmax(190px,.72fr)]">
 
-        <div className="grid min-h-[230px] grid-cols-1 bg-[#002A54] text-white xl:grid-cols-[minmax(330px,0.95fr)_minmax(400px,1.45fr)_minmax(260px,0.85fr)]">
+            {/* -------------------------------------------------
+                ZONA IZQUIERDA — IDENTIDAD
+                ------------------------------------------------- */}
+            <div className="min-w-0 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="flex min-w-0 items-center gap-4">
+                <label
+                  className={`relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white ${
+                    readOnly ? "" : "cursor-pointer hover:bg-slate-50"
+                  }`}
+                  title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
+                >
+                  {resolvedLogoUrl ? (
+                    <img
+                      src={resolvedLogoUrl}
+                      alt={`Logo ${centerName}`}
+                      className="h-full w-full object-contain p-2"
+                    />
+                  ) : (
+                    <Building2 className="h-14 w-14 text-slate-300" />
+                  )}
+                  {!readOnly && (
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadImage("logoUrl", f);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  )}
+                </label>
 
-          {/* =================================================
-              ZONA 1 — IDENTIDAD
-              ================================================= */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <input
+                      disabled={readOnly}
+                      inputMode="numeric"
+                      value={centerCodeDraft}
+                      onChange={e => {
+                        const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                        setCenterCodeDraft(value);
+                        updateCenter("code", value);
+                      }}
+                      onBlur={() => {
+                        const value = centerCodeDraft.replace(/\D/g, "");
+                        const normalized = value
+                          ? value.padStart(2, "0")
+                          : "";
+                        setCenterCodeDraft(normalized);
+                        updateCenter("code", normalized);
+                      }}
+                      className={`w-20 rounded-xl border bg-white/10 px-3 py-2 text-2xl font-black tracking-tight text-white outline-none placeholder:text-white/30 disabled:cursor-default ${
+                        codeIsOccupied
+                          ? "border-red-300 ring-2 ring-red-300/40"
+                          : "border-white/20 focus:border-[#FFCC00]"
+                      }`}
+                      aria-label="Número de centro"
+                      placeholder="01"
+                    />
 
-          <div className="flex min-w-0 items-center gap-5 border-b border-white/10 p-6 xl:border-b-0 xl:border-r">
+                    <input
+                      disabled={readOnly}
+                      value={centerShortCode}
+                      onChange={e =>
+                        updateCenter("shortCode", e.target.value.toUpperCase())
+                      }
+                      className="max-w-[120px] rounded-full border border-[#FFCC00]/50 bg-[#FFCC00] px-3 py-1.5 text-xs font-black uppercase tracking-wider text-[#002A54] outline-none disabled:cursor-default"
+                      aria-label="Código corto"
+                      placeholder="CÓDIGO"
+                    />
 
-            <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white">
+                    <Badge tone="success">
+                      {String(currentCenter.status || "").toUpperCase()}
+                    </Badge>
+                  </div>
 
-              {resolvedLogoUrl ? (
-                <img
-                  src={
-                    resolvedLogoUrl
-                  }
-                  alt={`Logo ${displayCenterName}`}
-                  className="h-full w-full object-contain p-2"
-                />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center bg-white/5 text-white/40">
-                  <Building2 className="h-10 w-10" />
-                  <span className="mt-2 text-[10px] font-semibold uppercase tracking-wider">
-                    Sin logo
-                  </span>
+                  {codeIsOccupied && (
+                    <div className="mt-1 text-xs font-semibold text-red-200">
+                      Este número de centro ya está ocupado por otro centro.
+                    </div>
+                  )}
+
+                  <input
+                    disabled={readOnly}
+                    value={centerName}
+                    onChange={e =>
+                      updateCenter("name", e.target.value.toUpperCase())
+                    }
+                    className="mt-3 w-full min-w-0 bg-transparent text-2xl font-black uppercase leading-tight text-white outline-none placeholder:text-white/40 disabled:cursor-default lg:text-3xl"
+                    aria-label="Nombre del centro"
+                    placeholder="NOMBRE DEL CENTRO"
+                  />
                 </div>
-              )}
-
+              </div>
             </div>
 
-            <div className="min-w-0 flex-1">
+            {/* -------------------------------------------------
+                ZONA CENTRAL — INFORMACIÓN
+                ------------------------------------------------- */}
+            <div className="min-w-0 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr]">
+                <HeaderField
+                  label="Dirección"
+                  value={currentCenter.address ?? ""}
+                  disabled={readOnly}
+                  onChange={value => updateCenter("address", value.toUpperCase())}
+                  className="sm:col-span-2"
+                />
+                <HeaderField
+                  label="Ciudad"
+                  value={currentCenter.city ?? ""}
+                  disabled={readOnly}
+                  onChange={value => updateCenter("city", value.toUpperCase())}
+                />
+                <HeaderField
+                  label="Provincia"
+                  value={currentCenter.province ?? ""}
+                  disabled={readOnly}
+                  onChange={value => updateCenter("province", value.toUpperCase())}
+                />
+              </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-
-                <span className="text-3xl font-black tracking-tight text-white">
-                  {displayCenterNumber}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/80">
+                <span className="rounded-lg bg-white/10 px-2.5 py-1.5">
+                  {String(currentCenter.country ?? "").toUpperCase() || "PAÍS"}
                 </span>
-
-                <Badge tone="success">
-                  ACTIVO
-                </Badge>
-
+                <span className="rounded-lg bg-white/10 px-2.5 py-1.5">
+                  STL · {String(currentCenter.stl ?? "").toUpperCase() || "—"}
+                </span>
               </div>
 
-              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+              <div className="mt-4 grid gap-3">
+                <HeaderContactRow
+                  label="Responsable de gestión"
+                  name={currentCenter.manager ?? ""}
+                  phone={currentCenter.managerPhone ?? ""}
+                  email={currentCenter.managerEmail ?? ""}
+                  disabled={readOnly}
+                  onNameChange={value => updateCenter("manager", value.toUpperCase())}
+                  onPhoneChange={value => updateCenter("managerPhone", value)}
+                  onEmailChange={value => updateCenter("managerEmail", value.toUpperCase())}
+                />
 
-                <h1 className="min-w-0 break-words text-2xl font-black leading-tight tracking-tight sm:text-3xl">
-                  {displayCenterName}
-                </h1>
-
-                {displayCenterShortCode && (
-                  <span className="shrink-0 rounded-full border border-[#FFCC00]/50 bg-[#FFCC00]/10 px-3 py-1 text-xs font-black tracking-wider text-[#FFCC00]">
-                    {displayCenterShortCode}
-                  </span>
-                )}
-
+                <HeaderContactRow
+                  label="Responsable técnico"
+                  name={currentCenter.technicalResponsible ?? ""}
+                  phone={currentCenter.technicalResponsiblePhone ?? ""}
+                  email={currentCenter.technicalResponsibleEmail ?? ""}
+                  disabled={readOnly}
+                  onNameChange={value => updateCenter("technicalResponsible", value.toUpperCase())}
+                  onPhoneChange={value => updateCenter("technicalResponsiblePhone", value)}
+                  onEmailChange={value => updateCenter("technicalResponsibleEmail", value.toUpperCase())}
+                />
               </div>
-
-              <div className="mt-3 h-px bg-white/10" />
-
-              <div className="mt-3 text-xs font-bold uppercase tracking-[.14em] text-[#FFCC00]">
-                {displayCountry}
-                {displayCountry &&
-                  displayStl &&
-                  " · "}
-                {displayStl}
-              </div>
-
             </div>
 
-          </div>
-
-          {/* =================================================
-              ZONA 2 — INFORMACIÓN
-              ================================================= */}
-
-          <div className="flex min-w-0 flex-col justify-center p-6">
-
+            {/* -------------------------------------------------
+                ZONA DERECHA — IMAGEN
+                ------------------------------------------------- */}
             <div className="min-w-0">
-
-              {displayAddress && (
-                <div className="truncate text-sm font-semibold text-white">
-                  {displayAddress}
-                </div>
-              )}
-
-              {(displayCity ||
-                displayProvince) && (
-                <div className="mt-1 truncate text-sm text-white/70">
-                  {displayCity}
-                  {displayCity &&
-                    displayProvince &&
-                    " · "}
-                  {displayProvince}
-                </div>
-              )}
-
-              {(!displayAddress &&
-                !displayCity &&
-                !displayProvince) && (
-                <div className="text-sm text-white/40">
-                  Dirección pendiente
-                </div>
-              )}
-
-            </div>
-
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-
-              {/* ---------------------------------------------
-                  RESPONSABLE DE GESTIÓN
-                  --------------------------------------------- */}
-
-              <div className="min-w-0">
-
-                <div className="mb-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#FFCC00]">
-                  Responsable de gestión
-                </div>
-
-                {currentCenter.manager ? (
-                  <div
-                    className="truncate text-sm font-semibold text-white"
-                    title={
-                      currentCenter.manager
-                    }
-                  >
-                    {currentCenter.manager}
-                  </div>
+              <label
+                className={`group relative flex h-full min-h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/5 ${
+                  readOnly ? "" : "cursor-pointer hover:bg-white/10"
+                }`}
+                title={readOnly ? "Imagen del centro" : "Pulsar para cargar o cambiar la imagen del centro"}
+              >
+                {resolvedImageUrl ? (
+                  <img
+                    src={resolvedImageUrl}
+                    alt={centerName || "Imagen del centro"}
+                    className="h-full min-h-[220px] w-full object-cover"
+                  />
                 ) : (
-                  <div className="text-sm text-white/35">
-                    Sin responsable
-                  </div>
-                )}
-
-                {(currentCenter.managerPhone ||
-                  currentCenter.managerEmail) && (
-                  <div className="mt-1 space-y-0.5 text-xs text-white/60">
-
-                    {currentCenter.managerPhone && (
-                      <div
-                        className="truncate"
-                        title={
-                          currentCenter.managerPhone
-                        }
-                      >
-                        {currentCenter.managerPhone}
-                      </div>
-                    )}
-
-                    {currentCenter.managerEmail && (
-                      <div
-                        className="truncate"
-                        title={
-                          currentCenter.managerEmail
-                        }
-                      >
-                        {currentCenter.managerEmail}
-                      </div>
-                    )}
-
-                  </div>
-                )}
-
-              </div>
-
-              {/* ---------------------------------------------
-                  RESPONSABLE TÉCNICO
-                  --------------------------------------------- */}
-
-              <div className="min-w-0">
-
-                <div className="mb-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#FFCC00]">
-                  Responsable técnico
-                </div>
-
-                {currentCenter.technicalResponsible ? (
-                  <div
-                    className="truncate text-sm font-semibold text-white"
-                    title={
-                      currentCenter.technicalResponsible
-                    }
-                  >
-                    {
-                      currentCenter.technicalResponsible
-                    }
-                  </div>
-                ) : (
-                  <div className="text-sm text-white/35">
-                    Sin responsable
-                  </div>
-                )}
-
-                {(currentCenter.technicalResponsiblePhone ||
-                  currentCenter.technicalResponsibleEmail) && (
-                  <div className="mt-1 space-y-0.5 text-xs text-white/60">
-
-                    {currentCenter.technicalResponsiblePhone && (
-                      <div
-                        className="truncate"
-                        title={
-                          currentCenter.technicalResponsiblePhone
-                        }
-                      >
-                        {
-                          currentCenter.technicalResponsiblePhone
-                        }
-                      </div>
-                    )}
-
-                    {currentCenter.technicalResponsibleEmail && (
-                      <div
-                        className="truncate"
-                        title={
-                          currentCenter.technicalResponsibleEmail
-                        }
-                      >
-                        {
-                          currentCenter.technicalResponsibleEmail
-                        }
-                      </div>
-                    )}
-
-                  </div>
-                )}
-
-              </div>
-
-            </div>
-
-          </div>
-
-          {/* =================================================
-              ZONA 3 — ESTADO + IMAGEN
-              ================================================= */}
-
-          <div className="flex min-w-0 flex-col border-t border-white/10 p-4 xl:border-l xl:border-t-0">
-
-            <div className="mb-3 flex items-center justify-between gap-3">
-
-              <div className="text-[10px] font-bold uppercase tracking-[.18em] text-white/50">
-                Estado del centro
-              </div>
-
-              <Badge tone="success">
-                ACTIVO
-              </Badge>
-
-            </div>
-
-            <div className="relative min-h-[150px] flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-
-              {resolvedImageUrl ? (
-                <img
-                  src={
-                    resolvedImageUrl
-                  }
-                  alt={displayCenterName}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full min-h-[150px] w-full flex-col items-center justify-center text-white/35">
-
-                  <Building2 className="h-10 w-10" />
-
-                  <span className="mt-2 text-xs font-semibold">
+                  <div className="flex h-full min-h-[220px] w-full items-center justify-center rounded-2xl border border-dashed border-white/20 text-xs font-medium uppercase tracking-wider text-white/45">
                     Imagen del centro
-                  </span>
-
-                </div>
-              )}
-
+                  </div>
+                )}
+                {!readOnly && (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage("imageUrl", f);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                )}
+              </label>
             </div>
-
           </div>
 
-        </div>
-
-      </Card>
-
-      {/* ===================================================
-          KPIs
-          =================================================== */}
-
-      <div className="grid gap-4 md:grid-cols-5">
-
-        {[
-          [
-            "Cumplimiento",
-            `${summary.score}%`,
-          ],
-          [
-            "Confirmados",
-            `${summary.confirmed}/${summary.total}`,
-          ],
-          [
-            "Pendientes",
-            summary.pendingConfirmation,
-          ],
-          [
-            "No aptos",
-            summary.counts[
-              "NO APTO"
-            ],
-          ],
-          [
-            "Condicionados",
-            summary.counts[
-              "APTO CONDICIONADO"
-            ],
-          ],
-        ].map(
-          ([t, v]) => (
-            <Card
-              key={String(t)}
-              className="p-5"
-            >
-              <div className="text-2xl font-black">
-                {v}
-              </div>
-
-              <div className="mt-1 text-sm text-slate-500">
-                {t}
-              </div>
-            </Card>
-          )
-        )}
-
-      </div>
-
-      {/* ===================================================
-          DATOS DEL CENTRO
-          =================================================== */}
-
-      <Card className="p-6">
-
-        <div className="flex items-center justify-between gap-4">
-
-          <SectionTitle
-            title="Datos del centro"
-            subtitle="Edición disponible según perfil"
-            action={
-              saved ? (
-                <Badge tone="success">
-                  Guardado
-                </Badge>
-              ) : undefined
-            }
-          />
-
-          <SectionToggle
-            open={
-              openCenterData
-            }
-            onClick={() =>
-              setOpenCenterData(
-                v => !v
-              )
-            }
-          />
-
-        </div>
-
-        {openCenterData && (
-          <>
-
-            <div className="grid gap-4 md:grid-cols-4">
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Nº centro
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    centerCode
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "code",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Código corto
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    centerShortCode
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "shortCode",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono uppercase outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-2">
-
-                <span className="text-xs text-slate-400">
-                  Nombre completo del centro
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    centerName
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "name",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-semibold outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Propiedad
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.property ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "property",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-3">
-
-                <span className="text-xs text-slate-400">
-                  Dirección
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.address ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "address",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-2">
-
-                <span className="text-xs text-slate-400">
-                  Ciudad
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.city ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "city",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-2">
-
-                <span className="text-xs text-slate-400">
-                  Provincia
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.province ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "province",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Gerente
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.manager ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "manager",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Teléfono gerente
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.managerPhone ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "managerPhone",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Email gerente
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  type="email"
-                  value={
-                    currentCenter.managerEmail ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "managerEmail",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <div />
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Responsable técnico
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.technicalResponsible ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "technicalResponsible",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Teléfono responsable técnico
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.technicalResponsiblePhone ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "technicalResponsiblePhone",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Email responsable técnico
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  type="email"
-                  value={
-                    currentCenter.technicalResponsibleEmail ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "technicalResponsibleEmail",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <div />
-
+          {saved && (
+            <div className="mt-3 text-right text-xs font-semibold text-[#FFCC00]">
+              Cambios guardados
             </div>
-
-            {!readOnly && (
-              <div className="mt-5 flex flex-wrap gap-3">
-
-                <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
-                  <ImagePlus className="mr-2 inline h-4 w-4" />
-
-                  Logo
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const f =
-                        e.target.files?.[0];
-
-                      if (f) {
-                        uploadImage(
-                          "logoUrl",
-                          f
-                        );
-                      }
-                    }}
-                  />
-
-                </label>
-
-                <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
-                  <ImagePlus className="mr-2 inline h-4 w-4" />
-
-                  Imagen centro
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const f =
-                        e.target.files?.[0];
-
-                      if (f) {
-                        uploadImage(
-                          "imageUrl",
-                          f
-                        );
-                      }
-                    }}
-                  />
-
-                </label>
-
-              </div>
-            )}
-
-          </>
-        )}
-
+          )}
+        </div>
       </Card>
 
       {/* ===================================================
