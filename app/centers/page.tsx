@@ -200,15 +200,11 @@ export default function Centers() {
   useEffect(() => {
     return () => {
       if (imagePreview) {
-        URL.revokeObjectURL(
-          imagePreview
-        );
+        URL.revokeObjectURL(imagePreview);
       }
 
       if (logoPreview) {
-        URL.revokeObjectURL(
-          logoPreview
-        );
+        URL.revokeObjectURL(logoPreview);
       }
     };
   }, [
@@ -1131,24 +1127,24 @@ export default function Centers() {
 
       {showNewCenter && (
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
 
-          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
 
             {/* ------------------------------------------------
              * CABECERA MODAL
              * ------------------------------------------------ */}
 
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-3">
 
               <div>
 
-                <h2 className="text-xl font-bold text-slate-900">
+                <h2 className="text-lg font-bold text-slate-900">
                   Nuevo centro
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Introduce todos los datos necesarios para definir el centro.
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Introduce los datos del centro.
                 </p>
 
               </div>
@@ -1157,7 +1153,7 @@ export default function Centers() {
                 type="button"
                 onClick={closeNewCenter}
                 disabled={saving}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Cerrar"
               >
                 <X className="h-5 w-5" />
@@ -1165,32 +1161,33 @@ export default function Centers() {
 
             </div>
 
-            <div className="space-y-6 p-6">
+            {/* ------------------------------------------------
+             * FORMULARIO COMPACTO
+             * ------------------------------------------------ */}
+
+            <div className="p-5">
 
               {/* ------------------------------------------------
                * ERROR
                * ------------------------------------------------ */}
 
               {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
                   {error}
                 </div>
               )}
 
-              {/* =================================================
-               * IDENTIFICACIÓN
-               * ================================================= */}
+              <div className="space-y-3">
 
-              <section>
+                {/* =================================================
+                 * FILA 1
+                 * Nº CENTRO · NOMBRE · CÓDIGO
+                 * ================================================= */}
 
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Identificación del centro
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-3">
 
                   <Field
-                    label="Nº de centro"
+                    label="Nº de Centro"
                     required
                     value={
                       newCenter.code
@@ -1204,7 +1201,7 @@ export default function Centers() {
                   />
 
                   <Field
-                    label="Nombre del centro"
+                    label="Nombre de centro"
                     required
                     value={
                       newCenter.name
@@ -1218,7 +1215,7 @@ export default function Centers() {
                   />
 
                   <Field
-                    label="Código / abreviatura"
+                    label="Código / Abreviatura"
                     value={
                       newCenter.shortCode
                     }
@@ -1232,52 +1229,35 @@ export default function Centers() {
 
                 </div>
 
-              </section>
+                {/* =================================================
+                 * FILA 2
+                 * PAÍS · CIUDAD · PROVINCIA
+                 * ================================================= */}
 
-              {/* =================================================
-               * LOCALIZACIÓN
-               * ================================================= */}
+                <div className="grid gap-3 md:grid-cols-3">
 
-              <section>
+                  <SelectField
+                    label="País"
+                    required
+                    value={
+                      newCenter.country
+                    }
+                    onChange={(value) =>
+                      updateNewCenter(
+                        "country",
+                        value as V1Country
+                      )
+                    }
+                    disabled={saving}
+                  >
+                    <option value="España">
+                      España
+                    </option>
 
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Localización
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-3">
-
-                  <div>
-
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      País *
-                    </label>
-
-                    <select
-                      value={
-                        newCenter.country
-                      }
-                      onChange={(e) =>
-                        updateNewCenter(
-                          "country",
-                          e.target
-                            .value as V1Country
-                        )
-                      }
-                      disabled={saving}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
-                    >
-
-                      <option value="España">
-                        España
-                      </option>
-
-                      <option value="Portugal">
-                        Portugal
-                      </option>
-
-                    </select>
-
-                  </div>
+                    <option value="Portugal">
+                      Portugal
+                    </option>
+                  </SelectField>
 
                   <Field
                     label="Ciudad"
@@ -1305,6 +1285,15 @@ export default function Centers() {
                     }
                   />
 
+                </div>
+
+                {/* =================================================
+                 * FILA 3
+                 * DIRECCIÓN
+                 * ================================================= */}
+
+                <div className="grid gap-3 md:grid-cols-3">
+
                   <div className="md:col-span-3">
 
                     <Field
@@ -1324,19 +1313,12 @@ export default function Centers() {
 
                 </div>
 
-              </section>
+                {/* =================================================
+                 * FILA 4
+                 * PROPIEDAD · IMAGEN · LOGOTIPO
+                 * ================================================= */}
 
-              {/* =================================================
-               * DATOS DE GESTIÓN
-               * ================================================= */}
-
-              <section>
-
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Datos de gestión
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-3">
 
                   <Field
                     label="Propiedad"
@@ -1351,67 +1333,43 @@ export default function Centers() {
                     }
                   />
 
-                  {/* ---------------------------------------------
-                   * STL AUTOMÁTICO
-                   * --------------------------------------------- */}
+                  <ImageUploadField
+                    label="Imagen del centro"
+                    file={imageFile}
+                    preview={imagePreview}
+                    onChange={(file) =>
+                      handleImageChange(
+                        file,
+                        "image"
+                      )
+                    }
+                    disabled={saving}
+                  />
 
-                  <div>
-
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      STL
-                    </label>
-
-                    <div className="flex min-h-[42px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
-                      {newCenter.country ===
-                      "España"
-                        ? "STL_ES_2026_V1"
-                        : "STL_PT_2026_V1"}
-                    </div>
-
-                    <p className="mt-1 text-xs text-slate-400">
-                      Se asigna automáticamente según el país.
-                    </p>
-
-                  </div>
-
-                  {/* ---------------------------------------------
-                   * ESTADO AUTOMÁTICO
-                   * --------------------------------------------- */}
-
-                  <div>
-
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">
-                      Estado
-                    </label>
-
-                    <div className="flex min-h-[42px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-green-700">
-                      Activo
-                    </div>
-
-                    <p className="mt-1 text-xs text-slate-400">
-                      Los centros nuevos se crean activos.
-                    </p>
-
-                  </div>
+                  <ImageUploadField
+                    label="Imagen del logotipo"
+                    file={logoFile}
+                    preview={logoPreview}
+                    onChange={(file) =>
+                      handleImageChange(
+                        file,
+                        "logo"
+                      )
+                    }
+                    disabled={saving}
+                  />
 
                 </div>
 
-              </section>
+                {/* =================================================
+                 * FILA 5
+                 * RESPONSABLE GESTIÓN · TELÉFONO · EMAIL
+                 * ================================================= */}
 
-              {/* =================================================
-               * RESPONSABLE DE GESTIÓN
-               * ================================================= */}
-
-              <section>
-
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Responsable de gestión
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-3">
 
                   <Field
-                    label="Responsable"
+                    label="Responsable de gestión"
                     value={
                       newCenter.manager
                     }
@@ -1452,19 +1410,12 @@ export default function Centers() {
 
                 </div>
 
-              </section>
+                {/* =================================================
+                 * FILA 6
+                 * RESPONSABLE TÉCNICO · TELÉFONO · EMAIL
+                 * ================================================= */}
 
-              {/* =================================================
-               * RESPONSABLE TÉCNICO
-               * ================================================= */}
-
-              <section>
-
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Responsable técnico
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-3">
 
                   <Field
                     label="Responsable técnico"
@@ -1508,57 +1459,7 @@ export default function Centers() {
 
                 </div>
 
-              </section>
-
-              {/* =================================================
-               * IMAGEN Y LOGOTIPO
-               * ================================================= */}
-
-              <section>
-
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">
-                  Imagen y logotipo
-                </h3>
-
-                <div className="grid gap-6 md:grid-cols-2">
-
-                  {/* ---------------------------------------------
-                   * IMAGEN DEL CENTRO
-                   * --------------------------------------------- */}
-
-                  <ImageUploadField
-                    label="Imagen del centro"
-                    file={imageFile}
-                    preview={imagePreview}
-                    onChange={(file) =>
-                      handleImageChange(
-                        file,
-                        "image"
-                      )
-                    }
-                    disabled={saving}
-                  />
-
-                  {/* ---------------------------------------------
-                   * LOGOTIPO
-                   * --------------------------------------------- */}
-
-                  <ImageUploadField
-                    label="Logotipo"
-                    file={logoFile}
-                    preview={logoPreview}
-                    onChange={(file) =>
-                      handleImageChange(
-                        file,
-                        "logo"
-                      )
-                    }
-                    disabled={saving}
-                  />
-
-                </div>
-
-              </section>
+              </div>
 
             </div>
 
@@ -1566,7 +1467,7 @@ export default function Centers() {
              * BOTONES
              * ================================================= */}
 
-            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t bg-white px-6 py-4">
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-white px-5 py-3">
 
               <Button
                 type="button"
@@ -1621,9 +1522,9 @@ function Field({
   type?: string;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
 
-      <label className="mb-1 block text-sm font-semibold text-slate-700">
+      <label className="mb-1 block text-xs font-semibold text-slate-700">
 
         {label}
 
@@ -1643,8 +1544,61 @@ function Field({
             e.target.value
           )
         }
-        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+        className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-slate-400"
       />
+
+    </div>
+  );
+}
+
+/* =========================================================
+ * COMPONENTE SELECT FIELD
+ * ========================================================= */
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  required = false,
+  disabled = false,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (
+    value: string
+  ) => void;
+  required?: boolean;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+
+      <label className="mb-1 block text-xs font-semibold text-slate-700">
+
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">
+            *
+          </span>
+        )}
+
+      </label>
+
+      <select
+        value={value}
+        onChange={(e) =>
+          onChange(
+            e.target.value
+          )
+        }
+        disabled={disabled}
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+      >
+        {children}
+      </select>
 
     </div>
   );
@@ -1669,27 +1623,32 @@ function ImageUploadField({
   ) => void;
   disabled?: boolean;
 }) {
-  return (
-    <div>
+  const inputId =
+    `file-${label
+      .toLowerCase()
+      .replace(/\s+/g, "-")}`;
 
-      <label className="mb-1 block text-sm font-semibold text-slate-700">
+  return (
+    <div className="min-w-0">
+
+      <label className="mb-1 block text-xs font-semibold text-slate-700">
         {label}
       </label>
 
       <input
-        id={`file-${label
-          .toLowerCase()
-          .replace(/\s+/g, "-")}`}
+        id={inputId}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
         className="sr-only"
         disabled={disabled}
         onChange={(e) => {
-          const file =
+          const selectedFile =
             e.target.files?.[0] ||
             null;
 
-          onChange(file);
+          onChange(
+            selectedFile
+          );
 
           /*
            * Permitimos volver a seleccionar el mismo
@@ -1699,66 +1658,59 @@ function ImageUploadField({
         }}
       />
 
-      <label
-        htmlFor={`file-${label
-          .toLowerCase()
-          .replace(/\s+/g, "-")}`}
-        className={`flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center transition hover:border-slate-400 hover:bg-slate-100 ${
-          disabled
-            ? "cursor-not-allowed opacity-60"
-            : ""
-        }`}
-      >
+      <div className="flex h-[38px] items-center gap-2">
 
-        {preview ? (
-          <div className="flex w-full flex-col items-center gap-3">
+        {/* ---------------------------------------------------
+         * PREVISUALIZACIÓN
+         * --------------------------------------------------- */}
 
-            <div className="flex h-32 w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex h-[38px] w-[48px] shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
 
-              <img
-                src={preview}
-                alt={`Vista previa de ${label}`}
-                className="max-h-full max-w-full object-contain"
-              />
+          {preview ? (
+            <img
+              src={preview}
+              alt={`Vista previa de ${label}`}
+              className="h-full w-full object-contain"
+            />
+          ) : (
+            <ImageIcon className="h-4 w-4 text-slate-400" />
+          )}
 
-            </div>
+        </div>
 
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        {/* ---------------------------------------------------
+         * BOTÓN DE CARGA
+         * --------------------------------------------------- */}
 
-              <Upload className="h-4 w-4" />
+        <label
+          htmlFor={inputId}
+          className={`inline-flex h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 ${
+            disabled
+              ? "cursor-not-allowed opacity-60"
+              : ""
+          }`}
+        >
+          <Upload className="h-3.5 w-3.5" />
 
-              Cambiar imagen
+          {preview
+            ? "Cambiar"
+            : "Seleccionar"}
+        </label>
 
-            </div>
+        {/* ---------------------------------------------------
+         * NOMBRE DEL ARCHIVO
+         * --------------------------------------------------- */}
 
-            <p className="max-w-full truncate text-xs text-slate-400">
-              {file?.name}
-            </p>
-
-          </div>
-        ) : (
-          <>
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
-
-              <ImageIcon className="h-6 w-6 text-slate-400" />
-
-            </div>
-
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-
-              <Upload className="h-4 w-4" />
-
-              Cargar {label.toLowerCase()}
-
-            </div>
-
-            <p className="mt-2 text-xs text-slate-400">
-              JPG, PNG, WEBP o GIF · Máximo 10 MB
-            </p>
-          </>
+        {file && (
+          <span
+            className="min-w-0 truncate text-xs text-slate-400"
+            title={file.name}
+          >
+            {file.name}
+          </span>
         )}
 
-      </label>
+      </div>
 
     </div>
   );
