@@ -243,43 +243,6 @@ function getResultVisual(
 }
 
 /* =========================================================
- * FORMATO NÚMERO DE CENTRO
- * ========================================================= */
-
-function formatCenterNumber(
-  value: string | number | undefined
-): string {
-  const text =
-    String(value ?? "").trim();
-
-  if (!text) {
-    return "";
-  }
-
-  /*
-   * El número de centro es el número ya definido
-   * para ese centro. No se genera ningún número nuevo.
-   *
-   * Únicamente se añade un cero delante cuando el
-   * número está comprendido entre 1 y 9.
-   */
-  const numericValue =
-    Number(text);
-
-  if (
-    Number.isInteger(numericValue) &&
-    numericValue >= 1 &&
-    numericValue <= 9
-  ) {
-    return String(
-      numericValue
-    ).padStart(2, "0");
-  }
-
-  return text;
-}
-
-/* =========================================================
  * FRECUENCIAS
  * ========================================================= */
 
@@ -1134,26 +1097,76 @@ export default function CenterDetail() {
     ) as CenterOverride;
 
   const centerName =
-    currentCenter.name ??
-    "";
+    currentCenter.name ?? "";
 
   const centerCode =
-    currentCenter.code ??
-    "";
-
-  /*
-   * Presentación del número de centro.
-   *
-   * El valor original no se modifica.
-   */
-  const formattedCenterNumber =
-    formatCenterNumber(
-      centerCode
-    );
+    currentCenter.code ?? "";
 
   const centerShortCode =
-    currentCenter.shortCode ??
-    "";
+    currentCenter.shortCode ?? "";
+
+  /*
+   * PRESENTACIÓN DE DATOS DE CABECERA
+   *
+   * El número se muestra siempre con dos dígitos.
+   * El nombre y la abreviatura se muestran siempre
+   * en mayúsculas.
+   */
+  const displayCenterNumber =
+    (() => {
+      const value =
+        String(centerCode).trim();
+
+      if (
+        /^\d+$/.test(value)
+      ) {
+        return value.padStart(
+          2,
+          "0"
+        );
+      }
+
+      return value;
+    })();
+
+  const displayCenterName =
+    centerName.toLocaleUpperCase(
+      "es-ES"
+    );
+
+  const displayCenterShortCode =
+    centerShortCode.toLocaleUpperCase(
+      "es-ES"
+    );
+
+  const displayCountry =
+    String(
+      currentCenter.country ?? ""
+    ).toLocaleUpperCase(
+      "es-ES"
+    );
+
+  const displayStl =
+    String(
+      currentCenter.stl ?? ""
+    ).toLocaleUpperCase(
+      "es-ES"
+    );
+
+  const displayAddress =
+    String(
+      currentCenter.address ?? ""
+    );
+
+  const displayCity =
+    String(
+      currentCenter.city ?? ""
+    );
+
+  const displayProvince =
+    String(
+      currentCenter.province ?? ""
+    );
 
   /* -------------------------------------------------------
    * ELEMENTOS
@@ -1495,71 +1508,229 @@ export default function CenterDetail() {
 
       <Card className="overflow-hidden">
 
-        <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
+        <div className="grid min-h-[230px] grid-cols-1 bg-[#002A54] text-white xl:grid-cols-[minmax(330px,0.95fr)_minmax(400px,1.45fr)_minmax(260px,0.85fr)]">
 
-          <div className="flex items-center gap-5 p-6">
+          {/* =================================================
+              ZONA 1 — IDENTIDAD
+              ================================================= */}
 
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
+          <div className="flex min-w-0 items-center gap-5 border-b border-white/10 p-6 xl:border-b-0 xl:border-r">
+
+            <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white">
 
               {resolvedLogoUrl ? (
                 <img
                   src={
                     resolvedLogoUrl
                   }
-                  alt="Logo"
-                  className="h-full w-full object-contain"
+                  alt={`Logo ${displayCenterName}`}
+                  className="h-full w-full object-contain p-2"
                 />
               ) : (
-                <span className="text-2xl font-black text-[#FFCC00]">
-                  {centerShortCode ||
-                    formattedCenterNumber}
-                </span>
+                <div className="flex h-full w-full flex-col items-center justify-center bg-white/5 text-white/40">
+                  <Building2 className="h-10 w-10" />
+                  <span className="mt-2 text-[10px] font-semibold uppercase tracking-wider">
+                    Sin logo
+                  </span>
+                </div>
               )}
 
             </div>
 
-            <div>
+            <div className="min-w-0 flex-1">
 
-              <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {
-                  currentCenter.country
-                }{" "}
-                ·{" "}
-                {
-                  currentCenter.stl
-                }
-              </div>
+              <div className="flex flex-wrap items-center gap-3">
 
-              <h1 className="mt-2 text-3xl font-black">
-                {centerName}
-              </h1>
-
-              <p className="mt-2 text-sm text-white/70">
-                {
-                  currentCenter.address ||
-                  "Dirección pendiente"
-                }
-              </p>
-
-              <div className="mt-3 flex gap-2">
+                <span className="text-3xl font-black tracking-tight text-white">
+                  {displayCenterNumber}
+                </span>
 
                 <Badge tone="success">
-                  {
-                    currentCenter.status
-                  }
+                  ACTIVO
                 </Badge>
 
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Código{" "}
-                  {
-                    centerShortCode ||
-                    "—"
-                  }
-                </span>
+              </div>
 
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  {formattedCenterNumber}
-                </span>
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+
+                <h1 className="min-w-0 break-words text-2xl font-black leading-tight tracking-tight sm:text-3xl">
+                  {displayCenterName}
+                </h1>
+
+                {displayCenterShortCode && (
+                  <span className="shrink-0 rounded-full border border-[#FFCC00]/50 bg-[#FFCC00]/10 px-3 py-1 text-xs font-black tracking-wider text-[#FFCC00]">
+                    {displayCenterShortCode}
+                  </span>
+                )}
+
+              </div>
+
+              <div className="mt-3 h-px bg-white/10" />
+
+              <div className="mt-3 text-xs font-bold uppercase tracking-[.14em] text-[#FFCC00]">
+                {displayCountry}
+                {displayCountry &&
+                  displayStl &&
+                  " · "}
+                {displayStl}
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* =================================================
+              ZONA 2 — INFORMACIÓN
+              ================================================= */}
+
+          <div className="flex min-w-0 flex-col justify-center p-6">
+
+            <div className="min-w-0">
+
+              {displayAddress && (
+                <div className="truncate text-sm font-semibold text-white">
+                  {displayAddress}
+                </div>
+              )}
+
+              {(displayCity ||
+                displayProvince) && (
+                <div className="mt-1 truncate text-sm text-white/70">
+                  {displayCity}
+                  {displayCity &&
+                    displayProvince &&
+                    " · "}
+                  {displayProvince}
+                </div>
+              )}
+
+              {(!displayAddress &&
+                !displayCity &&
+                !displayProvince) && (
+                <div className="text-sm text-white/40">
+                  Dirección pendiente
+                </div>
+              )}
+
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+
+              {/* ---------------------------------------------
+                  RESPONSABLE DE GESTIÓN
+                  --------------------------------------------- */}
+
+              <div className="min-w-0">
+
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#FFCC00]">
+                  Responsable de gestión
+                </div>
+
+                {currentCenter.manager ? (
+                  <div
+                    className="truncate text-sm font-semibold text-white"
+                    title={
+                      currentCenter.manager
+                    }
+                  >
+                    {currentCenter.manager}
+                  </div>
+                ) : (
+                  <div className="text-sm text-white/35">
+                    Sin responsable
+                  </div>
+                )}
+
+                {(currentCenter.managerPhone ||
+                  currentCenter.managerEmail) && (
+                  <div className="mt-1 space-y-0.5 text-xs text-white/60">
+
+                    {currentCenter.managerPhone && (
+                      <div
+                        className="truncate"
+                        title={
+                          currentCenter.managerPhone
+                        }
+                      >
+                        {currentCenter.managerPhone}
+                      </div>
+                    )}
+
+                    {currentCenter.managerEmail && (
+                      <div
+                        className="truncate"
+                        title={
+                          currentCenter.managerEmail
+                        }
+                      >
+                        {currentCenter.managerEmail}
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+
+              {/* ---------------------------------------------
+                  RESPONSABLE TÉCNICO
+                  --------------------------------------------- */}
+
+              <div className="min-w-0">
+
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#FFCC00]">
+                  Responsable técnico
+                </div>
+
+                {currentCenter.technicalResponsible ? (
+                  <div
+                    className="truncate text-sm font-semibold text-white"
+                    title={
+                      currentCenter.technicalResponsible
+                    }
+                  >
+                    {
+                      currentCenter.technicalResponsible
+                    }
+                  </div>
+                ) : (
+                  <div className="text-sm text-white/35">
+                    Sin responsable
+                  </div>
+                )}
+
+                {(currentCenter.technicalResponsiblePhone ||
+                  currentCenter.technicalResponsibleEmail) && (
+                  <div className="mt-1 space-y-0.5 text-xs text-white/60">
+
+                    {currentCenter.technicalResponsiblePhone && (
+                      <div
+                        className="truncate"
+                        title={
+                          currentCenter.technicalResponsiblePhone
+                        }
+                      >
+                        {
+                          currentCenter.technicalResponsiblePhone
+                        }
+                      </div>
+                    )}
+
+                    {currentCenter.technicalResponsibleEmail && (
+                      <div
+                        className="truncate"
+                        title={
+                          currentCenter.technicalResponsibleEmail
+                        }
+                      >
+                        {
+                          currentCenter.technicalResponsibleEmail
+                        }
+                      </div>
+                    )}
+
+                  </div>
+                )}
 
               </div>
 
@@ -1567,21 +1738,47 @@ export default function CenterDetail() {
 
           </div>
 
-          <div className="flex items-center justify-center bg-white/5 p-4">
+          {/* =================================================
+              ZONA 3 — ESTADO + IMAGEN
+              ================================================= */}
 
-            {resolvedImageUrl ? (
-              <img
-                src={
-                  resolvedImageUrl
-                }
-                alt={centerName}
-                className="h-32 w-full rounded-xl object-cover"
-              />
-            ) : (
-              <div className="flex h-32 w-full items-center justify-center rounded-xl border border-dashed border-white/20 text-xs text-white/50">
-                Imagen del centro
+          <div className="flex min-w-0 flex-col border-t border-white/10 p-4 xl:border-l xl:border-t-0">
+
+            <div className="mb-3 flex items-center justify-between gap-3">
+
+              <div className="text-[10px] font-bold uppercase tracking-[.18em] text-white/50">
+                Estado del centro
               </div>
-            )}
+
+              <Badge tone="success">
+                ACTIVO
+              </Badge>
+
+            </div>
+
+            <div className="relative min-h-[150px] flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+
+              {resolvedImageUrl ? (
+                <img
+                  src={
+                    resolvedImageUrl
+                  }
+                  alt={displayCenterName}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full min-h-[150px] w-full flex-col items-center justify-center text-white/35">
+
+                  <Building2 className="h-10 w-10" />
+
+                  <span className="mt-2 text-xs font-semibold">
+                    Imagen del centro
+                  </span>
+
+                </div>
+              )}
+
+            </div>
 
           </div>
 
