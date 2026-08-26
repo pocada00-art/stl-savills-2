@@ -11,10 +11,8 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Plus,
-  RotateCcw,
   Search,
   FileCheck2,
-  BarChart3,
   ChevronDown,
   ChevronUp,
   X,
@@ -26,6 +24,7 @@ import {
   Settings,
   CalendarDays,
   ClipboardCheck,
+  BarChart3,
   CircleAlert,
 } from "lucide-react";
 
@@ -871,6 +870,12 @@ export default function CenterDetail() {
     useState(false);
 
   const [
+    openInactive,
+    setOpenInactive,
+  ] =
+    useState(false);
+
+  const [
     openReview,
     setOpenReview,
   ] =
@@ -1536,16 +1541,6 @@ export default function CenterDetail() {
     });
   }
 
-  function resetPeriod() {
-    const next = {
-      ...state,
-    };
-
-    delete next.reviews[key];
-
-    updateState(next);
-  }
-
   function uploadImage(
     field:
       | "imageUrl"
@@ -1648,187 +1643,27 @@ export default function CenterDetail() {
           CABECERA DEL CENTRO
           =================================================== */}
       <Card className="overflow-hidden">
-        <div className="bg-[#002A54] p-4 text-white sm:p-5 lg:p-6">
-          <div className="grid gap-5 lg:grid-cols-[minmax(300px,1.15fr)_minmax(420px,1.65fr)_minmax(190px,.72fr)]">
+        <div className="bg-[#002A54] p-3 text-white sm:p-4 lg:p-5">
+          <div className="grid items-stretch gap-3 lg:grid-cols-[170px_minmax(0,1fr)_250px]">
 
             {/* -------------------------------------------------
-                ZONA IZQUIERDA — IDENTIDAD
+                ZONA IZQUIERDA — LOGO + IDENTIDAD
                 ------------------------------------------------- */}
-            <div className="min-w-0 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-              <div className="flex min-w-0 items-center gap-4">
-                <label
-                  className={`relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white ${
-                    readOnly ? "" : "cursor-pointer hover:bg-slate-50"
-                  }`}
-                  title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
-                >
-                  {resolvedLogoUrl ? (
-                    <img
-                      src={resolvedLogoUrl}
-                      alt={`Logo ${centerName}`}
-                      className="h-full w-full object-contain p-2"
-                    />
-                  ) : (
-                    <Building2 className="h-14 w-14 text-slate-300" />
-                  )}
-                  {!readOnly && (
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={e => {
-                        const f = e.target.files?.[0];
-                        if (f) uploadImage("logoUrl", f);
-                        e.currentTarget.value = "";
-                      }}
-                    />
-                  )}
-                </label>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <input
-                      disabled={readOnly}
-                      inputMode="numeric"
-                      value={centerCodeDraft}
-                      onChange={e => {
-                        const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                        setCenterCodeDraft(value);
-                        updateCenter("code", value);
-                      }}
-                      onBlur={() => {
-                        const value = centerCodeDraft.replace(/\D/g, "");
-                        const normalized = value
-                          ? value.padStart(2, "0")
-                          : "";
-                        setCenterCodeDraft(normalized);
-                        updateCenter("code", normalized);
-                      }}
-                      className={`w-20 rounded-xl border bg-white/10 px-3 py-2 text-2xl font-black tracking-tight text-white outline-none placeholder:text-white/30 disabled:cursor-default ${
-                        codeIsOccupied
-                          ? "border-red-300 ring-2 ring-red-300/40"
-                          : "border-white/20 focus:border-[#FFCC00]"
-                      }`}
-                      aria-label="Número de centro"
-                      placeholder="01"
-                    />
-
-                    <input
-                      disabled={readOnly}
-                      value={centerShortCode}
-                      onChange={e =>
-                        updateCenter("shortCode", e.target.value.toUpperCase())
-                      }
-                      className="max-w-[120px] rounded-full border border-[#FFCC00]/50 bg-[#FFCC00] px-3 py-1.5 text-xs font-black uppercase tracking-wider text-[#002A54] outline-none disabled:cursor-default"
-                      aria-label="Código corto"
-                      placeholder="CÓDIGO"
-                    />
-
-                    <Badge tone="success">
-                      {String(currentCenter.status || "").toUpperCase()}
-                    </Badge>
-                  </div>
-
-                  {codeIsOccupied && (
-                    <div className="mt-1 text-xs font-semibold text-red-200">
-                      Este número de centro ya está ocupado por otro centro.
-                    </div>
-                  )}
-
-                  <input
-                    disabled={readOnly}
-                    value={centerName}
-                    onChange={e =>
-                      updateCenter("name", e.target.value.toUpperCase())
-                    }
-                    className="mt-3 w-full min-w-0 bg-transparent text-2xl font-black uppercase leading-tight text-white outline-none placeholder:text-white/40 disabled:cursor-default lg:text-3xl"
-                    aria-label="Nombre del centro"
-                    placeholder="NOMBRE DEL CENTRO"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* -------------------------------------------------
-                ZONA CENTRAL — INFORMACIÓN
-                ------------------------------------------------- */}
-            <div className="min-w-0 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-              <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr]">
-                <HeaderField
-                  label="Dirección"
-                  value={currentCenter.address ?? ""}
-                  disabled={readOnly}
-                  onChange={value => updateCenter("address", value.toUpperCase())}
-                  className="sm:col-span-2"
-                />
-                <HeaderField
-                  label="Ciudad"
-                  value={currentCenter.city ?? ""}
-                  disabled={readOnly}
-                  onChange={value => updateCenter("city", value.toUpperCase())}
-                />
-                <HeaderField
-                  label="Provincia"
-                  value={currentCenter.province ?? ""}
-                  disabled={readOnly}
-                  onChange={value => updateCenter("province", value.toUpperCase())}
-                />
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/80">
-                <span className="rounded-lg bg-white/10 px-2.5 py-1.5">
-                  {String(currentCenter.country ?? "").toUpperCase() || "PAÍS"}
-                </span>
-                <span className="rounded-lg bg-white/10 px-2.5 py-1.5">
-                  STL · {String(currentCenter.stl ?? "").toUpperCase() || "—"}
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                <HeaderContactRow
-                  label="Responsable de gestión"
-                  name={currentCenter.manager ?? ""}
-                  phone={currentCenter.managerPhone ?? ""}
-                  email={currentCenter.managerEmail ?? ""}
-                  disabled={readOnly}
-                  onNameChange={value => updateCenter("manager", value.toUpperCase())}
-                  onPhoneChange={value => updateCenter("managerPhone", value)}
-                  onEmailChange={value => updateCenter("managerEmail", value.toUpperCase())}
-                />
-
-                <HeaderContactRow
-                  label="Responsable técnico"
-                  name={currentCenter.technicalResponsible ?? ""}
-                  phone={currentCenter.technicalResponsiblePhone ?? ""}
-                  email={currentCenter.technicalResponsibleEmail ?? ""}
-                  disabled={readOnly}
-                  onNameChange={value => updateCenter("technicalResponsible", value.toUpperCase())}
-                  onPhoneChange={value => updateCenter("technicalResponsiblePhone", value)}
-                  onEmailChange={value => updateCenter("technicalResponsibleEmail", value.toUpperCase())}
-                />
-              </div>
-            </div>
-
-            {/* -------------------------------------------------
-                ZONA DERECHA — IMAGEN
-                ------------------------------------------------- */}
-            <div className="min-w-0">
+            <div className="flex min-w-0 flex-col gap-2">
               <label
-                className={`group relative flex h-full min-h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/5 ${
-                  readOnly ? "" : "cursor-pointer hover:bg-white/10"
+                className={`group relative flex min-h-[112px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white ${
+                  readOnly ? "" : "cursor-pointer hover:bg-slate-50"
                 }`}
-                title={readOnly ? "Imagen del centro" : "Pulsar para cargar o cambiar la imagen del centro"}
+                title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
               >
-                {resolvedImageUrl ? (
+                {resolvedLogoUrl ? (
                   <img
-                    src={resolvedImageUrl}
-                    alt={centerName || "Imagen del centro"}
-                    className="h-full min-h-[220px] w-full object-cover"
+                    src={resolvedLogoUrl}
+                    alt={`Logo ${centerName}`}
+                    className="h-full w-full object-contain p-3"
                   />
                 ) : (
-                  <div className="flex h-full min-h-[220px] w-full items-center justify-center rounded-2xl border border-dashed border-white/20 text-xs font-medium uppercase tracking-wider text-white/45">
-                    Imagen del centro
-                  </div>
+                  <Building2 className="h-16 w-16 text-slate-300" />
                 )}
                 {!readOnly && (
                   <input
@@ -1837,152 +1672,173 @@ export default function CenterDetail() {
                     className="hidden"
                     onChange={e => {
                       const f = e.target.files?.[0];
-                      if (f) uploadImage("imageUrl", f);
+                      if (f) uploadImage("logoUrl", f);
                       e.currentTarget.value = "";
                     }}
                   />
                 )}
               </label>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                <div className="text-[9px] font-bold uppercase tracking-[.14em] text-white/45">
+                  Identificación
+                </div>
+                <div className="mt-0.5 text-[11px] font-semibold uppercase text-white/80">
+                  Centro
+                </div>
+              </div>
             </div>
+
+            {/* -------------------------------------------------
+                ZONA CENTRAL — IDENTIDAD + INFORMACIÓN
+                ------------------------------------------------- */}
+            <div className="flex min-w-0 flex-col justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <input
+                  disabled={readOnly}
+                  inputMode="numeric"
+                  value={centerCodeDraft}
+                  onChange={e => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setCenterCodeDraft(value);
+                    updateCenter("code", value);
+                  }}
+                  onBlur={() => {
+                    const value = centerCodeDraft.replace(/\D/g, "");
+                    const normalized = value ? value.padStart(2, "0") : "";
+                    setCenterCodeDraft(normalized);
+                    updateCenter("code", normalized);
+                  }}
+                  className={`w-[72px] shrink-0 rounded-xl border bg-transparent px-2 py-1 text-3xl font-black tracking-tight text-white outline-none placeholder:text-white/30 sm:text-4xl ${
+                    codeIsOccupied
+                      ? "border-red-300 ring-2 ring-red-300/40"
+                      : "border-white/20 focus:border-[#FFCC00]"
+                  }`}
+                  aria-label="Número de centro"
+                  placeholder="01"
+                />
+
+                <input
+                  disabled={readOnly}
+                  value={centerName}
+                  onChange={e =>
+                    updateCenter("name", e.target.value.toUpperCase())
+                  }
+                  className="min-w-[180px] flex-1 bg-transparent py-1 text-3xl font-black uppercase leading-none tracking-tight text-white outline-none placeholder:text-white/40 sm:text-4xl"
+                  aria-label="Nombre del centro"
+                  placeholder="NOMBRE DEL CENTRO"
+                />
+
+                <input
+                  disabled={readOnly}
+                  value={centerShortCode}
+                  onChange={e =>
+                    updateCenter("shortCode", e.target.value.toUpperCase())
+                  }
+                  className="w-auto min-w-[72px] max-w-[120px] rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-base font-black uppercase tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#FFCC00]"
+                  aria-label="Código corto"
+                  placeholder="CÓDIGO"
+                />
+
+                <span className="ml-auto rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white/65">
+                  {String(currentCenter.status || "").toUpperCase() || "ACTIVO"}
+                </span>
+              </div>
+
+              {codeIsOccupied && (
+                <div className="-mt-2 text-xs font-semibold text-red-200">
+                  Este número de centro ya está ocupado por otro centro.
+                </div>
+              )}
+
+              <div className="grid gap-2">
+                <HeaderField
+                  label="Dirección"
+                  value={currentCenter.address ?? ""}
+                  disabled={readOnly}
+                  onChange={value => updateCenter("address", value.toUpperCase())}
+                />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="min-w-0">
+                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.14em] text-white/45">
+                      País
+                    </span>
+                    <div className="truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold uppercase text-white/80">
+                      {String(currentCenter.country ?? "").toUpperCase() || "—"}
+                    </div>
+                  </div>
+
+                  <HeaderField
+                    label="Provincia"
+                    value={currentCenter.province ?? ""}
+                    disabled={readOnly}
+                    onChange={value => updateCenter("province", value.toUpperCase())}
+                  />
+
+                  <HeaderField
+                    label="Ciudad"
+                    value={currentCenter.city ?? ""}
+                    disabled={readOnly}
+                    onChange={value => updateCenter("city", value.toUpperCase())}
+                  />
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-[.14em] text-white/45">
+                    STL
+                  </span>
+                  <div className="min-w-0 truncate rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-bold uppercase text-white/80">
+                    {String(currentCenter.stl ?? "").toUpperCase() || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* -------------------------------------------------
+                ZONA DERECHA — IMAGEN DEL CENTRO
+                ------------------------------------------------- */}
+            <label
+              className={`group relative flex min-h-[205px] min-w-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/5 ${
+                readOnly ? "" : "cursor-pointer hover:bg-white/10"
+              }`}
+              title={readOnly ? "Imagen del centro" : "Pulsar para cargar o cambiar la imagen del centro"}
+            >
+              {resolvedImageUrl ? (
+                <img
+                  src={resolvedImageUrl}
+                  alt={centerName || "Imagen del centro"}
+                  className="h-full min-h-[205px] w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full min-h-[205px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 text-white/40">
+                  <Building2 className="h-12 w-12" />
+                  <span className="text-[10px] font-semibold uppercase tracking-[.14em]">
+                    Imagen del centro
+                  </span>
+                </div>
+              )}
+              {!readOnly && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage("imageUrl", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              )}
+            </label>
           </div>
 
           {saved && (
-            <div className="mt-3 text-right text-xs font-semibold text-[#FFCC00]">
+            <div className="mt-2 text-right text-xs font-semibold text-[#FFCC00]">
               Cambios guardados
             </div>
           )}
         </div>
-      </Card>
-
-      {/* ===================================================
-          HISTÓRICO
-          =================================================== */}
-
-      <Card className="p-6">
-
-        <div className="flex items-center justify-between gap-4">
-
-          <SectionTitle
-            title="Histórico de cumplimiento"
-            subtitle="Revisiones realizadas del centro hasta la fecha actual"
-          />
-
-          <SectionToggle
-            open={
-              openHistory
-            }
-            onClick={() =>
-              setOpenHistory(
-                v => !v
-              )
-            }
-          />
-
-        </div>
-
-        {openHistory && (
-          <>
-
-            {reviewYears.length ===
-            0 ? (
-              <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                No hay revisiones históricas cargadas.
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3 md:grid-cols-4">
-
-                {reviewYears.flatMap(
-                  y =>
-                    (
-                      [
-                        "S1",
-                        "S2",
-                      ] as Period[]
-                    ).map(p => {
-                      const r =
-                        state
-                          .reviews[
-                          reviewKey(
-                            centerId,
-                            y,
-                            p
-                          )
-                        ];
-
-                      const historicalActiveIds =
-                        catalog
-                          .filter(
-                            (x: any) =>
-                              activeMap[
-                                x.id
-                              ] !==
-                              false
-                          )
-                          .map(
-                            (x: any) =>
-                              x.id
-                          );
-
-                      const sum =
-                        reviewSummary(
-                          r,
-                          historicalActiveIds
-                        );
-
-                      return (
-                        <div
-                          key={`${y}-${p}`}
-                          className="rounded-xl border border-slate-200 p-4"
-                        >
-
-                          <div className="flex items-center justify-between">
-
-                            <div className="text-xs font-semibold text-slate-400">
-                              {p}{" "}
-                              {y}
-                            </div>
-
-                            {r?.confirmed && (
-                              <Badge tone="success">
-                                Confirmada
-                              </Badge>
-                            )}
-
-                          </div>
-
-                          <div className="mt-2 text-xl font-black">
-                            {r
-                              ? `${sum.score}%`
-                              : "—"}
-                          </div>
-
-                          <div className="mt-1 text-xs text-slate-500">
-                            {r
-                              ? r.confirmed
-                                ? "Revisión confirmada"
-                                : "Revisión cargada sin confirmar"
-                              : "Sin revisión cargada"}
-                          </div>
-
-                        </div>
-                      );
-                    })
-                )}
-
-              </div>
-            )}
-
-            <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-
-              <BarChart3 className="h-4 w-4" />
-
-              El histórico muestra únicamente años hasta el año actual.
-
-            </div>
-
-          </>
-        )}
-
       </Card>
 
       {/* ===================================================
@@ -2054,19 +1910,260 @@ export default function CenterDetail() {
                 </option>
               </Select>
 
-              {admin && (
-                <Button
-                  variant="secondary"
-                  onClick={
-                    resetPeriod
-                  }
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setOpenHistory(v => !v)}
+                  title={openHistory ? "Ocultar histórico de cumplimiento" : "Mostrar histórico de cumplimiento"}
+                  aria-label={openHistory ? "Ocultar histórico de cumplimiento" : "Mostrar histórico de cumplimiento"}
+                  className={`rounded-xl border p-2 transition ${
+                    openHistory
+                      ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
+                      : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                  }`}
                 >
-                  <RotateCcw className="mr-2 inline h-4 w-4" />
-                  Reiniciar demo
-                </Button>
-              )}
+                  <BarChart3 className="h-4 w-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOpenInactive(v => !v)}
+                  title={openInactive ? "Ocultar elementos no activos" : "Mostrar elementos no activos"}
+                  aria-label={openInactive ? "Ocultar elementos no activos" : "Mostrar elementos no activos"}
+                  className={`rounded-xl border p-2 transition ${
+                    openInactive
+                      ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
+                      : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  <Building2 className="h-4 w-4" />
+                </button>
+              </div>
 
             </div>
+
+            {openHistory && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">
+                      Histórico de cumplimiento
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Revisiones realizadas del centro hasta la fecha actual.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenHistory(false)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700"
+                    title="Ocultar histórico"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {reviewYears.length === 0 ? (
+                  <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
+                    No hay revisiones históricas cargadas.
+                  </div>
+                ) : (
+                  <div className="grid gap-2 md:grid-cols-4">
+                    {reviewYears.flatMap(
+                      y =>
+                        (["S1", "S2"] as Period[]).map(p => {
+                          const r =
+                            state.reviews[reviewKey(centerId, y, p)];
+
+                          const historicalActiveIds =
+                            catalog
+                              .filter(
+                                (x: any) =>
+                                  activeMap[x.id] !== false
+                              )
+                              .map((x: any) => x.id);
+
+                          const sum = reviewSummary(
+                            r,
+                            historicalActiveIds
+                          );
+
+                          return (
+                            <div
+                              key={`${y}-${p}`}
+                              className="rounded-xl border border-slate-200 bg-white p-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs font-semibold text-slate-400">
+                                  {p} {y}
+                                </div>
+                                {r?.confirmed && (
+                                  <Badge tone="success">
+                                    Confirmada
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="mt-1 text-lg font-black">
+                                {r ? `${sum.score}%` : "—"}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {r
+                                  ? r.confirmed
+                                    ? "Revisión confirmada"
+                                    : "Revisión cargada sin confirmar"
+                                  : "Sin revisión cargada"}
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <BarChart3 className="h-4 w-4" />
+                  El histórico muestra únicamente años hasta el año actual.
+                </div>
+              </div>
+            )}
+
+            {openInactive && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">
+                      Elementos no activos
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      No computan, no generan vencimientos y conservan su histórico.
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setShowAddElement(v => !v)}
+                    >
+                      <Plus className="mr-2 inline h-4 w-4" />
+                      Añadir elemento
+                    </Button>
+                  )}
+                </div>
+
+                {showAddElement && !readOnly && (
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                      <input
+                        value={addElementSearch}
+                        onChange={e => setAddElementSearch(e.target.value)}
+                        placeholder="Buscar cualquier elemento..."
+                        className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
+                      />
+                    </div>
+
+                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                      {selectableItems.map((x: any) => {
+                        const isActive =
+                          activeMap[x.id] !== false;
+
+                        const visual = getInstallationVisual(
+                          x.installation,
+                          x.category
+                        );
+                        const Icon = visual.Icon;
+
+                        return (
+                          <div
+                            key={x.id}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                              >
+                                <Icon
+                                  className={`h-4 w-4 ${visual.icon}`}
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold">
+                                  {x.code} · {x.installation}
+                                </div>
+                                <div className="truncate text-xs text-slate-500">
+                                  {x.action} · {x.frequency}
+                                </div>
+                              </div>
+                            </div>
+
+                            {isActive ? (
+                              <Badge>Activo</Badge>
+                            ) : (
+                              <Button
+                                variant="secondary"
+                                onClick={() => setActive(x.id, true)}
+                              >
+                                Activar
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {inactiveItems.length === 0 ? (
+                  <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
+                    No hay elementos no activos actualmente.
+                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
+                  </div>
+                ) : (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {inactiveItems.map((x: any) => {
+                      const visual = getInstallationVisual(
+                        x.installation,
+                        x.category
+                      );
+                      const Icon = visual.Icon;
+
+                      return (
+                        <div
+                          key={x.id}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                            >
+                              <Icon
+                                className={`h-4 w-4 ${visual.icon}`}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate">
+                                <b>{x.code}</b> · {x.installation}
+                              </div>
+                              <div className="truncate text-xs text-slate-500">
+                                {x.action}
+                              </div>
+                            </div>
+                          </div>
+
+                          {!readOnly && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => setActive(x.id, true)}
+                            >
+                              Activar
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mt-5 grid gap-4 md:grid-cols-4">
 
@@ -2374,41 +2471,6 @@ export default function CenterDetail() {
         {openInstallations && (
           <>
 
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-
-              <div className="flex flex-wrap items-center gap-2">
-
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-
-                  <ClipboardCheck className="h-4 w-4" />
-
-                  Leyenda de resultados
-
-                </div>
-
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  FAVORABLE
-                </span>
-
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                  CONDICIONADO
-                </span>
-
-                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                  DESFAVORABLE
-                </span>
-
-                <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                  PTE.
-                </span>
-
-                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  ERROR
-                </span>
-
-              </div>
-
-            </div>
 
             <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
 
@@ -2919,251 +2981,6 @@ export default function CenterDetail() {
 
               <div>
                 En esta fase, la próxima revisión se calcula exclusivamente como fecha de ejecución + frecuencia. Todavía no se aplican sábados, domingos ni festivos.
-              </div>
-
-            </div>
-
-            {/* =================================================
-                ELEMENTOS NO ACTIVOS
-                ================================================= */}
-
-            <div className="mt-6 rounded-2xl border border-slate-200 p-5">
-
-              <div className="flex items-center justify-between gap-4">
-
-                <SectionTitle
-                  title="Elementos no activos"
-                  subtitle="No computan, no generan vencimientos y conservan su histórico"
-                  action={
-                    !readOnly ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          setShowAddElement(
-                            v =>
-                              !v
-                          )
-                        }
-                      >
-                        <Plus className="mr-2 inline h-4 w-4" />
-                        Añadir elemento
-                      </Button>
-                    ) : undefined
-                  }
-                />
-
-              </div>
-
-              {showAddElement &&
-                !readOnly && (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-
-                    <div className="mb-3 text-sm font-bold">
-                      Seleccionar elemento del catálogo
-                    </div>
-
-                    <div className="relative mb-3">
-
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-
-                      <input
-                        value={
-                          addElementSearch
-                        }
-                        onChange={e =>
-                          setAddElementSearch(
-                            e.target.value
-                          )
-                        }
-                        placeholder="Buscar cualquier elemento..."
-                        className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
-                      />
-
-                    </div>
-
-                    <div className="max-h-80 space-y-2 overflow-y-auto">
-
-                      {selectableItems.map(
-                        (
-                          x: any
-                        ) => {
-
-                          const isActive =
-                            activeMap[
-                              x.id
-                            ] !==
-                            false;
-
-                          const visual =
-                            getInstallationVisual(
-                              x.installation,
-                              x.category
-                            );
-
-                          const Icon =
-                            visual.Icon;
-
-                          return (
-                            <div
-                              key={
-                                x.id
-                              }
-                              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
-                            >
-
-                              <div className="flex min-w-0 items-center gap-3">
-
-                                <div
-                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                                >
-                                  <Icon
-                                    className={`h-4 w-4 ${visual.icon}`}
-                                  />
-                                </div>
-
-                                <div className="min-w-0">
-
-                                  <div className="truncate text-sm font-semibold">
-                                    {
-                                      x.code
-                                    }{" "}
-                                    ·{" "}
-                                    {
-                                      x.installation
-                                    }
-                                  </div>
-
-                                  <div className="truncate text-xs text-slate-500">
-                                    {
-                                      x.action
-                                    }{" "}
-                                    ·{" "}
-                                    {
-                                      x.frequency
-                                    }
-                                  </div>
-
-                                </div>
-
-                              </div>
-
-                              {isActive ? (
-                                <Badge>
-                                  Activo
-                                </Badge>
-                              ) : (
-                                <Button
-                                  variant="secondary"
-                                  onClick={() =>
-                                    setActive(
-                                      x.id,
-                                      true
-                                    )
-                                  }
-                                >
-                                  Activar
-                                </Button>
-                              )}
-
-                            </div>
-                          );
-                        }
-                      )}
-
-                    </div>
-
-                  </div>
-                )}
-
-              <div className="mt-4">
-
-                {inactiveItems.length ===
-                0 ? (
-                  <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    No hay elementos no activos actualmente.
-                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
-                  </div>
-                ) : (
-                  <div className="grid gap-2 md:grid-cols-2">
-
-                    {inactiveItems.map(
-                      (
-                        x: any
-                      ) => {
-
-                        const visual =
-                          getInstallationVisual(
-                            x.installation,
-                            x.category
-                          );
-
-                        const Icon =
-                          visual.Icon;
-
-                        return (
-                          <div
-                            key={
-                              x.id
-                            }
-                            className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
-                          >
-
-                            <div className="flex min-w-0 items-center gap-3">
-
-                              <div
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                              >
-                                <Icon
-                                  className={`h-4 w-4 ${visual.icon}`}
-                                />
-                              </div>
-
-                              <div className="min-w-0">
-
-                                <div className="truncate">
-                                  <b>
-                                    {
-                                      x.code
-                                    }
-                                  </b>{" "}
-                                  ·{" "}
-                                  {
-                                    x.installation
-                                  }
-                                </div>
-
-                                <div className="truncate text-xs text-slate-500">
-                                  {
-                                    x.action
-                                  }
-                                </div>
-
-                              </div>
-
-                            </div>
-
-                            {!readOnly && (
-                              <Button
-                                variant="secondary"
-                                onClick={() =>
-                                  setActive(
-                                    x.id,
-                                    true
-                                  )
-                                }
-                              >
-                                Activar
-                              </Button>
-                            )}
-
-                          </div>
-                        );
-                      }
-                    )}
-
-                  </div>
-                )}
-
               </div>
 
             </div>
