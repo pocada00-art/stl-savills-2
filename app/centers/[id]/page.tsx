@@ -243,6 +243,43 @@ function getResultVisual(
 }
 
 /* =========================================================
+ * FORMATO NÚMERO DE CENTRO
+ * ========================================================= */
+
+function formatCenterNumber(
+  value: string | number | undefined
+): string {
+  const text =
+    String(value ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  /*
+   * El número de centro es el número ya definido
+   * para ese centro. No se genera ningún número nuevo.
+   *
+   * Únicamente se añade un cero delante cuando el
+   * número está comprendido entre 1 y 9.
+   */
+  const numericValue =
+    Number(text);
+
+  if (
+    Number.isInteger(numericValue) &&
+    numericValue >= 1 &&
+    numericValue <= 9
+  ) {
+    return String(
+      numericValue
+    ).padStart(2, "0");
+  }
+
+  return text;
+}
+
+/* =========================================================
  * FRECUENCIAS
  * ========================================================= */
 
@@ -789,22 +826,6 @@ export default function CenterDetail() {
 
   /* -------------------------------------------------------
    * IMÁGENES RESUELTAS
-   *
-   * Estas dos variables son las que realmente utilizaremos
-   * en <img src>.
-   *
-   * Si el valor original es:
-   *
-   * indexeddb://center/<id>/image
-   *
-   * o:
-   *
-   * indexeddb://center/<id>/logo
-   *
-   * se resuelve mediante loadCenterImage().
-   *
-   * Si es una URL normal o data:image, se utiliza
-   * directamente.
    * ------------------------------------------------------- */
 
   const [
@@ -852,9 +873,6 @@ export default function CenterDetail() {
 
   /* -------------------------------------------------------
    * AÑO ACTUAL / HISTÓRICO
-   *
-   * Este useMemo se ejecuta siempre antes de cualquier
-   * return condicional.
    * ------------------------------------------------------- */
 
   const currentYear =
@@ -936,15 +954,6 @@ export default function CenterDetail() {
     persistedCenter ||
     null;
 
-  /*
-   * IMPORTANTE:
-   *
-   * No hacemos return aquí.
-   *
-   * El componente todavía tiene Hooks que deben ejecutarse
-   * en todos los renders para evitar React error #310.
-   */
-
   const currentCenter =
     rawCenter
       ? resolveCenter(
@@ -953,24 +962,11 @@ export default function CenterDetail() {
         )
       : null;
 
-  /*
-   * ID estable del centro.
-   *
-   * Se utiliza también dentro de callbacks para evitar que
-   * TypeScript considere currentCenter como posiblemente nulo
-   * al capturar la variable en una función.
-   */
   const centerId =
     currentCenter?.id ?? "";
 
   /* -------------------------------------------------------
    * RESOLUCIÓN DE IMÁGENES INDEXEDDB
-   *
-   * Este Hook está deliberadamente ANTES del return
-   * "Centro no encontrado".
-   *
-   * Así React ejecuta siempre los mismos Hooks en el mismo
-   * orden.
    * ------------------------------------------------------- */
 
   useEffect(() => {
@@ -996,16 +992,6 @@ export default function CenterDetail() {
         return;
       }
 
-      /*
-       * Imagen normal:
-       *
-       * - https://...
-       * - /images/...
-       * - data:image/...
-       * - blob:...
-       *
-       * Se utiliza directamente.
-       */
       if (
         !source.startsWith(
           "indexeddb://"
@@ -1016,12 +1002,6 @@ export default function CenterDetail() {
       }
 
       try {
-        /*
-         * loadCenterImage() devuelve directamente una URL
-         * preparada para <img src>.
-         *
-         * NO utilizar URL.createObjectURL() aquí.
-         */
         const loaded =
           await loadCenterImage(
             source
@@ -1099,9 +1079,6 @@ export default function CenterDetail() {
           } catch {
             /*
              * No hacemos nada.
-             *
-             * El navegador puede ignorar la revocación si
-             * la URL ya no existe.
              */
           }
         }
@@ -1113,13 +1090,9 @@ export default function CenterDetail() {
     currentCenter?.logoUrl,
   ]);
 
-  /*
-   * -------------------------------------------------------
+  /* -------------------------------------------------------
    * RETURN CONDICIONAL
-   *
-   * A partir de aquí todos los Hooks ya se han ejecutado.
-   * -------------------------------------------------------
-   */
+   * ------------------------------------------------------- */
 
   if (!currentCenter) {
     return (
@@ -1167,6 +1140,16 @@ export default function CenterDetail() {
   const centerCode =
     currentCenter.code ??
     "";
+
+  /*
+   * Presentación del número de centro.
+   *
+   * El valor original no se modifica.
+   */
+  const formattedCenterNumber =
+    formatCenterNumber(
+      centerCode
+    );
 
   const centerShortCode =
     currentCenter.shortCode ??
@@ -1289,12 +1272,6 @@ export default function CenterDetail() {
       keyof CenterOverride,
     value: string
   ) {
-    /*
-     * currentCenter está garantizado por el return
-     * condicional anterior.
-     *
-     * Por tanto TypeScript ya puede tratarlo como no nulo.
-     */
     updateState({
       ...state,
       centers: {
@@ -1428,14 +1405,6 @@ export default function CenterDetail() {
       | "logoUrl",
     file: File
   ) {
-    /*
-     * La imagen nueva se almacena como data URL mediante
-     * el comportamiento existente.
-     *
-     * Si el alta de centros utiliza indexeddb://, esta
-     * pantalla también es capaz de resolverlo mediante
-     * loadCenterImage().
-     */
     const reader =
       new FileReader();
 
@@ -1543,7 +1512,7 @@ export default function CenterDetail() {
               ) : (
                 <span className="text-2xl font-black text-[#FFCC00]">
                   {centerShortCode ||
-                    centerCode}
+                    formattedCenterNumber}
                 </span>
               )}
 
@@ -1589,8 +1558,7 @@ export default function CenterDetail() {
                 </span>
 
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº{" "}
-                  {centerCode}
+                  {formattedCenterNumber}
                 </span>
 
               </div>
