@@ -11,6 +11,7 @@ import { useParams } from "next/navigation";
 
 import {
   ArrowLeft,
+  ArrowUpDown,
   Plus,
   Minus,
   Search,
@@ -73,6 +74,77 @@ type IconComponent =
   React.ComponentType<{
     className?: string;
   }>;
+
+type TableColumnKey =
+  | "code"
+  | "type"
+  | "installation"
+  | "description"
+  | "action"
+  | "frequency"
+  | "equipmentId"
+  | "company"
+  | "status"
+  | "date"
+  | "nextReview"
+  | "secondReview"
+  | "result"
+  | "comment"
+  | "actions";
+
+const TABLE_COLUMN_LABELS: Record<TableColumnKey, string> = {
+  code: "Código",
+  type: "Tipo",
+  installation: "Instalación",
+  description: "Descripción",
+  action: "Actuación",
+  frequency: "Frecuencia",
+  equipmentId: "ID equipo",
+  company: "Empresa",
+  status: "Estado revisión",
+  date: "Fecha",
+  nextReview: "Próxima revisión",
+  secondReview: "2ª revisión",
+  result: "Resultado",
+  comment: "Comentario",
+  actions: "",
+};
+
+const TABLE_COLUMN_DEFAULT_WIDTHS: Record<TableColumnKey, number> = {
+  code: 96,
+  type: 70,
+  installation: 180,
+  description: 180,
+  action: 180,
+  frequency: 120,
+  equipmentId: 130,
+  company: 140,
+  status: 155,
+  date: 125,
+  nextReview: 155,
+  secondReview: 135,
+  result: 130,
+  comment: 190,
+  actions: 52,
+};
+
+const TABLE_COLUMN_MIN_WIDTHS: Record<TableColumnKey, number> = {
+  code: 70,
+  type: 55,
+  installation: 120,
+  description: 100,
+  action: 120,
+  frequency: 90,
+  equipmentId: 90,
+  company: 90,
+  status: 110,
+  date: 100,
+  nextReview: 110,
+  secondReview: 100,
+  result: 100,
+  comment: 120,
+  actions: 44,
+};
 
 /* =========================================================
  * UTILIDADES VISUALES
@@ -250,12 +322,32 @@ function formatCenterCode(value: string | number | undefined | null) {
   const raw = String(value ?? "").trim();
   if (!raw) return "—";
 
-  const numeric = raw.match(/^\d+$/);
+  // Los códigos pueden ser enteros (01, 02, 11) o contener
+  // un punto decimal (14.4). El punto forma parte del código
+  // oficial y nunca debe eliminarse.
+  const numeric = raw.match(/^(\d+)([.,]\d+)?$/);
   if (numeric) {
-    return raw.padStart(2, "0");
+    const integerPart = numeric[1].padStart(2, "0");
+    const decimalPart = numeric[2]
+      ? `.${numeric[2].slice(1)}`
+      : "";
+    return `${integerPart}${decimalPart}`;
   }
 
   return raw.toUpperCase();
+}
+
+function normalizeCenterCodeForCompare(value: string | number | undefined | null) {
+  const raw = String(value ?? "").trim().replace(",", ".");
+  if (!raw) return "";
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric.toString() : raw.toLowerCase();
+}
+
+function sentenceCase(value: string | number | null | undefined, fallback = "—") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 
 function resolveBaseCode(catalog: any[], index: number): string {
@@ -277,12 +369,11 @@ function instanceCode(baseCode: string, ordinal: number): string {
 function parseFrequency(
   frequency: string
 ) {
-  const value =
-    String(
-      frequency || ""
-    )
-      .trim()
-      .toLowerCase();
+  const value = String(
+    frequency || ""
+  )
+    .trim()
+    .toLowerCase();
 
   if (!value) {
     return null;
@@ -800,6 +891,45 @@ function HeaderContactRow({
   );
 }
 
+function TableHeader({
+  column,
+  sort,
+  onSort,
+  width,
+}: {
+  column: TableColumnKey;
+  sort: { key: TableColumnKey; direction: "asc" | "desc" };
+  onSort: (key: TableColumnKey) => void;
+  width: number;
+}) {
+  const sortable = column !== "actions";
+  const active = sort.key === column;
+
+  return (
+    <th
+      className="px-2 py-2"
+      style={{ width, minWidth: width }}
+    >
+      <button
+        type="button"
+        disabled={!sortable}
+        onClick={() => sortable && onSort(column)}
+        className={`inline-flex w-full items-center justify-between gap-1 text-left ${
+          sortable ? "cursor-pointer hover:text-[#FFCC00]" : "cursor-default"
+        }`}
+        title={sortable ? `Ordenar por ${TABLE_COLUMN_LABELS[column]}` : undefined}
+      >
+        <span>{TABLE_COLUMN_LABELS[column]}</span>
+        {sortable && (
+          <span className="shrink-0 opacity-70">
+            {active ? (sort.direction === "asc" ? "▲" : "▼") : <ArrowUpDown className="h-3 w-3" />}
+          </span>
+        )}
+      </button>
+    </th>
+  );
+}
+
 /* =========================================================
  * COMPONENTE
  * ========================================================= */
@@ -888,6 +1018,7 @@ export default function CenterDetail() {
   ] =
     useState(false);
 
+
   const [
     openReview,
     setOpenReview,
@@ -900,17 +1031,40 @@ export default function CenterDetail() {
   ] =
     useState(true);
 
-  const [showDescriptionColumn, setShowDescriptionColumn] =
-    useState(true);
-
-  const [descriptionWidth, setDescriptionWidth] =
-    useState(150);
-
   const [showColumnOptions, setShowColumnOptions] =
     useState(false);
 
+  const [columnVisibility, setColumnVisibility] =
+    useState<Record<TableColumnKey, boolean>>({
+      code: true,
+      type: true,
+      installation: true,
+      description: true,
+      action: true,
+      frequency: true,
+      equipmentId: true,
+      company: true,
+      status: true,
+      date: true,
+      nextReview: true,
+      secondReview: true,
+      result: true,
+      comment: true,
+      actions: true,
+    });
+
+  const [columnWidths, setColumnWidths] =
+    useState<Record<TableColumnKey, number>>(TABLE_COLUMN_DEFAULT_WIDTHS);
+
+  const [tableSort, setTableSort] =
+    useState<{ key: TableColumnKey; direction: "asc" | "desc" }>({
+      key: "code",
+      direction: "asc",
+    });
+
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
+
 
   /* -------------------------------------------------------
    * IMÁGENES RESUELTAS
@@ -1111,6 +1265,7 @@ export default function CenterDetail() {
     setCenterCodeDraft(formatted === "—" ? "" : formatted);
   }, [centerId, centerCode]);
 
+
   /* -------------------------------------------------------
    * RESOLUCIÓN DE IMÁGENES INDEXEDDB
    *
@@ -1261,58 +1416,16 @@ export default function CenterDetail() {
     currentCenter?.logoUrl,
   ]);
 
-  /*
-   * -------------------------------------------------------
-   * RETURN CONDICIONAL
-   *
-   * A partir de aquí todos los Hooks ya se han ejecutado.
-   * -------------------------------------------------------
-   */
-
-  if (!currentCenter) {
-    return (
-      <Card className="p-8">
-        <h2 className="text-xl font-bold">
-          Centro no encontrado
-        </h2>
-
-        <p className="mt-2 text-sm text-slate-500">
-          El centro no existe ni en el catálogo demo ni
-          entre los centros creados mediante el nuevo sistema.
-        </p>
-
-        <Link
-          href="/centers"
-          className="mt-4 inline-block text-sm underline"
-        >
-          Volver
-        </Link>
-      </Card>
-    );
-  }
-
-  /*
-   * Capturamos estos valores después de comprobar que
-   * currentCenter existe.
-   *
-   * TypeScript los considera no nulos y pueden utilizarse
-   * con seguridad dentro de callbacks y funciones anidadas.
-   */
-  const centerCountry =
-    currentCenter.country;
-
-  const centerStl =
-    currentCenter.stl;
-
   /* -------------------------------------------------------
    * CATÁLOGO
    * ------------------------------------------------------- */
 
   const catalog =
-    currentCenter.country ===
-    "España"
-      ? demo.esCatalog
-      : demo.ptCatalog;
+    currentCenter
+      ? currentCenter.country === "España"
+        ? demo.esCatalog
+        : demo.ptCatalog
+      : [];
 
   const overrides =
     (
@@ -1322,7 +1435,7 @@ export default function CenterDetail() {
     ) as CenterOverride;
 
   const normalizedDraftCode =
-    centerCodeDraft.trim().replace(/^0+(?=\d)/, "");
+    normalizeCenterCodeForCompare(centerCodeDraft);
 
   const codeIsOccupied =
     normalizedDraftCode !== "" &&
@@ -1335,13 +1448,13 @@ export default function CenterDetail() {
     ].some(center => {
       const otherId = String(center.id ?? "");
       const otherCode = String(center.code ?? "")
-        .trim()
-        .replace(/^0+(?=\d)/, "");
+        .trim();
+      const normalizedOtherCode = normalizeCenterCodeForCompare(otherCode);
 
       return (
         otherId !== centerId &&
-        otherCode !== "" &&
-        otherCode === normalizedDraftCode
+        normalizedOtherCode !== "" &&
+        normalizedOtherCode === normalizedDraftCode
       );
     });
 
@@ -1395,7 +1508,7 @@ export default function CenterDetail() {
 
     return Array.from(unique.values()).filter(
       (x: any) =>
-        `${x.baseCode} ${x.installation} ${x.action} ${x.category}`
+        `${x.baseCode} ${sentenceCase(x.installation)} ${sentenceCase(x.action)} ${x.category}`
           .toLowerCase()
           .includes(addElementSearch.toLowerCase())
     );
@@ -1457,7 +1570,106 @@ export default function CenterDetail() {
         .includes(q.toLowerCase())
   );
 
-  /* -------------------------------------------------------
+  const sortedVisible = useMemo(() => {
+    const getSortValue = (item: any): string => {
+      const reviewItem = review.items[item.id] || blankItem();
+      const nextDate = calculateNextReview(
+        reviewItem.date,
+        String(item.frequency || "")
+      );
+      const result = calculateResult(
+        reviewItem.status,
+        reviewItem.date,
+        reviewItem.secondReviewDate,
+        nextDate,
+        String(item.frequency || "")
+      );
+
+      switch (tableSort.key) {
+        case "code": return String(item.displayCode ?? "");
+        case "type": return String(item.category ?? "");
+        case "installation": return String(item.installation ?? "");
+        case "description": return String(item.category ?? "");
+        case "action": return String(item.action ?? "");
+        case "frequency": return String(item.frequency ?? "");
+        case "equipmentId": return String(reviewItem.equipmentId ?? "");
+        case "company": return String(reviewItem.company ?? "");
+        case "status": return String(reviewItem.status ?? "");
+        case "date": return String(reviewItem.date ?? "");
+        case "nextReview": return String(nextDate ?? "");
+        case "secondReview": return String(reviewItem.secondReviewDate ?? "");
+        case "result": return String(result ?? "");
+        case "comment": return String(reviewItem.comment ?? "");
+        case "actions": return "";
+        default: return "";
+      }
+    };
+
+    return [...visible].sort((a: any, b: any) =>
+      getSortValue(a).localeCompare(
+        getSortValue(b),
+        "es",
+        { numeric: true, sensitivity: "base" }
+      ) * (tableSort.direction === "asc" ? 1 : -1)
+    );
+  }, [visible, tableSort, review]);
+
+  const visibleColumnCount = Object.values(columnVisibility).filter(Boolean).length;
+
+  function toggleTableSort(key: TableColumnKey) {
+    setTableSort(current => ({
+      key,
+      direction:
+        current.key === key && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  }
+
+  function toggleColumnVisibility(key: TableColumnKey) {
+    setColumnVisibility(current => {
+      if (current[key] && Object.values(current).filter(Boolean).length <= 1) {
+        return current;
+      }
+      return { ...current, [key]: !current[key] };
+    });
+  }
+
+  function setColumnWidth(key: TableColumnKey, value: number) {
+    setColumnWidths(current => ({ ...current, [key]: value }));
+  }
+
+  /*
+   * -------------------------------------------------------
+   * RETURN CONDICIONAL
+   *
+   * A partir de aquí todos los Hooks ya se han ejecutado.
+   * -------------------------------------------------------
+   */
+
+  if (!currentCenter) {
+    return (
+      <Card className="p-8">
+        <h2 className="text-xl font-bold">
+          Centro no encontrado
+        </h2>
+
+        <p className="mt-2 text-sm text-slate-500">
+          El centro no existe ni en el catálogo demo ni
+          entre los centros creados mediante el nuevo sistema.
+        </p>
+
+        <Link
+          href="/centers"
+          className="mt-4 inline-block text-sm underline"
+        >
+          Volver
+        </Link>
+      </Card>
+    );
+  }
+
+    /* -------------------------------------------------------
    * ACTUALIZACIÓN DE ESTADO
    * ------------------------------------------------------- */
 
@@ -1530,23 +1742,16 @@ export default function CenterDetail() {
     }
 
     const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
     const customItem: CenterItem = {
       id: customId,
-      baseCode: String(
-        template.baseCode ??
-        template.code ??
-        ""
-      ),
-      country: centerCountry,
-      stl: centerStl,
+      baseCode: String(template.baseCode ?? template.code ?? ""),
+      country: currentCenter.country,
+      stl: currentCenter.stl,
       category: template.category,
       installation: template.installation,
       action: template.action,
       frequency: template.frequency,
-      normativeReference:
-        template.normativeReference ??
-        null,
+      normativeReference: template.normativeReference ?? null,
     };
 
     updateState({
@@ -1835,13 +2040,13 @@ export default function CenterDetail() {
                   inputMode="numeric"
                   value={centerCodeDraft}
                   onChange={e => {
-                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    const value = e.target.value.replace(/[^0-9.,]/g, "").replace(",", ".").slice(0, 8);
                     setCenterCodeDraft(value);
                     updateCenter("code", value);
                   }}
                   onBlur={() => {
-                    const value = centerCodeDraft.replace(/\D/g, "");
-                    const normalized = value ? value.padStart(2, "0") : "";
+                    const value = centerCodeDraft.replace(",", ".").trim();
+                    const normalized = formatCenterCode(value) === "—" ? "" : formatCenterCode(value);
                     setCenterCodeDraft(normalized);
                     updateCenter("code", normalized);
                   }}
@@ -2529,30 +2734,41 @@ export default function CenterDetail() {
           <>
 
             {showColumnOptions && (
-              <div className="mb-2 mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setShowDescriptionColumn(v => !v)}
-                  className="inline-flex items-center gap-1.5 font-semibold text-slate-700"
-                  title={showDescriptionColumn ? "Ocultar descripción" : "Mostrar descripción"}
-                >
-                  {showDescriptionColumn ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  Descripción
-                </button>
-                {showDescriptionColumn && (
-                  <label className="flex items-center gap-2 text-slate-500">
-                    Ancho
-                    <input
-                      type="range"
-                      min="100"
-                      max="300"
-                      step="10"
-                      value={descriptionWidth}
-                      onChange={e => setDescriptionWidth(Number(e.target.value))}
-                    />
-                    <span className="w-10 text-right font-mono">{descriptionWidth}px</span>
-                  </label>
-                )}
+              <div className="mb-2 mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-slate-700">Configuración de columnas</div>
+                  <div className="text-[10px] text-slate-400">Pulsa el título para ordenar. Ajusta el ancho con cada control.</div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
+                    <div key={column} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleColumnVisibility(column)}
+                          className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"
+                          title={columnVisibility[column] ? `Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}` : `Mostrar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
+                        >
+                          {columnVisibility[column] ? <Eye className="h-3.5 w-3.5 shrink-0" /> : <EyeOff className="h-3.5 w-3.5 shrink-0" />}
+                          <span className="truncate">{TABLE_COLUMN_LABELS[column] || "Acciones"}</span>
+                        </button>
+                        <span className="shrink-0 text-[10px] font-mono text-slate-400">{columnWidths[column]} px</span>
+                      </div>
+                      {columnVisibility[column] && (
+                        <input
+                          className="mt-1 w-full"
+                          type="range"
+                          min={TABLE_COLUMN_MIN_WIDTHS[column]}
+                          max="320"
+                          step="5"
+                          value={columnWidths[column]}
+                          onChange={e => setColumnWidth(column, Number(e.target.value))}
+                          aria-label={`Ancho de ${TABLE_COLUMN_LABELS[column] || "acciones"}`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -2603,80 +2819,36 @@ export default function CenterDetail() {
 
                 <table className="min-w-[1500px] w-full text-xs">
 
-                  <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
+                  <colgroup>
+                    {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
+                      <col
+                        key={column}
+                        style={{
+                          width: columnWidths[column],
+                          minWidth: columnWidths[column],
+                          display: columnVisibility[column] ? undefined : "none",
+                        }}
+                      />
+                    ))}
+                  </colgroup>
 
+                  <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold tracking-wide text-white">
                     <tr>
-
-                      <th className="w-24 px-2 py-2">
-                        Código
-                      </th>
-
-                      <th className="w-16 px-1.5 py-2 text-center">
-                        Tipo
-                      </th>
-
-                      <th className="min-w-[145px] px-2 py-2">
-                        Instalación
-                      </th>
-
-                      {showDescriptionColumn && (
-                        <th
-                          className="px-2 py-2"
-                          style={{ width: descriptionWidth, minWidth: descriptionWidth }}
-                        >
-                          Descripción
-                        </th>
-                      )}
-
-                      <th className="min-w-[145px] px-2 py-2">
-                        Actuación
-                      </th>
-
-                      <th className="w-24 px-2 py-2">
-                        Frecuencia
-                      </th>
-
-                      <th className="w-28 px-2 py-2">
-                        ID equipo
-                      </th>
-
-                      <th className="w-28 px-2 py-2">
-                        Empresa
-                      </th>
-
-                      <th className="w-36 px-2 py-2">
-                        Estado revisión
-                      </th>
-
-                      <th className="w-28 px-2 py-2">
-                        Fecha
-                      </th>
-
-                      <th className="w-28 px-2 py-2">
-                        Próxima revisión
-                      </th>
-
-                      <th className="w-28 px-2 py-2">
-                        2ª revisión
-                      </th>
-
-                      <th className="w-28 px-2 py-2">
-                        Resultado
-                      </th>
-
-                      <th className="min-w-[170px] px-2 py-2">
-                        Comentario
-                      </th>
-
-                      <th className="w-12 px-2 py-2" />
-
+                      {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
+                        <TableHeader
+                          key={column}
+                          column={column}
+                          sort={tableSort}
+                          onSort={toggleTableSort}
+                          width={columnWidths[column]}
+                        />
+                      ))}
                     </tr>
-
                   </thead>
 
                   <tbody>
 
-                    {visible.map(
+                    {sortedVisible.map(
                       (
                         x: any
                       ) => {
@@ -2759,16 +2931,11 @@ export default function CenterDetail() {
                               </div>
                             </td>
 
-                            {showDescriptionColumn && (
-                              <td
-                                className="px-2 py-2 align-top text-slate-400"
-                                style={{ width: descriptionWidth, maxWidth: descriptionWidth }}
-                              >
-                                <div className="truncate" title={x.category || ""}>
-                                  {x.category || "—"}
-                                </div>
-                              </td>
-                            )}
+                            <td className="px-2 py-2 align-top text-slate-400">
+                              <div className="truncate" title={x.category || ""}>
+                                {sentenceCase(x.category)}
+                              </div>
+                            </td>
 
                             <td className="px-2 py-2 align-top text-slate-600">
                               {x.action}
@@ -2870,7 +3037,7 @@ export default function CenterDetail() {
                                         s
                                       }
                                     >
-                                      {s}
+                                      {sentenceCase(s)}
                                     </option>
                                   )
                                 )}
@@ -2984,9 +3151,7 @@ export default function CenterDetail() {
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {
-                                  result
-                                }
+                                {sentenceCase(result)}
 
                               </span>
 
@@ -3048,9 +3213,7 @@ export default function CenterDetail() {
                       <tr>
 
                         <td
-                          colSpan={
-                            15
-                          }
+                          colSpan={visibleColumnCount}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con la búsqueda.
