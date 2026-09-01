@@ -277,11 +277,12 @@ function instanceCode(baseCode: string, ordinal: number): string {
 function parseFrequency(
   frequency: string
 ) {
-  const value = String(
-    frequency || ""
-  )
-    .trim()
-    .toLowerCase();
+  const value =
+    String(
+      frequency || ""
+    )
+      .trim()
+      .toLowerCase();
 
   if (!value) {
     return null;
@@ -887,7 +888,6 @@ export default function CenterDetail() {
   ] =
     useState(false);
 
-
   const [
     openReview,
     setOpenReview,
@@ -911,7 +911,6 @@ export default function CenterDetail() {
 
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
-
 
   /* -------------------------------------------------------
    * IMÁGENES RESUELTAS
@@ -1112,7 +1111,6 @@ export default function CenterDetail() {
     setCenterCodeDraft(formatted === "—" ? "" : formatted);
   }, [centerId, centerCode]);
 
-
   /* -------------------------------------------------------
    * RESOLUCIÓN DE IMÁGENES INDEXEDDB
    *
@@ -1292,6 +1290,19 @@ export default function CenterDetail() {
       </Card>
     );
   }
+
+  /*
+   * Capturamos estos valores después de comprobar que
+   * currentCenter existe.
+   *
+   * TypeScript los considera no nulos y pueden utilizarse
+   * con seguridad dentro de callbacks y funciones anidadas.
+   */
+  const centerCountry =
+    currentCenter.country;
+
+  const centerStl =
+    currentCenter.stl;
 
   /* -------------------------------------------------------
    * CATÁLOGO
@@ -1519,16 +1530,23 @@ export default function CenterDetail() {
     }
 
     const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     const customItem: CenterItem = {
       id: customId,
-      baseCode: String(template.baseCode ?? template.code ?? ""),
-      country: currentCenter.country,
-      stl: currentCenter.stl,
+      baseCode: String(
+        template.baseCode ??
+        template.code ??
+        ""
+      ),
+      country: centerCountry,
+      stl: centerStl,
       category: template.category,
       installation: template.installation,
       action: template.action,
       frequency: template.frequency,
-      normativeReference: template.normativeReference ?? null,
+      normativeReference:
+        template.normativeReference ??
+        null,
     };
 
     updateState({
