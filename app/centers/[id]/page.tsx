@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Plus,
+  Minus,
   Search,
   FileCheck2,
   ChevronDown,
@@ -26,6 +28,9 @@ import {
   ClipboardCheck,
   BarChart3,
   CircleAlert,
+  SlidersHorizontal,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
@@ -49,6 +54,7 @@ import {
   type V1Status,
   type Period,
   type CenterOverride,
+  type CenterItem,
 } from "@/lib/v1-state";
 
 import {
@@ -250,6 +256,18 @@ function formatCenterCode(value: string | number | undefined | null) {
   }
 
   return raw.toUpperCase();
+}
+
+function resolveBaseCode(catalog: any[], index: number): string {
+  for (let i = index; i >= 0; i -= 1) {
+    const code = String(catalog[i]?.code ?? "").trim();
+    if (code) return code;
+  }
+  return "";
+}
+
+function instanceCode(baseCode: string, ordinal: number): string {
+  return baseCode ? `${baseCode}.${ordinal}` : String(ordinal);
 }
 
 /* =========================================================
@@ -869,11 +887,6 @@ export default function CenterDetail() {
   ] =
     useState(false);
 
-  const [
-    openInactive,
-    setOpenInactive,
-  ] =
-    useState(false);
 
   const [
     openReview,
@@ -886,6 +899,19 @@ export default function CenterDetail() {
     setOpenInstallations,
   ] =
     useState(true);
+
+  const [showDescriptionColumn, setShowDescriptionColumn] =
+    useState(true);
+
+  const [descriptionWidth, setDescriptionWidth] =
+    useState(150);
+
+  const [showColumnOptions, setShowColumnOptions] =
+    useState(false);
+
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomScrollRef = useRef<HTMLDivElement | null>(null);
+
 
   /* -------------------------------------------------------
    * IMÁGENES RESUELTAS
@@ -1313,25 +1339,65 @@ export default function CenterDetail() {
    * ------------------------------------------------------- */
 
   const activeMap =
-    state.activeItems[
-      centerId
-    ] || {};
+    state.activeItems[centerId] || {};
 
-  const activeItems =
-    catalog.filter(
-      (x: any) =>
-        activeMap[
-          x.id
-        ] !== false
-    );
+  const catalogItems = useMemo(
+    () =>
+      catalog.map((item: any, index: number) => ({
+        ...item,
+        baseCode: resolveBaseCode(catalog as any[], index),
+      })),
+    [catalog]
+  );
 
-  const inactiveItems =
-    catalog.filter(
-      (x: any) =>
-        activeMap[
-          x.id
-        ] === false
+  const customItems = state.customItems?.[centerId] || [];
+
+  const centerItems = useMemo(() => {
+    const baseItems = catalogItems.filter(
+      (x: any) => activeMap[x.id] !== false
     );
+    return [...baseItems, ...customItems];
+  }, [catalogItems, activeMap, customItems]);
+
+  const numberedItems = useMemo(() => {
+    const counters = new Map<string, number>();
+
+    return centerItems.map((item: any) => {
+      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
+      const ordinal = (counters.get(baseCode) || 0) + 1;
+      counters.set(baseCode, ordinal);
+      return {
+        ...item,
+        displayCode: instanceCode(baseCode, ordinal),
+      };
+    });
+  }, [centerItems]);
+
+  const selectableItems = useMemo(() => {
+    const unique = new Map<string, any>();
+
+    catalogItems.forEach((item: any) => {
+      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
+      const key = `${baseCode}|${item.installation}`;
+      if (!unique.has(key)) unique.set(key, item);
+    });
+
+    return Array.from(unique.values()).filter(
+      (x: any) =>
+        `${x.baseCode} ${x.installation} ${x.action} ${x.category}`
+          .toLowerCase()
+          .includes(addElementSearch.toLowerCase())
+    );
+  }, [catalogItems, addElementSearch]);
+
+  const elementCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    centerItems.forEach((item: any) => {
+      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
+      counts.set(baseCode, (counts.get(baseCode) || 0) + 1);
+    });
+    return counts;
+  }, [centerItems]);
 
   /* -------------------------------------------------------
    * REVISIÓN
@@ -1356,9 +1422,8 @@ export default function CenterDetail() {
   const summary =
     reviewSummary(
       review,
-      activeItems.map(
-        (x: any) =>
-          x.id
+      centerItems.map(
+        (x: any) => x.id
       )
     );
 
@@ -1367,40 +1432,19 @@ export default function CenterDetail() {
     ...Array.from(
       new Set(
         catalog
-          .map(
-            (x: any) =>
-              x.category
-          )
+          .map((x: any) => x.category)
           .filter(Boolean)
       )
     ),
   ];
 
-  const visible =
-    activeItems.filter(
-      (x: any) =>
-        (
-          category ===
-            "Todas" ||
-          x.category ===
-            category
-        ) &&
-        `${x.code} ${x.installation} ${x.action} ${x.category}`
-          .toLowerCase()
-          .includes(
-            q.toLowerCase()
-          )
-    );
-
-  const selectableItems =
-    catalog.filter(
-      (x: any) =>
-        `${x.code} ${x.installation} ${x.action} ${x.category}`
-          .toLowerCase()
-          .includes(
-            addElementSearch.toLowerCase()
-          )
-    );
+  const visible = numberedItems.filter(
+    (x: any) =>
+      (category === "Todas" || x.category === category) &&
+      `${x.displayCode} ${x.installation} ${x.action} ${x.category}`
+        .toLowerCase()
+        .includes(q.toLowerCase())
+  );
 
   /* -------------------------------------------------------
    * ACTUALIZACIÓN DE ESTADO
@@ -1457,8 +1501,84 @@ export default function CenterDetail() {
         },
       },
     };
-
     updateState(next);
+  }
+
+  function addElement(template: any) {
+    if (readOnly) return;
+
+    const reusable = catalogItems.find(
+      (item: any) =>
+        item.baseCode === template.baseCode &&
+        activeMap[item.id] === false
+    );
+
+    if (reusable) {
+      setActive(reusable.id, true);
+      return;
+    }
+
+    const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const customItem: CenterItem = {
+      id: customId,
+      baseCode: String(template.baseCode ?? template.code ?? ""),
+      country: currentCenter.country,
+      stl: currentCenter.stl,
+      category: template.category,
+      installation: template.installation,
+      action: template.action,
+      frequency: template.frequency,
+      normativeReference: template.normativeReference ?? null,
+    };
+
+    updateState({
+      ...state,
+      customItems: {
+        ...(state.customItems || {}),
+        [centerId]: [
+          ...(state.customItems?.[centerId] || []),
+          customItem,
+        ],
+      },
+    });
+  }
+
+  function removeElement(itemId: string) {
+    if (readOnly) return;
+
+    const isCustom = customItems.some((item: any) => item.id === itemId);
+    const nextReviews = { ...state.reviews };
+
+    Object.keys(nextReviews).forEach(reviewId => {
+      if (!nextReviews[reviewId]?.items?.[itemId]) return;
+      const nextItems = { ...nextReviews[reviewId].items };
+      delete nextItems[itemId];
+      nextReviews[reviewId] = { ...nextReviews[reviewId], items: nextItems };
+    });
+
+    if (isCustom) {
+      updateState({
+        ...state,
+        customItems: {
+          ...(state.customItems || {}),
+          [centerId]: customItems.filter((item: any) => item.id !== itemId),
+        },
+        reviews: nextReviews,
+      });
+      return;
+    }
+
+    updateState({
+      ...state,
+      activeItems: {
+        ...state.activeItems,
+        [centerId]: {
+          ...activeMap,
+          [itemId]: false,
+        },
+      },
+      reviews: nextReviews,
+    });
   }
 
   function getItem(
@@ -1656,11 +1776,11 @@ export default function CenterDetail() {
             isInactive ? "grayscale opacity-75" : ""
           }`}
         >
-          <div className="grid items-stretch gap-2 lg:grid-cols-[145px_minmax(0,1fr)_205px]">
+          <div className="grid items-stretch gap-2 lg:grid-cols-[120px_minmax(0,1fr)_190px]">
 
             {/* LOGO */}
             <label
-              className={`group relative flex min-h-[116px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white ${
+              className={`group relative flex min-h-[96px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white ${
                 readOnly ? "" : "cursor-pointer hover:bg-slate-50"
               }`}
               title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
@@ -1672,7 +1792,7 @@ export default function CenterDetail() {
                   className="h-full w-full object-contain p-2"
                 />
               ) : (
-                <Building2 className="h-14 w-14 text-slate-300" />
+                <Building2 className="h-11 w-11 text-slate-300" />
               )}
               {!readOnly && (
                 <input
@@ -1707,11 +1827,11 @@ export default function CenterDetail() {
                     setCenterCodeDraft(normalized);
                     updateCenter("code", normalized);
                   }}
-                  className={`w-[58px] shrink-0 rounded-lg border bg-transparent px-1.5 py-0 text-2xl font-black tracking-tight text-white outline-none placeholder:text-white/30 sm:text-3xl ${
+                  className={`w-[66px] shrink-0 rounded-lg border bg-white/10 px-2 py-1 text-2xl font-black tracking-tight text-white outline-none placeholder:text-white/30 sm:text-3xl ${
                     codeIsOccupied
                       ? "border-red-300 ring-2 ring-red-300/40"
-                      : "border-white/20 focus:border-[#FFCC00]"
-                  } disabled:opacity-60`}
+                      : "border-white/15 focus:border-[#FFCC00]"
+                  } disabled:cursor-default disabled:opacity-60`}
                   aria-label="Número de centro"
                   placeholder="01"
                 />
@@ -1722,7 +1842,7 @@ export default function CenterDetail() {
                   onChange={e =>
                     updateCenter("name", e.target.value.toUpperCase())
                   }
-                  className="min-w-0 flex-1 bg-transparent px-0 py-0 text-2xl font-black uppercase leading-none tracking-tight text-white outline-none placeholder:text-white/40 sm:text-3xl disabled:opacity-60"
+                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-2xl font-black uppercase leading-none tracking-tight text-white outline-none placeholder:text-white/40 focus:border-[#FFCC00] sm:text-3xl disabled:cursor-default disabled:opacity-60"
                   aria-label="Nombre del centro"
                   placeholder="NOMBRE DEL CENTRO"
                 />
@@ -1733,7 +1853,7 @@ export default function CenterDetail() {
                   onChange={e =>
                     updateCenter("shortCode", e.target.value.toUpperCase())
                   }
-                  className="w-[82px] shrink-0 rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                  className="w-[82px] shrink-0 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
                   aria-label="Código corto"
                   placeholder="CÓDIGO"
                 />
@@ -1809,7 +1929,7 @@ export default function CenterDetail() {
 
             {/* IMAGEN DEL CENTRO */}
             <label
-              className={`group relative flex min-h-[116px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5 ${
+              className={`group relative flex min-h-[96px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5 ${
                 readOnly ? "" : "cursor-pointer hover:bg-white/10"
               }`}
               title={readOnly ? "Imagen del centro" : "Pulsar para cargar o cambiar la imagen del centro"}
@@ -1818,11 +1938,11 @@ export default function CenterDetail() {
                 <img
                   src={resolvedImageUrl}
                   alt={centerName || "Imagen del centro"}
-                  className="h-full min-h-[116px] w-full object-cover"
+                  className="h-full min-h-[96px] w-full object-cover"
                 />
               ) : (
                 <div className="flex h-full min-h-[116px] w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-white/20 text-white/40">
-                  <Building2 className="h-9 w-9" />
+                  <Building2 className="h-8 w-8" />
                   <span className="text-[9px] font-semibold uppercase tracking-[.12em]">
                     Imagen del centro
                   </span>
@@ -1937,16 +2057,16 @@ export default function CenterDetail() {
 
                 <button
                   type="button"
-                  onClick={() => setOpenInactive(v => !v)}
-                  title={openInactive ? "Ocultar elementos no activos" : "Mostrar elementos no activos"}
-                  aria-label={openInactive ? "Ocultar elementos no activos" : "Mostrar elementos no activos"}
+                  onClick={() => setShowAddElement(v => !v)}
+                  title={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
+                  aria-label={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
                   className={`rounded-xl border p-2 transition ${
-                    openInactive
+                    showAddElement
                       ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
                       : "border-slate-200 text-slate-500 hover:bg-slate-50"
                   }`}
                 >
-                  <Building2 className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
                 </button>
               </div>
 
@@ -2037,141 +2157,41 @@ export default function CenterDetail() {
               </div>
             )}
 
-            {openInactive && (
+            {showAddElement && !readOnly && (
               <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
-                <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-bold text-slate-800">
-                      Elementos no activos
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      No computan, no generan vencimientos y conservan su histórico.
-                    </div>
+                    <div className="text-sm font-bold text-slate-800">Añadir elementos</div>
+                    <div className="text-[10px] text-slate-500">Selecciona una instalación y pulsa + tantas veces como unidades necesites.</div>
                   </div>
-                  {!readOnly && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowAddElement(v => !v)}
-                    >
-                      <Plus className="mr-2 inline h-4 w-4" />
-                      Añadir elemento
-                    </Button>
-                  )}
+                  <button type="button" onClick={() => setShowAddElement(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700" title="Cerrar">
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-
-                {showAddElement && !readOnly && (
-                  <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                      <input
-                        value={addElementSearch}
-                        onChange={e => setAddElementSearch(e.target.value)}
-                        placeholder="Buscar cualquier elemento..."
-                        className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm"
-                      />
-                    </div>
-
-                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                      {selectableItems.map((x: any) => {
-                        const isActive =
-                          activeMap[x.id] !== false;
-
-                        const visual = getInstallationVisual(
-                          x.installation,
-                          x.category
-                        );
-                        const Icon = visual.Icon;
-
-                        return (
-                          <div
-                            key={x.id}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                              >
-                                <Icon
-                                  className={`h-4 w-4 ${visual.icon}`}
-                                />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold">
-                                  {x.code} · {x.installation}
-                                </div>
-                                <div className="truncate text-xs text-slate-500">
-                                  {x.action} · {x.frequency}
-                                </div>
-                              </div>
-                            </div>
-
-                            {isActive ? (
-                              <Badge>Activo</Badge>
-                            ) : (
-                              <Button
-                                variant="secondary"
-                                onClick={() => setActive(x.id, true)}
-                              >
-                                Activar
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {inactiveItems.length === 0 ? (
-                  <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
-                    No hay elementos no activos actualmente.
-                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
-                  </div>
-                ) : (
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {inactiveItems.map((x: any) => {
-                      const visual = getInstallationVisual(
-                        x.installation,
-                        x.category
-                      );
-                      const Icon = visual.Icon;
-
-                      return (
-                        <div
-                          key={x.id}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                            >
-                              <Icon
-                                className={`h-4 w-4 ${visual.icon}`}
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate">
-                                <b>{x.code}</b> · {x.installation}
-                              </div>
-                              <div className="truncate text-xs text-slate-500">
-                                {x.action}
-                              </div>
-                            </div>
-                          </div>
-
-                          {!readOnly && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => setActive(x.id, true)}
-                            >
-                              Activar
-                            </Button>
-                          )}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input value={addElementSearch} onChange={e => setAddElementSearch(e.target.value)} placeholder="Buscar instalación..." className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs outline-none focus:border-[#002A54]" />
+                </div>
+                <div className="grid max-h-56 gap-1.5 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
+                  {selectableItems.map((x: any) => {
+                    const baseCode = String(x.baseCode ?? x.code ?? "").trim();
+                    const count = elementCounts.get(baseCode) || 0;
+                    const last = [...centerItems].reverse().find((item: any) => String(item.baseCode ?? item.code ?? "").trim() === baseCode);
+                    return (
+                      <div key={`${baseCode}-${x.installation}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-800">{baseCode} · {x.installation}</div>
+                          <div className="truncate text-[10px] text-slate-400">{count} elemento{count === 1 ? "" : "s"}</div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button type="button" disabled={!last} onClick={() => last && removeElement(last.id)} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30" title="Eliminar un elemento"><Minus className="h-3 w-3" /></button>
+                          <span className="w-5 text-center text-xs font-bold text-slate-700">{count}</span>
+                          <button type="button" onClick={() => addElement(x)} className="flex h-6 w-6 items-center justify-center rounded-md bg-[#002A54] text-white hover:bg-[#003a73]" title="Añadir un elemento"><Plus className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -2462,25 +2482,61 @@ export default function CenterDetail() {
 
           <SectionTitle
             title="Instalaciones y actuaciones"
-            subtitle={`${activeItems.length} elementos activos · ${inactiveItems.length} elementos no activos`}
+            subtitle={`${centerItems.length} elementos configurados`}
           />
 
-          <SectionToggle
-            open={
-              openInstallations
-            }
-            onClick={() =>
-              setOpenInstallations(
-                v => !v
-              )
-            }
-          />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowColumnOptions(v => !v)}
+              title="Configurar columnas"
+              aria-label="Configurar columnas"
+              className={`rounded-xl border p-2 transition ${
+                showColumnOptions
+                  ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+            <SectionToggle
+              open={openInstallations}
+              onClick={() => setOpenInstallations(v => !v)}
+            />
+          </div>
 
         </div>
 
         {openInstallations && (
           <>
 
+            {showColumnOptions && (
+              <div className="mb-2 mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowDescriptionColumn(v => !v)}
+                  className="inline-flex items-center gap-1.5 font-semibold text-slate-700"
+                  title={showDescriptionColumn ? "Ocultar descripción" : "Mostrar descripción"}
+                >
+                  {showDescriptionColumn ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  Descripción
+                </button>
+                {showDescriptionColumn && (
+                  <label className="flex items-center gap-2 text-slate-500">
+                    Ancho
+                    <input
+                      type="range"
+                      min="100"
+                      max="300"
+                      step="10"
+                      value={descriptionWidth}
+                      onChange={e => setDescriptionWidth(Number(e.target.value))}
+                    />
+                    <span className="w-10 text-right font-mono">{descriptionWidth}px</span>
+                  </label>
+                )}
+              </div>
+            )}
 
             <div className="mb-2 mt-3 flex flex-col gap-2 xl:flex-row">
 
@@ -2527,7 +2583,7 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="min-w-[1400px] w-full text-xs">
+                <table className="min-w-[1500px] w-full text-xs">
 
                   <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
 
@@ -2544,6 +2600,15 @@ export default function CenterDetail() {
                       <th className="min-w-[145px] px-2 py-2">
                         Instalación
                       </th>
+
+                      {showDescriptionColumn && (
+                        <th
+                          className="px-2 py-2"
+                          style={{ width: descriptionWidth, minWidth: descriptionWidth }}
+                        >
+                          Descripción
+                        </th>
+                      )}
 
                       <th className="min-w-[145px] px-2 py-2">
                         Actuación
@@ -2651,7 +2716,7 @@ export default function CenterDetail() {
                           >
 
                             <td className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
-                              {x.code}
+                              {x.displayCode}
                             </td>
 
                             <td className="px-1.5 py-2 align-top">
@@ -2671,22 +2736,21 @@ export default function CenterDetail() {
                             </td>
 
                             <td className="px-2 py-2 align-top">
-
-                              <div className="font-semibold text-slate-800">
-                                {
-                                  x.installation
-                                }
+                              <div className="font-semibold leading-tight text-slate-800">
+                                {x.installation}
                               </div>
-
-                              {x.category && (
-                                <div className="mt-1 text-xs text-slate-400">
-                                  {
-                                    x.category
-                                  }
-                                </div>
-                              )}
-
                             </td>
+
+                            {showDescriptionColumn && (
+                              <td
+                                className="px-2 py-2 align-top text-slate-400"
+                                style={{ width: descriptionWidth, maxWidth: descriptionWidth }}
+                              >
+                                <div className="truncate" title={x.category || ""}>
+                                  {x.category || "—"}
+                                </div>
+                              </td>
+                            )}
 
                             <td className="px-2 py-2 align-top text-slate-600">
                               {x.action}
@@ -2983,6 +3047,30 @@ export default function CenterDetail() {
 
               </div>
 
+            </div>
+
+            <div
+              ref={tableScrollRef}
+              className="overflow-x-auto rounded-b-lg border-x border-b border-slate-200"
+              onScroll={e => {
+                if (bottomScrollRef.current) {
+                  bottomScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                }
+              }}
+            >
+              <div className="h-1 min-w-[1500px]" />
+            </div>
+
+            <div
+              ref={bottomScrollRef}
+              className="fixed bottom-0 left-0 right-0 z-40 overflow-x-auto border border-slate-200 bg-white/95 shadow-lg backdrop-blur"
+              onScroll={e => {
+                if (tableScrollRef.current) {
+                  tableScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                }
+              }}
+            >
+              <div className="h-2 min-w-[1500px]" />
             </div>
 
             <div className="mt-2 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-[10px] text-blue-800">
