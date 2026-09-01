@@ -86,6 +86,18 @@ export type V1CenterStatus =
  * internamente y no debe utilizarse para cambiar el
  * identificador de un centro existente.
  */
+export type CenterItem = {
+  id: string;
+  baseCode: string;
+  country: V1Country;
+  stl: V1STL;
+  category?: string;
+  installation: string;
+  action: string;
+  frequency?: string;
+  normativeReference?: string | null;
+};
+
 export type CenterOverride = {
   id?: string;
 
@@ -182,6 +194,13 @@ export type V1State = {
     string,
     Record<string, boolean>
   >;
+
+  /**
+   * Elementos creados específicamente para un centro.
+   * Se utilizan cuando el catálogo genérico ya no dispone
+   * de otra instancia libre del mismo tipo de elemento.
+   */
+  customItems?: Record<string, CenterItem[]>;
 
   /**
    * Revisiones históricas.
@@ -709,6 +728,9 @@ function getEmptyState(): V1State {
     activeItems:
       {},
 
+    customItems:
+      {},
+
     reviews:
       {},
   };
@@ -763,6 +785,10 @@ export function loadState(): V1State {
 
         activeItems:
           parsed.activeItems ??
+          {},
+
+        customItems:
+          parsed.customItems ??
           {},
 
         reviews:
