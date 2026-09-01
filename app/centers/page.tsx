@@ -175,7 +175,14 @@ export default function Centers() {
    * - elementos activos;
    * - revisiones históricas.
    */
-  const state: V1State = loadState();
+  const [state, setState] =
+    useState<V1State>(() => loadState());
+
+  useEffect(() => {
+    const refresh = () => setState(loadState());
+    window.addEventListener("stl-role-change", refresh);
+    return () => window.removeEventListener("stl-role-change", refresh);
+  }, []);
 
   const role = state.role;
   const userCountry = state.country;
@@ -234,16 +241,13 @@ export default function Centers() {
         ...c,
 
         name:
-          overrides.name ??
-          c.name,
+          String(overrides.name ?? c.name ?? "").toUpperCase(),
 
         code:
-          overrides.code ??
-          c.code,
+          String(overrides.code ?? c.code ?? "").replace(/\D/g, "").padStart(2, "0"),
 
         shortCode:
-          overrides.shortCode ??
-          c.shortCode,
+          String(overrides.shortCode ?? c.shortCode ?? "").toUpperCase(),
 
         country:
           overrides.country ??
@@ -296,16 +300,13 @@ export default function Centers() {
             centerId,
 
           name:
-            center.name ||
-            "",
+            String(center.name || "").toUpperCase(),
 
           code:
-            center.code ||
-            "",
+            String(center.code || "").replace(/\D/g, "").padStart(2, "0"),
 
           shortCode:
-            center.shortCode ||
-            "",
+            String(center.shortCode || "").toUpperCase(),
 
           country:
             center.country ||
@@ -430,7 +431,12 @@ export default function Centers() {
   ) {
     setNewCenter((current) => ({
       ...current,
-      [field]: value,
+      [field]:
+        field === "name" || field === "shortCode"
+          ? String(value).toUpperCase()
+          : field === "code"
+            ? String(value).replace(/\D/g, "").slice(0, 6)
+            : value,
     }));
   }
 
@@ -498,6 +504,39 @@ export default function Centers() {
   }
 
   /* =======================================================
+   * ACTIVAR / DESACTIVAR CENTRO
+   * ======================================================= */
+
+  function toggleCenterStatus(center: CenterListItem) {
+    if (role === "LECTURA") {
+      return;
+    }
+
+    const nextStatus =
+      center.status === "Activo"
+        ? "Inactivo"
+        : "Activo";
+
+    const currentOverride =
+      (state.centers?.[center.id] || {}) as CenterOverride;
+
+    const nextState: V1State = {
+      ...state,
+      centers: {
+        ...state.centers,
+        [center.id]: {
+          ...currentOverride,
+          id: center.id,
+          status: nextStatus,
+        },
+      },
+    };
+
+    setState(nextState);
+    saveState(nextState);
+  }
+
+  /* =======================================================
    * CREAR CENTRO
    * ======================================================= */
 
@@ -536,14 +575,16 @@ export default function Centers() {
     const normalizedCode =
       newCenter.code
         .trim()
-        .toLowerCase();
+        .replace(/\D/g, "")
+        .replace(/^0+(?=\d)/, "");
 
     const existingCode =
       demo.centers.some(
         (center) =>
           String(center.code)
             .trim()
-            .toLowerCase() ===
+            .replace(/\D/g, "")
+            .replace(/^0+(?=\d)/, "") ===
           normalizedCode
       );
 
@@ -554,7 +595,8 @@ export default function Centers() {
         (center) =>
           String(center.code || "")
             .trim()
-            .toLowerCase() ===
+            .replace(/\D/g, "")
+            .replace(/^0+(?=\d)/, "") ===
           normalizedCode
       );
 
@@ -636,13 +678,13 @@ export default function Centers() {
         id,
 
         name:
-          newCenter.name.trim(),
+          newCenter.name.trim().toUpperCase(),
 
         code:
-          newCenter.code.trim(),
+          normalizedCode.padStart(2, "0"),
 
         shortCode:
-          newCenter.shortCode.trim(),
+          newCenter.shortCode.trim().toUpperCase(),
 
         address:
           newCenter.address.trim(),
@@ -1012,7 +1054,9 @@ export default function Centers() {
 
               <tr
                 key={c.id}
-                className="cursor-pointer hover:bg-slate-50"
+                className={`cursor-pointer hover:bg-slate-50 ${
+                  c.status !== "Activo" ? "text-slate-400" : ""
+                }`}
                 onClick={() =>
                   (
                     window.location.href =
@@ -1024,7 +1068,7 @@ export default function Centers() {
               >
 
                 <td className="font-mono text-xs">
-                  {c.code}
+                  {String(c.code || "").replace(/\D/g, "").padStart(2, "0")}
                 </td>
 
                 <td>
@@ -1081,19 +1125,26 @@ export default function Centers() {
                 </td>
 
                 <td>
-
-                  <Badge
-                    tone={
-                      c.status ===
-                      "Activo"
-                        ? "success"
-                        : "neutral"
+                  <button
+                    type="button"
+                    disabled={role === "LECTURA"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleCenterStatus(c);
+                    }}
+                    title={
+                      c.status === "Activo"
+                        ? "Desactivar centro"
+                        : "Activar centro"
                     }
+                    className={`inline-flex min-w-[82px] items-center justify-center rounded-full border px-3 py-1 text-xs font-bold transition ${
+                      c.status === "Activo"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        : "border-slate-300 bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    {c.status ||
-                      "—"}
-                  </Badge>
-
+                    {c.status === "Activo" ? "Activo" : "Inactivo"}
+                  </button>
                 </td>
 
               </tr>
