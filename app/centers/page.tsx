@@ -64,6 +64,31 @@ type CenterListItem = {
   status?: string;
 };
 
+function formatCenterCode(value: string | number | undefined | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "—";
+
+  const numeric = raw.match(/^(\d+)([.,]\d+)?$/);
+  if (!numeric) return raw.toUpperCase();
+
+  const integerPart = numeric[1].padStart(2, "0");
+  const decimalPart = numeric[2] ? `.${numeric[2].slice(1)}` : "";
+  return `${integerPart}${decimalPart}`;
+}
+
+function normalizeCenterCode(value: string | number | undefined | null) {
+  const raw = String(value ?? "").trim().replace(",", ".");
+  if (!raw) return "";
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric.toString() : raw.toLowerCase();
+}
+
+function sentenceCase(value: string | number | null | undefined, fallback = "—") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
 type NewCenterForm = {
   name: string;
   code: string;
@@ -244,7 +269,7 @@ export default function Centers() {
           String(overrides.name ?? c.name ?? "").toUpperCase(),
 
         code:
-          String(overrides.code ?? c.code ?? "").replace(/\D/g, "").padStart(2, "0"),
+          formatCenterCode(overrides.code ?? c.code ?? ""),
 
         shortCode:
           String(overrides.shortCode ?? c.shortCode ?? "").toUpperCase(),
@@ -303,7 +328,7 @@ export default function Centers() {
             String(center.name || "").toUpperCase(),
 
           code:
-            String(center.code || "").replace(/\D/g, "").padStart(2, "0"),
+            formatCenterCode(center.code || ""),
 
           shortCode:
             String(center.shortCode || "").toUpperCase(),
@@ -435,7 +460,7 @@ export default function Centers() {
         field === "name" || field === "shortCode"
           ? String(value).toUpperCase()
           : field === "code"
-            ? String(value).replace(/\D/g, "").slice(0, 6)
+            ? String(value).replace(/[^0-9.,]/g, "").replace(",", ".").slice(0, 8)
             : value,
     }));
   }
@@ -572,32 +597,18 @@ export default function Centers() {
      * Evitar duplicar número oficial
      * ----------------------------------------------------- */
 
-    const normalizedCode =
-      newCenter.code
-        .trim()
-        .replace(/\D/g, "")
-        .replace(/^0+(?=\d)/, "");
+    const normalizedCode = normalizeCenterCode(newCenter.code);
 
     const existingCode =
       demo.centers.some(
         (center) =>
-          String(center.code)
-            .trim()
-            .replace(/\D/g, "")
-            .replace(/^0+(?=\d)/, "") ===
-          normalizedCode
+          normalizeCenterCode(center.code) === normalizedCode
       );
 
     const savedCode =
-      Object.values(
-        state.centers || {}
-      ).some(
+      Object.values(state.centers || {}).some(
         (center) =>
-          String(center.code || "")
-            .trim()
-            .replace(/\D/g, "")
-            .replace(/^0+(?=\d)/, "") ===
-          normalizedCode
+          normalizeCenterCode(center.code) === normalizedCode
       );
 
     if (existingCode || savedCode) {
@@ -681,7 +692,9 @@ export default function Centers() {
           newCenter.name.trim().toUpperCase(),
 
         code:
-          normalizedCode.padStart(2, "0"),
+          formatCenterCode(newCenter.code) === "—"
+            ? ""
+            : formatCenterCode(newCenter.code),
 
         shortCode:
           newCenter.shortCode.trim().toUpperCase(),
@@ -1068,7 +1081,7 @@ export default function Centers() {
               >
 
                 <td className="font-mono text-xs">
-                  {String(c.code || "").replace(/\D/g, "").padStart(2, "0")}
+                  {formatCenterCode(c.code)}
                 </td>
 
                 <td>
@@ -1090,22 +1103,19 @@ export default function Centers() {
                 </td>
 
                 <td className="font-mono text-xs">
-                  {c.shortCode ||
-                    "—"}
+                  {sentenceCase(c.shortCode)}
                 </td>
 
                 <td>
-                  {c.country}
+                  {sentenceCase(c.country)}
                 </td>
 
                 <td>
-                  {c.property ||
-                    "—"}
+                  {sentenceCase(c.property)}
                 </td>
 
                 <td>
-                  {c.manager ||
-                    "Sin asignar"}
+                  {sentenceCase(c.manager, "Sin asignar")}
                 </td>
 
                 <td>
@@ -1118,8 +1128,7 @@ export default function Centers() {
                         : "warning"
                     }
                   >
-                    {c.stl ||
-                      "—"}
+                    {sentenceCase(c.stl)}
                   </Badge>
 
                 </td>
