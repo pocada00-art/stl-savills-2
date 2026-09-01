@@ -1728,7 +1728,11 @@ export default function CenterDetail() {
   }
 
   function addElement(template: any) {
-    if (readOnly) return;
+    if (readOnly || !currentCenter) return;
+
+    // Capturamos el centro en una constante local para que TypeScript
+    // mantenga la comprobación de nulabilidad dentro de toda la función.
+    const center = currentCenter;
 
     const reusable = catalogItems.find(
       (item: any) =>
@@ -1745,8 +1749,8 @@ export default function CenterDetail() {
     const customItem: CenterItem = {
       id: customId,
       baseCode: String(template.baseCode ?? template.code ?? ""),
-      country: currentCenter.country,
-      stl: currentCenter.stl,
+      country: center.country,
+      stl: center.stl,
       category: template.category,
       installation: template.installation,
       action: template.action,
