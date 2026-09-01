@@ -1063,6 +1063,30 @@ export default function CenterDetail() {
   const centerId =
     currentCenter?.id ?? "";
 
+  const centerName =
+    currentCenter?.name ??
+    "";
+
+  const centerCode =
+    currentCenter?.code ??
+    "";
+
+  const centerShortCode =
+    currentCenter?.shortCode ??
+    "";
+
+  /*
+   * IMPORTANTE: este Hook debe ejecutarse en todos los renders.
+   * Se coloca antes del return de "Centro no encontrado" para
+   * evitar React error #310 cuando un centro nuevo pasa de no
+   * estar disponible a estar disponible tras cargar el estado.
+   */
+  useEffect(() => {
+    const formatted = formatCenterCode(centerCode);
+    setCenterCodeDraft(formatted === "—" ? "" : formatted);
+  }, [centerId, centerCode]);
+
+
   /* -------------------------------------------------------
    * RESOLUCIÓN DE IMÁGENES INDEXEDDB
    *
@@ -1259,23 +1283,6 @@ export default function CenterDetail() {
         centerId
       ] || {}
     ) as CenterOverride;
-
-  const centerName =
-    currentCenter.name ??
-    "";
-
-  const centerCode =
-    currentCenter.code ??
-    "";
-
-  const centerShortCode =
-    currentCenter.shortCode ??
-    "";
-
-  useEffect(() => {
-    const formatted = formatCenterCode(centerCode);
-    setCenterCodeDraft(formatted === "—" ? "" : formatted);
-  }, [centerId, centerCode]);
 
   const normalizedDraftCode =
     centerCodeDraft.trim().replace(/^0+(?=\d)/, "");
