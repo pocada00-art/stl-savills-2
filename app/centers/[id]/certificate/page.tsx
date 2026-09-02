@@ -295,7 +295,7 @@ export default function CertificatePage() {
   }).length;
 
   const riskCount = rows.filter(({ item }) =>
-    /RIESGO|CRÍTICO|CRITICO/i.test(`${item.status || ""} ${item.result || ""} ${item.comment || ""}`),
+    /RIESGO|CRÍTICO|CRITICO/i.test(`${item.status || ""} ${item.comment || ""}`),
   ).length;
 
   const documentationCount = rows.filter(({ item }) =>
@@ -303,7 +303,7 @@ export default function CertificatePage() {
   ).length;
 
   const incidentCount = rows.filter(({ item }) =>
-    /INCIDENCIA|INCUMPLIMIENTO/i.test(`${item.status || ""} ${item.result || ""} ${item.comment || ""}`),
+    /INCIDENCIA|INCUMPLIMIENTO/i.test(`${item.status || ""} ${item.comment || ""}`),
   ).length;
 
   const recommendations = [
