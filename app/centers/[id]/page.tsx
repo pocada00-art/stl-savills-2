@@ -3,8 +3,8 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -358,8 +358,14 @@ function resolveBaseCode(catalog: any[], index: number): string {
   return "";
 }
 
-function instanceCode(baseCode: string, ordinal: number): string {
-  return baseCode ? `${baseCode}.${ordinal}` : String(ordinal);
+function resolveActionCode(item: any, baseCode: string): string {
+  const explicit = String(item.actionCode ?? item.code ?? "").trim();
+  if (/^\d+\.\d+$/.test(explicit)) return explicit;
+  return baseCode;
+}
+
+function instanceCode(actionCode: string, ordinal: number): string {
+  return actionCode ? `${actionCode}.${ordinal}` : String(ordinal);
 }
 
 /* =========================================================
@@ -895,37 +901,52 @@ function TableHeader({
   column,
   sort,
   onSort,
+  onHide,
+  onResizeStart,
   width,
 }: {
   column: TableColumnKey;
   sort: { key: TableColumnKey; direction: "asc" | "desc" };
   onSort: (key: TableColumnKey) => void;
+  onHide: (key: TableColumnKey) => void;
+  onResizeStart: (key: TableColumnKey, event: ReactMouseEvent) => void;
   width: number;
 }) {
   const sortable = column !== "actions";
   const active = sort.key === column;
 
   return (
-    <th
-      className="px-2 py-2"
-      style={{ width, minWidth: width }}
-    >
-      <button
-        type="button"
-        disabled={!sortable}
-        onClick={() => sortable && onSort(column)}
-        className={`inline-flex w-full items-center justify-between gap-1 text-left ${
-          sortable ? "cursor-pointer hover:text-[#FFCC00]" : "cursor-default"
-        }`}
-        title={sortable ? `Ordenar por ${TABLE_COLUMN_LABELS[column]}` : undefined}
-      >
-        <span>{TABLE_COLUMN_LABELS[column]}</span>
-        {sortable && (
-          <span className="shrink-0 opacity-70">
-            {active ? (sort.direction === "asc" ? "▲" : "▼") : <ArrowUpDown className="h-3 w-3" />}
-          </span>
-        )}
-      </button>
+    <th className="relative px-2 py-2" style={{ width, minWidth: width }}>
+      <div className="flex min-h-7 items-center gap-1">
+        <button
+          type="button"
+          disabled={!sortable}
+          onClick={() => sortable && onSort(column)}
+          className={`flex min-w-0 flex-1 items-center justify-between gap-1 text-left ${sortable ? "cursor-pointer hover:text-[#FFCC00]" : "cursor-default"}`}
+          title={sortable ? `Ordenar por ${TABLE_COLUMN_LABELS[column]}` : undefined}
+        >
+          <span className="truncate">{TABLE_COLUMN_LABELS[column]}</span>
+          {sortable && (
+            <span className="shrink-0 opacity-70">
+              {active ? (sort.direction === "asc" ? "▲" : "▼") : <ArrowUpDown className="h-3 w-3" />}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onHide(column)}
+          className="no-print shrink-0 rounded p-1 text-white/55 hover:bg-white/10 hover:text-white"
+          title={`Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
+          aria-label={`Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
+        >
+          <EyeOff className="h-3 w-3" />
+        </button>
+      </div>
+      <span
+        onMouseDown={event => onResizeStart(column, event)}
+        className="no-print absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-white/30"
+        title="Arrastrar para cambiar el ancho"
+      />
     </th>
   );
 }
@@ -1034,6 +1055,9 @@ export default function CenterDetail() {
   const [showColumnOptions, setShowColumnOptions] =
     useState(false);
 
+  const [quantityDrafts, setQuantityDrafts] =
+    useState<Record<string, string>>({});
+
   const [columnVisibility, setColumnVisibility] =
     useState<Record<TableColumnKey, boolean>>({
       code: true,
@@ -1062,8 +1086,6 @@ export default function CenterDetail() {
       direction: "asc",
     });
 
-  const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  const bottomScrollRef = useRef<HTMLDivElement | null>(null);
 
 
   /* -------------------------------------------------------
@@ -1465,14 +1487,34 @@ export default function CenterDetail() {
   const activeMap =
     state.activeItems[centerId] || {};
 
-  const catalogItems = useMemo(
-    () =>
-      catalog.map((item: any, index: number) => ({
+  const catalogItems = useMemo(() => {
+    const actionOrdinals = new Map<string, number>();
+    const seenActions = new Set<string>();
+
+    return catalog.map((item: any, index: number) => {
+      const baseCode = resolveBaseCode(catalog as any[], index);
+      const explicit = String(item.actionCode ?? item.code ?? "").trim();
+      let actionCode = resolveActionCode(item, baseCode);
+
+      if (!/^\d+\.\d+$/.test(explicit) && String(item.action || "").trim()) {
+        const actionKey = `${baseCode}|${String(item.action).trim().toLowerCase()}`;
+        if (!seenActions.has(actionKey)) {
+          const next = (actionOrdinals.get(baseCode) || 0) + 1;
+          actionOrdinals.set(baseCode, next);
+          seenActions.add(actionKey);
+          actionCode = `${baseCode}.${next}`;
+        } else {
+          actionCode = `${baseCode}.${actionOrdinals.get(baseCode) || 1}`;
+        }
+      }
+
+      return {
         ...item,
-        baseCode: resolveBaseCode(catalog as any[], index),
-      })),
-    [catalog]
-  );
+        baseCode,
+        actionCode,
+      };
+    });
+  }, [catalog]);
 
   const customItems = state.customItems?.[centerId] || [];
 
@@ -1488,11 +1530,13 @@ export default function CenterDetail() {
 
     return centerItems.map((item: any) => {
       const baseCode = String(item.baseCode ?? item.code ?? "").trim();
-      const ordinal = (counters.get(baseCode) || 0) + 1;
-      counters.set(baseCode, ordinal);
+      const actionCode = String(item.actionCode ?? resolveActionCode(item, baseCode)).trim();
+      const ordinal = (counters.get(actionCode) || 0) + 1;
+      counters.set(actionCode, ordinal);
+
       return {
         ...item,
-        displayCode: instanceCode(baseCode, ordinal),
+        displayCode: instanceCode(actionCode, ordinal),
       };
     });
   }, [centerItems]);
@@ -1502,7 +1546,7 @@ export default function CenterDetail() {
 
     catalogItems.forEach((item: any) => {
       const baseCode = String(item.baseCode ?? item.code ?? "").trim();
-      const key = `${baseCode}|${item.installation}`;
+      const key = `${item.actionCode ?? baseCode}|${item.installation}|${item.action}`;
       if (!unique.has(key)) unique.set(key, item);
     });
 
@@ -1517,7 +1561,7 @@ export default function CenterDetail() {
   const elementCounts = useMemo(() => {
     const counts = new Map<string, number>();
     centerItems.forEach((item: any) => {
-      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
+      const baseCode = String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim();
       counts.set(baseCode, (counts.get(baseCode) || 0) + 1);
     });
     return counts;
@@ -1550,6 +1594,17 @@ export default function CenterDetail() {
         (x: any) => x.id
       )
     );
+
+  const sinInformacionCount = centerItems.filter((item: any) => {
+    const reviewItem = review.items[item.id] || blankItem();
+    return reviewItem.status === "SIN INFORMACIÓN";
+  }).length;
+
+  const canValidateCenter =
+    state.role === "ADMIN" &&
+    centerItems.length > 0 &&
+    sinInformacionCount === 0 &&
+    !review.confirmed;
 
   const categories = [
     "Todas",
@@ -1637,6 +1692,37 @@ export default function CenterDetail() {
 
   function setColumnWidth(key: TableColumnKey, value: number) {
     setColumnWidths(current => ({ ...current, [key]: value }));
+  }
+
+  function reduceAllColumns() {
+    setColumnWidths({ ...TABLE_COLUMN_MIN_WIDTHS });
+  }
+
+  function startTableColumnResize(
+    key: TableColumnKey,
+    event: ReactMouseEvent
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startWidth = columnWidths[key];
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.max(
+        TABLE_COLUMN_MIN_WIDTHS[key],
+        startWidth + moveEvent.clientX - startX
+      );
+      setColumnWidths(current => ({ ...current, [key]: nextWidth }));
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
   }
 
   /*
@@ -1734,9 +1820,13 @@ export default function CenterDetail() {
     // mantenga la comprobación de nulabilidad dentro de toda la función.
     const center = currentCenter;
 
+    const templateActionCode = String(
+      template.actionCode ?? template.baseCode ?? template.code ?? ""
+    ).trim();
+
     const reusable = catalogItems.find(
       (item: any) =>
-        item.baseCode === template.baseCode &&
+        String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === templateActionCode &&
         activeMap[item.id] === false
     );
 
@@ -1746,9 +1836,10 @@ export default function CenterDetail() {
     }
 
     const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const customItem: CenterItem = {
+    const customItem: any = {
       id: customId,
       baseCode: String(template.baseCode ?? template.code ?? ""),
+      actionCode: templateActionCode,
       country: center.country,
       stl: center.stl,
       category: template.category,
@@ -1808,6 +1899,70 @@ export default function CenterDetail() {
     });
   }
 
+  function setElementQuantity(template: any, desiredCount: number) {
+    if (readOnly || !currentCenter) return;
+
+    const target = Math.max(0, Math.floor(desiredCount));
+    const actionCode = String(template.actionCode ?? template.baseCode ?? template.code ?? "").trim();
+
+    let nextState: V1State = {
+      ...state,
+      activeItems: {
+        ...state.activeItems,
+        [centerId]: { ...(state.activeItems?.[centerId] || {}) },
+      },
+      customItems: {
+        ...(state.customItems || {}),
+        [centerId]: [...(state.customItems?.[centerId] || [])],
+      },
+      reviews: { ...state.reviews },
+    };
+
+    const matches = () => [
+      ...catalogItems.filter((item: any) => nextState.activeItems?.[centerId]?.[item.id] !== false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
+      ...(nextState.customItems?.[centerId] || []).filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
+    ];
+
+    while (matches().length < target) {
+      const reusable = catalogItems.find((item: any) => nextState.activeItems?.[centerId]?.[item.id] === false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
+      if (reusable) {
+        nextState.activeItems[centerId][reusable.id] = true;
+      } else {
+        const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        nextState.customItems[centerId].push({
+          id: customId,
+          baseCode: String(template.baseCode ?? template.code ?? ""),
+          actionCode,
+          country: currentCenter.country,
+          stl: currentCenter.stl,
+          category: template.category,
+          installation: template.installation,
+          action: template.action,
+          frequency: template.frequency,
+          normativeReference: template.normativeReference ?? null,
+        } as any);
+      }
+    }
+
+    while (matches().length > target) {
+      const current = matches()[matches().length - 1];
+      const isCustom = nextState.customItems[centerId].some((item: any) => item.id === current.id);
+      if (isCustom) {
+        nextState.customItems[centerId] = nextState.customItems[centerId].filter((item: any) => item.id !== current.id);
+      } else {
+        nextState.activeItems[centerId][current.id] = false;
+      }
+      Object.keys(nextState.reviews).forEach(reviewId => {
+        if (!nextState.reviews[reviewId]?.items?.[current.id]) return;
+        const items = { ...nextState.reviews[reviewId].items };
+        delete items[current.id];
+        nextState.reviews[reviewId] = { ...nextState.reviews[reviewId], items };
+      });
+    }
+
+    updateState(nextState);
+  }
+
   function getItem(
     itemId: string
   ) {
@@ -1851,47 +2006,46 @@ export default function CenterDetail() {
   function confirmReview() {
     if (
       state.role !== "ADMIN" ||
-      summary.pendingConfirmation >
-        0
-    ) {
-      return;
-    }
+      review.confirmed ||
+      centerItems.length === 0 ||
+      sinInformacionCount > 0
+    ) return;
 
     const nextReview = {
       ...review,
       confirmed: true,
-      confirmedAt:
-        new Date().toISOString(),
-      confirmedBy:
-        "Administrador Demo",
-      participants: [
-        {
-          name: "Gestor Demo",
-          role: "GESTOR",
-          signed: true,
-        },
-        {
-          name:
-            "Administrador Demo",
-          role:
-            "ADMINISTRADOR",
-          signed: true,
-        },
-        ...(review.participants ||
-          []).filter(
-          p =>
-            p.role ===
-            "OTRO"
-        ),
-      ],
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: "Administrador",
     };
 
     updateState({
       ...state,
-      reviews: {
-        ...state.reviews,
-        [key]: nextReview,
-      },
+      reviews: { ...state.reviews, [key]: nextReview },
+    });
+  }
+
+  function unvalidateReview() {
+    if (state.role !== "ADMIN" || !review.confirmed) return;
+
+    const reason = window.prompt(
+      "Indique el motivo por el que se desvalida el centro:"
+    );
+
+    if (!reason || !reason.trim()) return;
+
+    const nextReview: any = {
+      ...review,
+      confirmed: false,
+      confirmedAt: undefined,
+      confirmedBy: undefined,
+      unconfirmedAt: new Date().toISOString(),
+      unconfirmedBy: "Administrador",
+      unconfirmationReason: reason.trim(),
+    };
+
+    updateState({
+      ...state,
+      reviews: { ...state.reviews, [key]: nextReview },
     });
   }
 
@@ -2189,12 +2343,6 @@ export default function CenterDetail() {
               )}
             </label>
           </div>
-
-          {saved && (
-            <div className="mt-1 text-right text-[10px] font-semibold text-[#FFCC00]">
-              Cambios guardados
-            </div>
-          )}
         </div>
       </Card>
 
@@ -2281,20 +2429,6 @@ export default function CenterDetail() {
                 >
                   <BarChart3 className="h-4 w-4" />
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddElement(v => !v)}
-                  title={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
-                  aria-label={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
-                  className={`rounded-xl border p-2 transition ${
-                    showAddElement
-                      ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
-                      : "border-slate-200 text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
               </div>
 
             </div>
@@ -2380,44 +2514,6 @@ export default function CenterDetail() {
                 <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                   <BarChart3 className="h-4 w-4" />
                   El histórico muestra únicamente años hasta el año actual.
-                </div>
-              </div>
-            )}
-
-            {showAddElement && !readOnly && (
-              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-bold text-slate-800">Añadir elementos</div>
-                    <div className="text-[10px] text-slate-500">Selecciona una instalación y pulsa + tantas veces como unidades necesites.</div>
-                  </div>
-                  <button type="button" onClick={() => setShowAddElement(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700" title="Cerrar">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="relative mb-2">
-                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-                  <input value={addElementSearch} onChange={e => setAddElementSearch(e.target.value)} placeholder="Buscar instalación..." className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs outline-none focus:border-[#002A54]" />
-                </div>
-                <div className="grid max-h-56 gap-1.5 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
-                  {selectableItems.map((x: any) => {
-                    const baseCode = String(x.baseCode ?? x.code ?? "").trim();
-                    const count = elementCounts.get(baseCode) || 0;
-                    const last = [...centerItems].reverse().find((item: any) => String(item.baseCode ?? item.code ?? "").trim() === baseCode);
-                    return (
-                      <div key={`${baseCode}-${x.installation}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold text-slate-800">{baseCode} · {x.installation}</div>
-                          <div className="truncate text-[10px] text-slate-400">{count} elemento{count === 1 ? "" : "s"}</div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <button type="button" disabled={!last} onClick={() => last && removeElement(last.id)} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30" title="Eliminar un elemento"><Minus className="h-3 w-3" /></button>
-                          <span className="w-5 text-center text-xs font-bold text-slate-700">{count}</span>
-                          <button type="button" onClick={() => addElement(x)} className="flex h-6 w-6 items-center justify-center rounded-md bg-[#002A54] text-white hover:bg-[#003a73]" title="Añadir un elemento"><Plus className="h-3 w-3" /></button>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
             )}
@@ -2536,14 +2632,37 @@ export default function CenterDetail() {
 
                 </div>
 
-                <Link
-                  href={`/centers/${centerId}/certificate?year=${year}&period=${period}`}
+                <div className="flex flex-wrap items-center gap-2">
+                  {admin && (
+                    <Button variant="secondary" onClick={unvalidateReview}>
+                      Desvalidar centro
+                    </Button>
+                  )}
+                  <Link
+                    href={`/centers/${centerId}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
                   Ver / exportar certificado
-                </Link>
+                  </Link>
+                </div>
 
+              </div>
+            )}
+
+            {!review.confirmed && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                <div className="text-xs text-slate-600">
+                  {sinInformacionCount > 0
+                    ? `${sinInformacionCount} elemento(s) sin información. Debe completarse antes de validar.`
+                    : centerItems.length === 0
+                      ? "No hay elementos activos para validar."
+                      : "El centro puede validarse aunque existan elementos PENDIENTE."}
+                </div>
+                <Button variant="primary" disabled={!canValidateCenter} onClick={confirmReview}>
+                  <ClipboardCheck className="mr-2 inline h-4 w-4" />
+                  Validar centro
+                </Button>
               </div>
             )}
 
@@ -2726,6 +2845,16 @@ export default function CenterDetail() {
             >
               <SlidersHorizontal className="h-4 w-4" />
             </button>
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={() => setShowAddElement(v => !v)}
+              title={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
+              aria-label={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
+              className={`rounded-xl border p-2 transition ${showAddElement ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]" : "border-slate-200 text-slate-500 hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
             <SectionToggle
               open={openInstallations}
               onClick={() => setOpenInstallations(v => !v)}
@@ -2740,8 +2869,19 @@ export default function CenterDetail() {
             {showColumnOptions && (
               <div className="mb-2 mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-xs font-bold text-slate-700">Configuración de columnas</div>
-                  <div className="text-[10px] text-slate-400">Pulsa el título para ordenar. Ajusta el ancho con cada control.</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs font-bold text-slate-700">Configuración de columnas</div>
+                    <button
+                      type="button"
+                      onClick={reduceAllColumns}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                      title="Reducir todas las columnas al mínimo"
+                    >
+                      <Minus className="h-3 w-3" />
+                      Reducir todas
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-slate-400">Pulsa el título para ordenar. Arrastra el borde de cada encabezado para ajustar su ancho.</div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
@@ -2772,6 +2912,44 @@ export default function CenterDetail() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {showAddElement && !readOnly && (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Añadir elementos</div>
+                    <div className="text-[10px] text-slate-500">Selecciona una actuación y modifica la cantidad con −, + o escribiendo directamente el número.</div>
+                  </div>
+                  <button type="button" onClick={() => setShowAddElement(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700" title="Cerrar">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input value={addElementSearch} onChange={e => setAddElementSearch(e.target.value)} placeholder="Buscar instalación o actuación..." className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs outline-none focus:border-[#002A54]" />
+                </div>
+                <div className="grid max-h-56 gap-1.5 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
+                  {selectableItems.map((x: any) => {
+                    const actionCode = String(x.actionCode ?? x.baseCode ?? x.code ?? "").trim();
+                    const count = elementCounts.get(actionCode) || 0;
+                    const last = [...centerItems].reverse().find((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
+                    return (
+                      <div key={`${actionCode}-${x.installation}-${x.action}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-800">{actionCode} · {x.installation}</div>
+                          <div className="truncate text-[10px] text-slate-400">{x.action || "Actuación"} · {count} elemento{count === 1 ? "" : "s"}</div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button type="button" disabled={!last} onClick={() => last && removeElement(last.id)} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30" title="Eliminar un elemento"><Minus className="h-3 w-3" /></button>
+                          <input type="number" min="0" step="1" value={quantityDrafts[actionCode] ?? String(count)} onChange={e => setQuantityDrafts(current => ({ ...current, [actionCode]: e.target.value.replace(/\D/g, "") }))} onBlur={e => { const value = Math.max(0, Number.parseInt(e.target.value || "0", 10)); setElementQuantity(x, value); setQuantityDrafts(current => { const next = { ...current }; delete next[actionCode]; return next; }); }} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} className="h-6 w-12 rounded-md border border-slate-200 text-center text-xs font-bold text-slate-700 outline-none focus:border-[#002A54]" aria-label={`Cantidad de ${x.installation} ${x.action || ""}`} />
+                          <button type="button" onClick={() => addElement(x)} className="flex h-6 w-6 items-center justify-center rounded-md bg-[#002A54] text-white hover:bg-[#003a73]" title="Añadir un elemento"><Plus className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2844,6 +3022,8 @@ export default function CenterDetail() {
                           column={column}
                           sort={tableSort}
                           onSort={toggleTableSort}
+                          onHide={toggleColumnVisibility}
+                          onResizeStart={startTableColumnResize}
                           width={columnWidths[column]}
                         />
                       ))}
@@ -3232,30 +3412,6 @@ export default function CenterDetail() {
 
               </div>
 
-            </div>
-
-            <div
-              ref={tableScrollRef}
-              className="overflow-x-auto rounded-b-lg border-x border-b border-slate-200"
-              onScroll={e => {
-                if (bottomScrollRef.current) {
-                  bottomScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
-                }
-              }}
-            >
-              <div className="h-1 min-w-[1500px]" />
-            </div>
-
-            <div
-              ref={bottomScrollRef}
-              className="fixed bottom-0 left-0 right-0 z-40 overflow-x-auto border border-slate-200 bg-white/95 shadow-lg backdrop-blur"
-              onScroll={e => {
-                if (tableScrollRef.current) {
-                  tableScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
-                }
-              }}
-            >
-              <div className="h-2 min-w-[1500px]" />
             </div>
 
             <div className="mt-2 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-[10px] text-blue-800">
