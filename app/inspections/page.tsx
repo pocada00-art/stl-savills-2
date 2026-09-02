@@ -21,6 +21,7 @@ import {
   EyeOff,
   Eye,
   Minus,
+  FileCheck2,
 } from "lucide-react";
 
 import {
@@ -943,85 +944,33 @@ function getCenterValidationState(
   review: V1State["reviews"][string] | undefined,
   activeIds: string[]
 ) {
-  const items =
-    activeIds.map(
-      itemId =>
-        review?.items?.[
-          itemId
-        ] ||
-        blankItem()
-    );
+  const items = activeIds.map(
+    itemId => review?.items?.[itemId] || blankItem()
+  );
 
-  const pending =
-    items.filter(
-      item =>
-        item.status ===
-          "PENDIENTE" ||
-        item.status ===
-          "SIN INFORMACIÓN"
-    ).length;
+  // PENDIENTE es un estado revisado y NO bloquea la validación.
+  // Únicamente SIN INFORMACIÓN impide validar el centro.
+  const pending = items.filter(
+    item => item.status === "SIN INFORMACIÓN"
+  ).length;
 
-  const total =
-    items.length;
+  const total = items.length;
+  const reviewed = total - pending;
+  const allReviewed = total > 0 && pending === 0;
 
-  const reviewed =
-    total - pending;
+  let overallStatus: V1Status | "EN CURSO" = "EN CURSO";
 
-  const allReviewed =
-    total > 0 &&
-    pending === 0 &&
-    reviewed === total;
-
-  let overallStatus:
-    | V1Status
-    | "EN CURSO" =
-    "EN CURSO";
-
-  if (
-    review?.confirmed
-  ) {
-    if (
-      items.some(
-        item =>
-          item.status ===
-          "NO APTO"
-      )
-    ) {
-      overallStatus =
-        "NO APTO";
-    } else if (
-      items.some(
-        item =>
-          item.status ===
-          "APTO CONDICIONADO"
-      )
-    ) {
-      overallStatus =
-        "APTO CONDICIONADO";
-    } else if (
-      items.some(
-        item =>
-          item.status ===
-            "PENDIENTE" ||
-          item.status ===
-            "SIN INFORMACIÓN"
-      )
-    ) {
-      overallStatus =
-        "PENDIENTE";
-    } else if (
-      items.length > 0 &&
-      items.every(
-        item =>
-          item.status ===
-          "APTO"
-      )
-    ) {
-      overallStatus =
-        "APTO";
+  if (review?.confirmed) {
+    if (items.some(item => item.status === "NO APTO")) {
+      overallStatus = "NO APTO";
+    } else if (items.some(item => item.status === "APTO CONDICIONADO")) {
+      overallStatus = "APTO CONDICIONADO";
+    } else if (items.some(item => item.status === "PENDIENTE")) {
+      overallStatus = "PENDIENTE";
+    } else if (items.length > 0 && items.every(item => item.status === "APTO")) {
+      overallStatus = "APTO";
     } else {
-      overallStatus =
-        "SIN INFORMACIÓN";
+      overallStatus = "SIN INFORMACIÓN";
     }
   }
 
@@ -2036,126 +1985,71 @@ export default function Inspections() {
   function validateCenter(
     row: (typeof rows)[number]
   ) {
-    /*
-     * La validación de centro se reserva al administrador,
-     * igual que las operaciones de confirmación existentes.
-     */
-    if (
-      state.role !==
-      "ADMIN"
-    ) {
-      return;
-    }
+    if (state.role !== "ADMIN" || row.review?.confirmed) return;
 
-    if (
-      row.review
-        ?.confirmed
-    ) {
-      return;
-    }
+    // Solo SIN INFORMACIÓN bloquea la validación.
+    if (!row.validation.allReviewed) return;
 
-    if (
-      !row.validation
-        .allReviewed
-    ) {
-      return;
-    }
-
-    const key =
-      reviewKey(
-        row.c.id,
-        year,
-        period
-      );
-
-    const currentReview =
-      state.reviews?.[
-        key
-      ];
-
-    /*
-     * No se puede confirmar un centro que no tenga
-     * revisión registrada.
-     */
-    if (
-      !currentReview
-    ) {
-      return;
-    }
-
-    /*
-     * Comprobación adicional de seguridad:
-     * todos los elementos activos deben estar revisados.
-     */
-    const activeIds =
-      row.active.map(
-        (item: any) =>
-          String(
-            item.id
-          )
-      );
-
-    const pending =
-      activeIds.filter(
-        itemId => {
-          const item =
-            currentReview
-              .items?.[
-              itemId
-            ] ||
-            blankItem();
-
-          return (
-            item.status ===
-              "PENDIENTE" ||
-            item.status ===
-              "SIN INFORMACIÓN"
-          );
-        }
-      );
-
-    if (
-      pending.length >
-      0
-    ) {
-      return;
-    }
-
-    const now =
-      new Date().toISOString();
+    const key = reviewKey(row.c.id, year, period);
+    const currentReview = state.reviews?.[key];
+    if (!currentReview) return;
 
     const nextReview = {
       ...currentReview,
       confirmed: true,
-      confirmedAt:
-        now,
-      confirmedBy:
-        "Administrador",
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: "Administrador",
     };
 
-    const nextState: V1State =
-      {
-        ...state,
-        reviews: {
-          ...state.reviews,
-          [key]:
-            nextReview,
-        },
-      };
+    const nextState: V1State = {
+      ...state,
+      reviews: {
+        ...state.reviews,
+        [key]: nextReview,
+      },
+    };
 
-    saveState(
-      nextState
+    saveState(nextState);
+    setState(nextState);
+    window.dispatchEvent(new Event("stl-state-change"));
+  }
+
+  function unvalidateCenter(
+    row: (typeof rows)[number]
+  ) {
+    if (state.role !== "ADMIN" || !row.review?.confirmed) return;
+
+    const reason = window.prompt(
+      "Indique el motivo por el que se desvalida el centro:"
     );
 
-    setState(
-      nextState
-    );
+    if (!reason || !reason.trim()) return;
 
-    window.dispatchEvent(
-      new Event(
-        "stl-state-change"
-      )
-    );
+    const key = reviewKey(row.c.id, year, period);
+    const currentReview = state.reviews?.[key];
+    if (!currentReview) return;
+
+    const nextReview: any = {
+      ...currentReview,
+      confirmed: false,
+      confirmedAt: undefined,
+      confirmedBy: undefined,
+      unconfirmedAt: new Date().toISOString(),
+      unconfirmedBy: "Administrador",
+      unconfirmationReason: reason.trim(),
+    };
+
+    const nextState: V1State = {
+      ...state,
+      reviews: {
+        ...state.reviews,
+        [key]: nextReview,
+      },
+    };
+
+    saveState(nextState);
+    setState(nextState);
+    window.dispatchEvent(new Event("stl-state-change"));
   }
 
   /* =======================================================
@@ -2927,29 +2821,32 @@ export default function Inspections() {
 
                                     {confirmed ? (
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <Badge tone="success">
-                                          Validada
-                                        </Badge>
-
+                                        <Badge tone="success">Validada</Badge>
                                         <span className="text-[11px] text-slate-500">
-                                          {
-                                            formatOverallStatus(
-                                              overallStatus
-                                            )
-                                          }
+                                          {formatOverallStatus(overallStatus)}
                                         </span>
+                                        <Link
+                                          href={`/centers/${encodeURIComponent(row.c.id)}/certificate?year=${year}&period=${period}`}
+                                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-[#002A54] hover:bg-slate-50"
+                                          title="Ver / exportar certificado"
+                                          aria-label="Ver / exportar certificado"
+                                        >
+                                          <FileCheck2 className="h-4 w-4" />
+                                        </Link>
+                                        {state.role === "ADMIN" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => unvalidateCenter(row)}
+                                            className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-100"
+                                          >
+                                            Desvalidar
+                                          </button>
+                                        )}
                                       </div>
-                                    ) : row.validation
-                                        .allReviewed &&
-                                      state.role ===
-                                        "ADMIN" ? (
+                                    ) : row.validation.allReviewed && state.role === "ADMIN" ? (
                                       <button
                                         type="button"
-                                        onClick={() =>
-                                          validateCenter(
-                                            row
-                                          )
-                                        }
+                                        onClick={() => validateCenter(row)}
                                         className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
                                       >
                                         Validar centro
@@ -2960,21 +2857,14 @@ export default function Inspections() {
                                         disabled
                                         className="inline-flex cursor-not-allowed items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-400"
                                         title={
-                                          state.role !==
-                                          "ADMIN"
+                                          state.role !== "ADMIN"
                                             ? "Solo un administrador puede validar el centro."
-                                            : "El centro todavía tiene elementos pendientes de revisión."
+                                            : "El centro tiene elementos SIN INFORMACIÓN."
                                         }
                                       >
-                                        {state.role !==
-                                        "ADMIN"
+                                        {state.role !== "ADMIN"
                                           ? "Validación restringida"
-                                          : `${pending} pendiente${
-                                              pending ===
-                                              1
-                                                ? ""
-                                                : "s"
-                                            }`}
+                                          : `${pending} sin información`}
                                       </button>
                                     )}
 
