@@ -1918,6 +1918,9 @@ export default function CenterDetail() {
       reviews: { ...state.reviews },
     };
 
+    nextState.customItems ??= {};
+    nextState.customItems[centerId] ??= [];
+
     const matches = () => [
       ...catalogItems.filter((item: any) => nextState.activeItems?.[centerId]?.[item.id] !== false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
       ...(nextState.customItems?.[centerId] || []).filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
@@ -1929,7 +1932,7 @@ export default function CenterDetail() {
         nextState.activeItems[centerId][reusable.id] = true;
       } else {
         const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        nextState.customItems[centerId].push({
+     nextState.customItems[centerId].push({
           id: customId,
           baseCode: String(template.baseCode ?? template.code ?? ""),
           actionCode,
