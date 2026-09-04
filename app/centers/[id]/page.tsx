@@ -1664,11 +1664,24 @@ export default function CenterDetail() {
   }
 
   function setColumnWidth(key: TableColumnKey, value: number) {
-    setColumnWidths(current => ({ ...current, [key]: value }));
+    setColumnWidths(current => ({
+      ...current,
+      [key]: Math.max(TABLE_COLUMN_MIN_WIDTHS[key], value),
+    }));
   }
 
   function reduceAllColumns() {
-    setColumnWidths({ ...TABLE_COLUMN_MIN_WIDTHS });
+    setColumnWidths(current => {
+      const next = { ...current };
+
+      (Object.keys(TABLE_COLUMN_MIN_WIDTHS) as TableColumnKey[]).forEach(column => {
+        if (columnVisibility[column]) {
+          next[column] = TABLE_COLUMN_MIN_WIDTHS[column];
+        }
+      });
+
+      return next;
+    });
   }
 
   function startTableColumnResize(
@@ -2972,7 +2985,7 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="min-w-[1500px] w-full text-xs">
+                <table className="w-max min-w-full table-fixed text-xs">
 
                   <colgroup>
                     {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
@@ -2981,7 +2994,7 @@ export default function CenterDetail() {
                         style={{
                           width: columnWidths[column],
                           minWidth: columnWidths[column],
-                          display: columnVisibility[column] ? undefined : "none",
+                          display: columnVisibility[column] ? "table-column" : "none",
                         }}
                       />
                     ))}
@@ -3063,11 +3076,19 @@ export default function CenterDetail() {
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
-                            <td data-column="code" style={display: columnVisibility["code"] ? undefined : "none"}$1className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
+                            <td data-column="code" style={{
+  width: columnWidths["code"],
+  minWidth: columnWidths["code"],
+  display: columnVisibility["code"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
                               {x.displayCode}
                             </td>
 
-                            <td data-column="visual" style={display: columnVisibility["visual"] ? undefined : "none"}$1className="px-1.5 py-2 align-top">
+                            <td data-column="type" style={{
+  width: columnWidths["type"],
+  minWidth: columnWidths["type"],
+  display: columnVisibility["type"] ? "table-cell" : "none",
+}}className="px-1.5 py-2 align-top">
 
                               <div
                                 className={`mx-auto flex h-7 w-7 items-center justify-center rounded-xl border ${visual.wrapper}`}
@@ -3083,23 +3104,39 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="installation" style={display: columnVisibility["installation"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="installation" style={{
+  width: columnWidths["installation"],
+  minWidth: columnWidths["installation"],
+  display: columnVisibility["installation"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
                               <div className="font-semibold leading-tight text-slate-800">
                                 {x.installation}
                               </div>
                             </td>
 
-                            <td data-column="category" style={display: columnVisibility["category"] ? undefined : "none"}$1className="px-2 py-2 align-top text-slate-400">
+                            <td data-column="description" style={{
+  width: columnWidths["description"],
+  minWidth: columnWidths["description"],
+  display: columnVisibility["description"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top text-slate-400">
                               <div className="truncate" title={x.category || ""}>
                                 {sentenceCase(x.category)}
                               </div>
                             </td>
 
-                            <td data-column="action" style={display: columnVisibility["action"] ? undefined : "none"}$1className="px-2 py-2 align-top text-slate-600">
+                            <td data-column="action" style={{
+  width: columnWidths["action"],
+  minWidth: columnWidths["action"],
+  display: columnVisibility["action"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top text-slate-600">
                               {x.action}
                             </td>
 
-                            <td data-column="frequency" style={display: columnVisibility["frequency"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="frequency" style={{
+  width: columnWidths["frequency"],
+  minWidth: columnWidths["frequency"],
+  display: columnVisibility["frequency"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
 
@@ -3114,7 +3151,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="equipmentId" style={display: columnVisibility["equipmentId"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="equipmentId" style={{
+  width: columnWidths["equipmentId"],
+  minWidth: columnWidths["equipmentId"],
+  display: columnVisibility["equipmentId"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -3138,7 +3179,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="company" style={display: columnVisibility["company"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="company" style={{
+  width: columnWidths["company"],
+  minWidth: columnWidths["company"],
+  display: columnVisibility["company"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -3162,7 +3207,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="status" style={display: columnVisibility["status"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="status" style={{
+  width: columnWidths["status"],
+  minWidth: columnWidths["status"],
+  display: columnVisibility["status"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <select
                                 disabled={
@@ -3204,7 +3253,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="lastReview" style={display: columnVisibility["lastReview"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="date" style={{
+  width: columnWidths["date"],
+  minWidth: columnWidths["date"],
+  display: columnVisibility["date"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -3228,7 +3281,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="nextReview" style={display: columnVisibility["nextReview"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="nextReview" style={{
+  width: columnWidths["nextReview"],
+  minWidth: columnWidths["nextReview"],
+  display: columnVisibility["nextReview"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <div className="flex min-h-8 items-center gap-2">
 
@@ -3268,7 +3325,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="secondReview" style={display: columnVisibility["secondReview"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="secondReview" style={{
+  width: columnWidths["secondReview"],
+  minWidth: columnWidths["secondReview"],
+  display: columnVisibility["secondReview"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               {item.status ===
                               "APTO CONDICIONADO" ? (
@@ -3299,7 +3360,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="result" style={display: columnVisibility["result"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="result" style={{
+  width: columnWidths["result"],
+  minWidth: columnWidths["result"],
+  display: columnVisibility["result"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <span
                                 className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-bold ${resultVisual.className}`}
@@ -3315,7 +3380,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="comment" style={display: columnVisibility["comment"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="comment" style={{
+  width: columnWidths["comment"],
+  minWidth: columnWidths["comment"],
+  display: columnVisibility["comment"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <textarea
                                 disabled={
@@ -3340,7 +3409,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="actions" style={display: columnVisibility["actions"] ? undefined : "none"}$1className="px-2 py-2 align-top">
+                            <td data-column="actions" style={{
+  width: columnWidths["actions"],
+  minWidth: columnWidths["actions"],
+  display: columnVisibility["actions"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               {!readOnly &&
                                 !review.confirmed && (
@@ -3370,7 +3443,8 @@ export default function CenterDetail() {
                       0 && (
                       <tr>
 
-                        <td data-column="code" style={display: columnVisibility["code"] ? undefined : "none"}$1                          colSpan={visibleColumnCount}
+                        <td
+                          colSpan={visibleColumnCount}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con la búsqueda.
