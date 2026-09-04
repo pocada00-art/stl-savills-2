@@ -54,6 +54,7 @@ return date.toLocaleString("es-ES");
 
 function formatCenterNumber(value: unknown): string {
   const raw = String(value ?? "").trim();
+
   if (!raw) return "";
 
   const [integerPart, decimalPart] = raw.split(".");
@@ -63,7 +64,12 @@ function formatCenterNumber(value: unknown): string {
     : `${integerPart.padStart(2, "0")}.${decimalPart}`;
 }
 
-return raw.toUpperCase();
+function formatCenterCode(value: unknown): string {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+
+  return raw.toUpperCase();
 }
 
 function textValue(
