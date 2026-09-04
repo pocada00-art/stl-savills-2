@@ -1872,152 +1872,69 @@ export default function CenterDetail() {
     });
   }
 
- function setElementQuantity(template: any, desiredCount: number) {
-  if (readOnly || !currentCenter) return;
+  function setElementQuantity(template: any, desiredCount: number) {
+    if (readOnly || !currentCenter) return;
 
-  const target = Math.max(0, Math.floor(desiredCount));
-  const actionCode = String(
-    template.actionCode ?? template.baseCode ?? template.code ?? ""
-  ).trim();
+    const target = Math.max(0, Math.floor(desiredCount));
+    const actionCode = String(template.actionCode ?? template.baseCode ?? template.code ?? "").trim();
 
-  let nextState: V1State = {
-    ...state,
-    activeItems: {
-      ...state.activeItems,
-      [centerId]: {
-        ...(state.activeItems?.[centerId] || {}),
+    let nextState: V1State = {
+      ...state,
+      activeItems: {
+        ...state.activeItems,
+        [centerId]: { ...(state.activeItems?.[centerId] || {}) },
       },
-    },
-    customItems: {
-      ...(state.customItems || {}),
-      [centerId]: [
-        ...(state.customItems?.[centerId] || []),
-      ],
-    },
-    reviews: {
-      ...state.reviews,
-    },
-  };
+      customItems: {
+        ...(state.customItems || {}),
+        [centerId]: [...(state.customItems?.[centerId] || [])],
+      },
+      reviews: { ...state.reviews },
+    };
 
-  const matches = () => [
-    ...catalogItems.filter(
-      (item: any) =>
-        nextState.activeItems?.[centerId]?.[item.id] !== false &&
-        String(
-          item.actionCode ??
-            item.baseCode ??
-            item.code ??
-            ""
-        ).trim() === actionCode
-    ),
-    ...(nextState.customItems?.[centerId] || []).filter(
-      (item: any) =>
-        String(
-          item.actionCode ??
-            item.baseCode ??
-            item.code ??
-            ""
-        ).trim() === actionCode
-    ),
-  ];
+    const matches = () => [
+      ...catalogItems.filter((item: any) => nextState.activeItems?.[centerId]?.[item.id] !== false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
+      ...(nextState.customItems?.[centerId] || []).filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
+    ];
 
-  /* Aumentar cantidad */
-  while (matches().length < target) {
-    const reusable = catalogItems.find(
-      (item: any) =>
-        nextState.activeItems?.[centerId]?.[item.id] === false &&
-        String(
-          item.actionCode ??
-            item.baseCode ??
-            item.code ??
-            ""
-        ).trim() === actionCode
-    );
-
-    if (reusable) {
-      nextState.activeItems[centerId][reusable.id] = true;
-    } else {
-      const customId = `custom-${centerId}-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
-
-      nextState.customItems ??= {};
-      nextState.customItems[centerId] ??= [];
-
-      nextState.customItems[centerId].push({
-        id: customId,
-        baseCode: String(
-          template.baseCode ??
-            template.code ??
-            ""
-        ),
-        actionCode,
-        country: currentCenter.country,
-        stl: currentCenter.stl,
-        category: template.category,
-        installation: template.installation,
-        action: template.action,
-        frequency: template.frequency,
-        normativeReference:
-          template.normativeReference ?? null,
-      } as any);
-    }
-  }
-
-  /* Reducir cantidad */
-  const customItems =
-    nextState.customItems?.[centerId] ?? [];
-
-  while (matches().length > target) {
-    const current =
-      matches()[matches().length - 1];
-
-    const isCustom =
-      customItems.some(
-        (item: any) =>
-          item.id === current.id
-      );
-
-    if (isCustom) {
-      nextState.customItems![centerId] =
-        nextState.customItems![centerId].filter(
-          (item: any) =>
-            item.id !== current.id
-        );
-    } else {
-      nextState.activeItems[centerId][
-        current.id
-      ] = false;
-    }
-
-    /* Eliminar también la información de revisión
-       del elemento que se ha eliminado */
-    Object.keys(
-      nextState.reviews
-    ).forEach(reviewId => {
-      if (
-        !nextState.reviews[reviewId]?.items?.[
-          current.id
-        ]
-      ) {
-        return;
+    while (matches().length < target) {
+      const reusable = catalogItems.find((item: any) => nextState.activeItems?.[centerId]?.[item.id] === false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
+      if (reusable) {
+        nextState.activeItems[centerId][reusable.id] = true;
+      } else {
+        const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        nextState.customItems[centerId].push({
+          id: customId,
+          baseCode: String(template.baseCode ?? template.code ?? ""),
+          actionCode,
+          country: currentCenter.country,
+          stl: currentCenter.stl,
+          category: template.category,
+          installation: template.installation,
+          action: template.action,
+          frequency: template.frequency,
+          normativeReference: template.normativeReference ?? null,
+        } as any);
       }
+    }
 
-      const items = {
-        ...nextState.reviews[reviewId].items,
-      };
+    while (matches().length > target) {
+      const current = matches()[matches().length - 1];
+      const isCustom = nextState.customItems[centerId].some((item: any) => item.id === current.id);
+      if (isCustom) {
+        nextState.customItems[centerId] = nextState.customItems[centerId].filter((item: any) => item.id !== current.id);
+      } else {
+        nextState.activeItems[centerId][current.id] = false;
+      }
+      Object.keys(nextState.reviews).forEach(reviewId => {
+        if (!nextState.reviews[reviewId]?.items?.[current.id]) return;
+        const items = { ...nextState.reviews[reviewId].items };
+        delete items[current.id];
+        nextState.reviews[reviewId] = { ...nextState.reviews[reviewId], items };
+      });
+    }
 
-      delete items[current.id];
-
-      nextState.reviews[reviewId] = {
-        ...nextState.reviews[reviewId],
-        items,
-      };
-    });
+    updateState(nextState);
   }
-
-  updateState(nextState);
-}
 
   function getItem(
     itemId: string
@@ -3146,11 +3063,11 @@ export default function CenterDetail() {
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
-                            <td className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
+                            <td data-column="code" style={display: columnVisibility["code"] ? undefined : "none"}$1className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
                               {x.displayCode}
                             </td>
 
-                            <td className="px-1.5 py-2 align-top">
+                            <td data-column="visual" style={display: columnVisibility["visual"] ? undefined : "none"}$1className="px-1.5 py-2 align-top">
 
                               <div
                                 className={`mx-auto flex h-7 w-7 items-center justify-center rounded-xl border ${visual.wrapper}`}
@@ -3166,23 +3083,23 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="installation" style={display: columnVisibility["installation"] ? undefined : "none"}$1className="px-2 py-2 align-top">
                               <div className="font-semibold leading-tight text-slate-800">
                                 {x.installation}
                               </div>
                             </td>
 
-                            <td className="px-2 py-2 align-top text-slate-400">
+                            <td data-column="category" style={display: columnVisibility["category"] ? undefined : "none"}$1className="px-2 py-2 align-top text-slate-400">
                               <div className="truncate" title={x.category || ""}>
                                 {sentenceCase(x.category)}
                               </div>
                             </td>
 
-                            <td className="px-2 py-2 align-top text-slate-600">
+                            <td data-column="action" style={display: columnVisibility["action"] ? undefined : "none"}$1className="px-2 py-2 align-top text-slate-600">
                               {x.action}
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="frequency" style={display: columnVisibility["frequency"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
 
@@ -3197,7 +3114,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="equipmentId" style={display: columnVisibility["equipmentId"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -3221,7 +3138,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="company" style={display: columnVisibility["company"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -3245,7 +3162,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="status" style={display: columnVisibility["status"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <select
                                 disabled={
@@ -3287,7 +3204,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="lastReview" style={display: columnVisibility["lastReview"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -3311,7 +3228,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="nextReview" style={display: columnVisibility["nextReview"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <div className="flex min-h-8 items-center gap-2">
 
@@ -3351,7 +3268,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="secondReview" style={display: columnVisibility["secondReview"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               {item.status ===
                               "APTO CONDICIONADO" ? (
@@ -3382,7 +3299,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="result" style={display: columnVisibility["result"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <span
                                 className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-bold ${resultVisual.className}`}
@@ -3398,7 +3315,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="comment" style={display: columnVisibility["comment"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               <textarea
                                 disabled={
@@ -3423,7 +3340,7 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-2 py-2 align-top">
+                            <td data-column="actions" style={display: columnVisibility["actions"] ? undefined : "none"}$1className="px-2 py-2 align-top">
 
                               {!readOnly &&
                                 !review.confirmed && (
@@ -3453,8 +3370,7 @@ export default function CenterDetail() {
                       0 && (
                       <tr>
 
-                        <td
-                          colSpan={visibleColumnCount}
+                        <td data-column="code" style={display: columnVisibility["code"] ? undefined : "none"}$1                          colSpan={visibleColumnCount}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con la búsqueda.
