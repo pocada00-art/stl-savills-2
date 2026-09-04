@@ -1920,9 +1920,11 @@ export default function CenterDetail() {
       }
     }
 
+    const customItems = nextState.customItems?.[centerId] ?? [];
+
     while (matches().length > target) {
       const current = matches()[matches().length - 1];
-      const isCustom = nextState.customItems[centerId].some((item: any) => item.id === current.id);
+      const isCustom = customItems.some((item: any) => item.id === current.id);
       if (isCustom) {
         nextState.customItems[centerId] = nextState.customItems[centerId].filter((item: any) => item.id !== current.id);
       } else {
