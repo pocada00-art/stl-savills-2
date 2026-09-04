@@ -24,7 +24,6 @@ import {
   type V1Status,
 } from "@/lib/v1-state";
 import { loadCenterImage } from "@/lib/image-storage";
-import { addDisplayCodes } from "@/lib/element-codes";
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -208,18 +207,15 @@ export default function CertificatePage() {
   const active = catalog.filter(
     (item: any) => state.activeItems[center!.id]?.[item.id] !== false,
   );
-  const customItems = center ? state.customItems?.[center.id] || [] : [];
-  const centerItems = [...active, ...customItems];
-  const numberedItems = addDisplayCodes(centerItems as any[], catalog as any[]);
 
-  const rows = numberedItems.map((x: any) => ({
+  const rows = active.map((x: any) => ({
     x,
     item: review?.items?.[x.id] || blankItem(),
   }));
 
   const summary = reviewSummary(
     review,
-    centerItems.map((item: any) => item.id),
+    active.map((item: any) => item.id),
   );
 
   const score = Number(summary.score || 0);
@@ -299,7 +295,7 @@ export default function CertificatePage() {
   }).length;
 
   const riskCount = rows.filter(({ item }) =>
-    /RIESGO|CRÍTICO|CRITICO/i.test(`${item.status || ""} ${item.result || ""} ${item.comment || ""}`),
+    /RIESGO|CRÍTICO|CRITICO/i.test(`${item.status || ""} ${resultFromStatus(item.status)} ${item.comment || ""}`),
   ).length;
 
   const documentationCount = rows.filter(({ item }) =>
@@ -307,7 +303,7 @@ export default function CertificatePage() {
   ).length;
 
   const incidentCount = rows.filter(({ item }) =>
-    /INCIDENCIA|INCUMPLIMIENTO/i.test(`${item.status || ""} ${item.result || ""} ${item.comment || ""}`),
+    /INCIDENCIA|INCUMPLIMIENTO/i.test(`${item.status || ""} ${resultFromStatus(item.status)} ${item.comment || ""}`),
   ).length;
 
   const recommendations = [
@@ -418,6 +414,7 @@ export default function CertificatePage() {
             <SummaryBox label="Cumplimiento" value={`${score}%`} />
             <SummaryBox label="Elementos" value={summary.total} />
             <SummaryBox label="ESTADO" value={status} />
+            <SummaryBox label="RESULTADO" value={result.label} className={result.classes} />
           </div>
 
           <div className="mt-1.5 grid grid-cols-4 gap-2">
@@ -452,7 +449,7 @@ export default function CertificatePage() {
                   const rowResult = resultFromStatus(item.status);
                   return (
                     <tr key={x.id} className="border-t border-slate-100">
-                      <td className="px-1 py-0.5 font-mono font-bold">{x.displayCode || x.code || "—"}</td>
+                      <td className="px-1 py-0.5 font-mono font-bold">{x.code || "—"}</td>
                       <td className="truncate px-1 py-0.5">{x.installation || "—"}</td>
                       <td className="truncate px-1 py-0.5">{x.action || "—"}</td>
                       <td className="truncate px-1 py-0.5">{x.frequency || "—"}</td>
@@ -484,24 +481,6 @@ export default function CertificatePage() {
               {recommendations.map((item, index) => <span key={index}>• {item}</span>)}
             </div>
           </div>
-
-          {rows.some(({ item }) => String(item.comment || "").trim()) && (
-            <div className="mt-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
-              <div className="text-[7px] font-black uppercase tracking-wide text-slate-400">Comentarios de la revisión</div>
-              <div className="mt-1 space-y-1">
-                {rows
-                  .filter(({ item }) => String(item.comment || "").trim())
-                  .map(({ x, item }) => (
-                    <div key={`comment-${x.id}`} className="rounded-md border border-slate-100 bg-slate-50 px-2 py-1">
-                      <div className="text-[7px] font-black text-slate-700">
-                        {x.displayCode || "—"} · {x.installation || "—"} · {x.action || "—"}
-                      </div>
-                      <div className="mt-0.5 text-[8px] text-slate-600">{item.comment}</div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
         </section>
 
         <section className="grid grid-cols-[1fr_1.5fr] gap-4 border-t border-slate-200 px-5 py-2 print:px-4 print:py-1.5">
