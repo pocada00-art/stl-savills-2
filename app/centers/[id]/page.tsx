@@ -1902,6 +1902,9 @@ export default function CenterDetail() {
         nextState.activeItems[centerId][reusable.id] = true;
       } else {
         const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        nextState.customItems ??= {};
+        nextState.customItems[centerId] ??= [];
+
         nextState.customItems[centerId].push({
           id: customId,
           baseCode: String(template.baseCode ?? template.code ?? ""),
