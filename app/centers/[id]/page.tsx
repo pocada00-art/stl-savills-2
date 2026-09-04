@@ -1885,39 +1885,93 @@ export default function CenterDetail() {
     });
   }
 
-  function setElementQuantity(template: any, desiredCount: number) {
+    function setElementQuantity(template: any, desiredCount: number) {
     if (readOnly || !currentCenter) return;
 
     const target = Math.max(0, Math.floor(desiredCount));
-    const actionCode = String(template.actionCode ?? template.baseCode ?? template.code ?? "").trim();
+    const actionCode = String(
+      template.actionCode ??
+        template.baseCode ??
+        template.code ??
+        ""
+    ).trim();
 
-    let nextState: V1State = {
+    /*
+     * En esta función customItems queda garantizado como un objeto
+     * existente, aunque V1State lo defina como propiedad opcional.
+     *
+     * Esto evita que TypeScript considere posiblemente undefined
+     * las operaciones posteriores sobre nextState.customItems.
+     */
+    let nextState: V1State & {
+      customItems: NonNullable<V1State["customItems"]>;
+    } = {
       ...state,
       activeItems: {
         ...state.activeItems,
-        [centerId]: { ...(state.activeItems?.[centerId] || {}) },
+        [centerId]: {
+          ...(state.activeItems?.[centerId] || {}),
+        },
       },
       customItems: {
         ...(state.customItems || {}),
-        [centerId]: [...(state.customItems?.[centerId] || [])],
+        [centerId]: [
+          ...(state.customItems?.[centerId] || []),
+        ],
       },
-      reviews: { ...state.reviews },
+      reviews: {
+        ...state.reviews,
+      },
     };
 
     const matches = () => [
-      ...catalogItems.filter((item: any) => nextState.activeItems?.[centerId]?.[item.id] !== false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
-      ...(nextState.customItems?.[centerId] || []).filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
+      ...catalogItems.filter(
+        (item: any) =>
+          nextState.activeItems?.[centerId]?.[item.id] !== false &&
+          String(
+            item.actionCode ??
+              item.baseCode ??
+              item.code ??
+              ""
+          ).trim() === actionCode
+      ),
+      ...(nextState.customItems[centerId] || []).filter(
+        (item: any) =>
+          String(
+            item.actionCode ??
+              item.baseCode ??
+              item.code ??
+              ""
+          ).trim() === actionCode
+      ),
     ];
 
     while (matches().length < target) {
-      const reusable = catalogItems.find((item: any) => nextState.activeItems?.[centerId]?.[item.id] === false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
+      const reusable = catalogItems.find(
+        (item: any) =>
+          nextState.activeItems?.[centerId]?.[item.id] === false &&
+          String(
+            item.actionCode ??
+              item.baseCode ??
+              item.code ??
+              ""
+          ).trim() === actionCode
+      );
+
       if (reusable) {
         nextState.activeItems[centerId][reusable.id] = true;
       } else {
-        const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const customId = `custom-${centerId}-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`;
+
         nextState.customItems[centerId].push({
           id: customId,
-          baseCode: String(template.baseCode ?? template.code ?? ""),
+          baseCode: String(
+            template.baseCode ??
+              template.code ??
+              ""
+          ),
           actionCode,
           country: currentCenter.country,
           stl: currentCenter.stl,
@@ -1925,25 +1979,55 @@ export default function CenterDetail() {
           installation: template.installation,
           action: template.action,
           frequency: template.frequency,
-          normativeReference: template.normativeReference ?? null,
+          normativeReference:
+            template.normativeReference ?? null,
         } as any);
       }
     }
 
     while (matches().length > target) {
-      const current = matches()[matches().length - 1];
-      const isCustom = nextState.customItems[centerId].some((item: any) => item.id === current.id);
+      const current =
+        matches()[matches().length - 1];
+
+      const isCustom =
+        nextState.customItems[centerId].some(
+          (item: any) =>
+            item.id === current.id
+        );
+
       if (isCustom) {
-        nextState.customItems[centerId] = nextState.customItems[centerId].filter((item: any) => item.id !== current.id);
+        nextState.customItems[centerId] =
+          nextState.customItems[centerId].filter(
+            (item: any) =>
+              item.id !== current.id
+          );
       } else {
-        nextState.activeItems[centerId][current.id] = false;
+        nextState.activeItems[centerId][current.id] =
+          false;
       }
-      Object.keys(nextState.reviews).forEach(reviewId => {
-        if (!nextState.reviews[reviewId]?.items?.[current.id]) return;
-        const items = { ...nextState.reviews[reviewId].items };
-        delete items[current.id];
-        nextState.reviews[reviewId] = { ...nextState.reviews[reviewId], items };
-      });
+
+      Object.keys(nextState.reviews).forEach(
+        reviewId => {
+          if (
+            !nextState.reviews[reviewId]?.items?.[
+              current.id
+            ]
+          ) {
+            return;
+          }
+
+          const items = {
+            ...nextState.reviews[reviewId].items,
+          };
+
+          delete items[current.id];
+
+          nextState.reviews[reviewId] = {
+            ...nextState.reviews[reviewId],
+            items,
+          };
+        }
+      );
     }
 
     updateState(nextState);
