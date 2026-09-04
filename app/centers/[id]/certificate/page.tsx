@@ -80,7 +80,7 @@ fallback = ""
 for (const key of keys) {
 const value = source?.[key];
 
-```
+
 if (
   value !== undefined &&
   value !== null &&
@@ -88,7 +88,7 @@ if (
 ) {
   return String(value).trim();
 }
-```
+
 
 }
 
@@ -130,7 +130,7 @@ const match = value.match(
 /^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)?$/
 );
 
-```
+
 if (match) {
   const amount = Number(
     match[1].replace(",", ".")
@@ -147,7 +147,7 @@ if (match) {
     ? Math.round(amount * 12)
     : Math.round(amount);
 }
-```
+
 
 }
 
@@ -204,7 +204,7 @@ switch (status) {
 case "APTO":
 return "APTO";
 
-```
+
 case "APTO CONDICIONADO":
   return "CONDICIONADO";
 
@@ -216,7 +216,7 @@ case "PENDIENTE":
 
 default:
   return "SIN INFORMACIÓN";
-```
+
 
 }
 }
@@ -228,7 +228,7 @@ switch (result) {
 case "APTO":
 return "border-emerald-200 bg-emerald-50 text-emerald-700";
 
-```
+
 case "CONDICIONADO":
   return "border-amber-200 bg-amber-50 text-amber-700";
 
@@ -237,7 +237,7 @@ case "NO APTO":
 
 default:
   return "border-slate-200 bg-slate-50 text-slate-600";
-```
+
 
 }
 }
@@ -333,12 +333,12 @@ value?: string;
 return ( <div className="min-w-0"> <div className="text-[7px] font-black uppercase tracking-wide text-slate-400">
 {label} </div>
 
-```
+
   <div className="truncate text-[9px] font-medium text-slate-700">
     {value || "—"}
   </div>
 </div>
-```
+
 
 );
 }
@@ -358,12 +358,12 @@ className={`rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 ${classNa
 > <div className="text-[7px] font-black uppercase tracking-wide text-slate-400">
 {label} </div>
 
-```
+
   <div className="mt-0.5 text-xs font-black text-slate-800">
     {value}
   </div>
 </div>
-```
+
 
 );
 }
@@ -430,12 +430,12 @@ const catalog =
 useMemo(() => {
 if (!center) return [];
 
-```
+
   return center.country === "España"
     ? demo.esCatalog
     : demo.ptCatalog;
 }, [center]);
-```
+
 
 const overrides: any =
 center
@@ -693,7 +693,7 @@ center,
 useEffect(() => {
 let cancelled = false;
 
-```
+
 async function resolve(
   source: string,
   setter: (
@@ -745,7 +745,7 @@ void resolve(
 return () => {
   cancelled = true;
 };
-```
+
 
 }, [
 photoSource,
@@ -766,7 +766,7 @@ x.frequency || ""
 )
 );
 
-```
+
     if (!nextReview) {
       return false;
     }
@@ -785,7 +785,7 @@ x.frequency || ""
     );
   }
 ).length;
-```
+
 
 const upcomingCount =
 rows.filter(
@@ -801,7 +801,7 @@ x.frequency || ""
 )
 );
 
-```
+
     if (!nextReview) {
       return false;
     }
@@ -832,7 +832,7 @@ x.frequency || ""
     );
   }
 ).length;
-```
+
 
 const riskCount =
 rows.filter(
@@ -871,7 +871,7 @@ const recommendations = [
 ]
 : []),
 
-```
+
 ...(condicionadoCount
   ? [
       `Realizar seguimiento de ${condicionadoCount} elemento(s) condicionado(s).`,
@@ -901,7 +901,7 @@ const recommendations = [
       "Realizar seguimiento de riesgos abiertos.",
     ]
   : []),
-```
+
 
 ].slice(0, 4);
 
@@ -988,7 +988,7 @@ Centro no encontrado. </div> </div>
 
 return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none print:px-0 print:py-0">
 
-```
+
   <div className="no-print mb-4 flex items-center justify-between gap-3">
 
     <Link
@@ -1705,7 +1705,7 @@ return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none pr
   `}</style>
 
 </div>
-```
+
 
 );
 }
