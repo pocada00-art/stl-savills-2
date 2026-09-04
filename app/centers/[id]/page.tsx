@@ -1925,11 +1925,15 @@ export default function CenterDetail() {
     while (matches().length > target) {
       const current = matches()[matches().length - 1];
       const isCustom = customItems.some((item: any) => item.id === current.id);
+
       if (isCustom) {
-        nextState.customItems[centerId] = nextState.customItems[centerId].filter((item: any) => item.id !== current.id);
+        nextState.customItems![centerId] = nextState.customItems![centerId].filter(
+          (item: any) => item.id !== current.id
+        );
       } else {
         nextState.activeItems[centerId][current.id] = false;
       }
+    }
       Object.keys(nextState.reviews).forEach(reviewId => {
         if (!nextState.reviews[reviewId]?.items?.[current.id]) return;
         const items = { ...nextState.reviews[reviewId].items };
