@@ -52,20 +52,15 @@ return value;
 return date.toLocaleString("es-ES");
 }
 
-function formatCenterCode(value: unknown) {
-const raw = String(value ?? "").trim().replace(",", ".");
+function formatCenterNumber(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
 
-if (!raw) return "—";
+  const [integerPart, decimalPart] = raw.split(".");
 
-if (/^\d+(?:.\d+)?$/.test(raw)) {
-const [integerPart, decimalPart] = raw.split(".");
-
-```
-return decimalPart === undefined
-  ? integerPart.padStart(2, "0")
-  : `${integerPart.padStart(2, "0")}.${decimalPart}`;
-```
-
+  return decimalPart === undefined
+    ? integerPart.padStart(2, "0")
+    : `${integerPart.padStart(2, "0")}.${decimalPart}`;
 }
 
 return raw.toUpperCase();
