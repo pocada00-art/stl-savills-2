@@ -1670,15 +1670,20 @@ export default function CenterDetail() {
     }));
   }
 
-  function reduceAllColumns() {
+    function reduceAllColumns() {
     setColumnWidths(current => {
       const next = { ...current };
 
-      (Object.keys(TABLE_COLUMN_MIN_WIDTHS) as TableColumnKey[]).forEach(column => {
-        if (columnVisibility[column]) {
-          next[column] = TABLE_COLUMN_MIN_WIDTHS[column];
+      (Object.keys(TABLE_COLUMN_MIN_WIDTHS) as TableColumnKey[]).forEach(
+        column => {
+          // IMPORTANTE:
+          // Solo reducimos las columnas que están actualmente visibles.
+          // Las ocultas conservan exactamente el ancho que tenían.
+          if (columnVisibility[column]) {
+            next[column] = TABLE_COLUMN_MIN_WIDTHS[column];
+          }
         }
-      });
+      );
 
       return next;
     });
@@ -3069,7 +3074,7 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="w-max min-w-full table-fixed text-xs">
+                <table className="w-max table-fixed text-xs">
 
                   <colgroup>
                     {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
