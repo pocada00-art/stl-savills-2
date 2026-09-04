@@ -1872,78 +1872,152 @@ export default function CenterDetail() {
     });
   }
 
-  function setElementQuantity(template: any, desiredCount: number) {
-    if (readOnly || !currentCenter) return;
+ function setElementQuantity(template: any, desiredCount: number) {
+  if (readOnly || !currentCenter) return;
 
-    const target = Math.max(0, Math.floor(desiredCount));
-    const actionCode = String(template.actionCode ?? template.baseCode ?? template.code ?? "").trim();
+  const target = Math.max(0, Math.floor(desiredCount));
+  const actionCode = String(
+    template.actionCode ?? template.baseCode ?? template.code ?? ""
+  ).trim();
 
-    let nextState: V1State = {
-      ...state,
-      activeItems: {
-        ...state.activeItems,
-        [centerId]: { ...(state.activeItems?.[centerId] || {}) },
+  let nextState: V1State = {
+    ...state,
+    activeItems: {
+      ...state.activeItems,
+      [centerId]: {
+        ...(state.activeItems?.[centerId] || {}),
       },
-      customItems: {
-        ...(state.customItems || {}),
-        [centerId]: [...(state.customItems?.[centerId] || [])],
-      },
-      reviews: { ...state.reviews },
-    };
+    },
+    customItems: {
+      ...(state.customItems || {}),
+      [centerId]: [
+        ...(state.customItems?.[centerId] || []),
+      ],
+    },
+    reviews: {
+      ...state.reviews,
+    },
+  };
 
-    const matches = () => [
-      ...catalogItems.filter((item: any) => nextState.activeItems?.[centerId]?.[item.id] !== false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
-      ...(nextState.customItems?.[centerId] || []).filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
-    ];
+  const matches = () => [
+    ...catalogItems.filter(
+      (item: any) =>
+        nextState.activeItems?.[centerId]?.[item.id] !== false &&
+        String(
+          item.actionCode ??
+            item.baseCode ??
+            item.code ??
+            ""
+        ).trim() === actionCode
+    ),
+    ...(nextState.customItems?.[centerId] || []).filter(
+      (item: any) =>
+        String(
+          item.actionCode ??
+            item.baseCode ??
+            item.code ??
+            ""
+        ).trim() === actionCode
+    ),
+  ];
 
-    while (matches().length < target) {
-      const reusable = catalogItems.find((item: any) => nextState.activeItems?.[centerId]?.[item.id] === false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
-      if (reusable) {
-        nextState.activeItems[centerId][reusable.id] = true;
-      } else {
-        const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        nextState.customItems ??= {};
-        nextState.customItems[centerId] ??= [];
+  /* Aumentar cantidad */
+  while (matches().length < target) {
+    const reusable = catalogItems.find(
+      (item: any) =>
+        nextState.activeItems?.[centerId]?.[item.id] === false &&
+        String(
+          item.actionCode ??
+            item.baseCode ??
+            item.code ??
+            ""
+        ).trim() === actionCode
+    );
 
-        nextState.customItems[centerId].push({
-          id: customId,
-          baseCode: String(template.baseCode ?? template.code ?? ""),
-          actionCode,
-          country: currentCenter.country,
-          stl: currentCenter.stl,
-          category: template.category,
-          installation: template.installation,
-          action: template.action,
-          frequency: template.frequency,
-          normativeReference: template.normativeReference ?? null,
-        } as any);
-      }
+    if (reusable) {
+      nextState.activeItems[centerId][reusable.id] = true;
+    } else {
+      const customId = `custom-${centerId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+
+      nextState.customItems ??= {};
+      nextState.customItems[centerId] ??= [];
+
+      nextState.customItems[centerId].push({
+        id: customId,
+        baseCode: String(
+          template.baseCode ??
+            template.code ??
+            ""
+        ),
+        actionCode,
+        country: currentCenter.country,
+        stl: currentCenter.stl,
+        category: template.category,
+        installation: template.installation,
+        action: template.action,
+        frequency: template.frequency,
+        normativeReference:
+          template.normativeReference ?? null,
+      } as any);
     }
-
-    const customItems = nextState.customItems?.[centerId] ?? [];
-
-    while (matches().length > target) {
-      const current = matches()[matches().length - 1];
-      const isCustom = customItems.some((item: any) => item.id === current.id);
-
-      if (isCustom) {
-        nextState.customItems![centerId] = nextState.customItems![centerId].filter(
-          (item: any) => item.id !== current.id
-        );
-      } else {
-        nextState.activeItems[centerId][current.id] = false;
-      }
-    }
-      Object.keys(nextState.reviews).forEach(reviewId => {
-        if (!nextState.reviews[reviewId]?.items?.[current.id]) return;
-        const items = { ...nextState.reviews[reviewId].items };
-        delete items[current.id];
-        nextState.reviews[reviewId] = { ...nextState.reviews[reviewId], items };
-      });
-    }
-
-    updateState(nextState);
   }
+
+  /* Reducir cantidad */
+  const customItems =
+    nextState.customItems?.[centerId] ?? [];
+
+  while (matches().length > target) {
+    const current =
+      matches()[matches().length - 1];
+
+    const isCustom =
+      customItems.some(
+        (item: any) =>
+          item.id === current.id
+      );
+
+    if (isCustom) {
+      nextState.customItems![centerId] =
+        nextState.customItems![centerId].filter(
+          (item: any) =>
+            item.id !== current.id
+        );
+    } else {
+      nextState.activeItems[centerId][
+        current.id
+      ] = false;
+    }
+
+    /* Eliminar también la información de revisión
+       del elemento que se ha eliminado */
+    Object.keys(
+      nextState.reviews
+    ).forEach(reviewId => {
+      if (
+        !nextState.reviews[reviewId]?.items?.[
+          current.id
+        ]
+      ) {
+        return;
+      }
+
+      const items = {
+        ...nextState.reviews[reviewId].items,
+      };
+
+      delete items[current.id];
+
+      nextState.reviews[reviewId] = {
+        ...nextState.reviews[reviewId],
+        items,
+      };
+    });
+  }
+
+  updateState(nextState);
+}
 
   function getItem(
     itemId: string
