@@ -62,6 +62,11 @@ import {
   loadCenterImage,
 } from "@/lib/image-storage";
 
+import {
+  addDisplayCodes,
+  buildElementCodes,
+} from "@/lib/element-codes";
+
 const STATUSES: V1Status[] = [
   "APTO",
   "APTO CONDICIONADO",
@@ -904,6 +909,7 @@ function TableHeader({
   onHide,
   onResizeStart,
   width,
+  visible,
 }: {
   column: TableColumnKey;
   sort: { key: TableColumnKey; direction: "asc" | "desc" };
@@ -911,12 +917,16 @@ function TableHeader({
   onHide: (key: TableColumnKey) => void;
   onResizeStart: (key: TableColumnKey, event: ReactMouseEvent) => void;
   width: number;
+  visible: boolean;
 }) {
   const sortable = column !== "actions";
   const active = sort.key === column;
 
   return (
-    <th className="relative px-2 py-2" style={{ width, minWidth: width }}>
+    <th
+      className="relative px-2 py-2"
+      style={{ width, minWidth: width, display: visible ? "table-cell" : "none" }}
+    >
       <div className="flex min-h-7 items-center gap-1">
         <button
           type="button"
@@ -1488,32 +1498,7 @@ export default function CenterDetail() {
     state.activeItems[centerId] || {};
 
   const catalogItems = useMemo(() => {
-    const actionOrdinals = new Map<string, number>();
-    const seenActions = new Set<string>();
-
-    return catalog.map((item: any, index: number) => {
-      const baseCode = resolveBaseCode(catalog as any[], index);
-      const explicit = String(item.actionCode ?? item.code ?? "").trim();
-      let actionCode = resolveActionCode(item, baseCode);
-
-      if (!/^\d+\.\d+$/.test(explicit) && String(item.action || "").trim()) {
-        const actionKey = `${baseCode}|${String(item.action).trim().toLowerCase()}`;
-        if (!seenActions.has(actionKey)) {
-          const next = (actionOrdinals.get(baseCode) || 0) + 1;
-          actionOrdinals.set(baseCode, next);
-          seenActions.add(actionKey);
-          actionCode = `${baseCode}.${next}`;
-        } else {
-          actionCode = `${baseCode}.${actionOrdinals.get(baseCode) || 1}`;
-        }
-      }
-
-      return {
-        ...item,
-        baseCode,
-        actionCode,
-      };
-    });
+    return buildElementCodes(catalog as any[]);
   }, [catalog]);
 
   const customItems = state.customItems?.[centerId] || [];
@@ -1526,20 +1511,8 @@ export default function CenterDetail() {
   }, [catalogItems, activeMap, customItems]);
 
   const numberedItems = useMemo(() => {
-    const counters = new Map<string, number>();
-
-    return centerItems.map((item: any) => {
-      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
-      const actionCode = String(item.actionCode ?? resolveActionCode(item, baseCode)).trim();
-      const ordinal = (counters.get(actionCode) || 0) + 1;
-      counters.set(actionCode, ordinal);
-
-      return {
-        ...item,
-        displayCode: instanceCode(actionCode, ordinal),
-      };
-    });
-  }, [centerItems]);
+    return addDisplayCodes(centerItems as any[], catalog as any[]);
+  }, [centerItems, catalog]);
 
   const selectableItems = useMemo(() => {
     const unique = new Map<string, any>();
@@ -1918,9 +1891,6 @@ export default function CenterDetail() {
       reviews: { ...state.reviews },
     };
 
-    nextState.customItems ??= {};
-    nextState.customItems[centerId] ??= [];
-
     const matches = () => [
       ...catalogItems.filter((item: any) => nextState.activeItems?.[centerId]?.[item.id] !== false && String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
       ...(nextState.customItems?.[centerId] || []).filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode),
@@ -1932,7 +1902,7 @@ export default function CenterDetail() {
         nextState.activeItems[centerId][reusable.id] = true;
       } else {
         const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-     nextState.customItems[centerId].push({
+        nextState.customItems[centerId].push({
           id: customId,
           baseCode: String(template.baseCode ?? template.code ?? ""),
           actionCode,
@@ -3028,6 +2998,7 @@ export default function CenterDetail() {
                           onHide={toggleColumnVisibility}
                           onResizeStart={startTableColumnResize}
                           width={columnWidths[column]}
+                          visible={columnVisibility[column]}
                         />
                       ))}
                     </tr>
