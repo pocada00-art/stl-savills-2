@@ -3,42 +3,1709 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Printer, ArrowLeft, CheckCircle2 } from "lucide-react";
-import { demo } from "@/lib/data";
-import { loadState, reviewKey, reviewSummary, blankItem, type Period, type V1State } from "@/lib/v1-state";
+import {
+ArrowLeft,
+CheckCircle2,
+CircleAlert,
+FileText,
+Printer,
+ShieldCheck,
+} from "lucide-react";
 
-export default function CertificatePage(){
- const params=useParams(); const search=useSearchParams(); const id=String(params.id);
- const center=demo.centers.find(c=>c.id===id); const year=Number(search.get("year")||2026); const period=(search.get("period")||"S2") as Period;
- const [state,setState]=useState<V1State>({role:"ADMIN",centers:{},activeItems:{},reviews:{}});
- useEffect(()=>setState(loadState()),[]);
- if(!center) return <div>Centro no encontrado</div>;
- const catalog=center.country==="España"?demo.esCatalog:demo.ptCatalog;
- const active=catalog.filter((x:any)=>(state.activeItems[center.id]?.[x.id]!==false));
- const review=state.reviews[reviewKey(center.id,year,period)];
- const summary=reviewSummary(review,active.map((x:any)=>x.id));
- const overrides=state.centers[center.id]||{};
- const rows=active.map((x:any)=>({x,item:review?.items[x.id]||blankItem()}));
- const certificateNumber=`STL-${center.code}-${period}-${year}`;
- return <div className="mx-auto max-w-5xl space-y-6">
-  <div className="no-print flex items-center justify-between"><Link href={`/centers/${center.id}`} className="rounded-xl border border-slate-200 px-3 py-2 text-sm"><ArrowLeft className="mr-2 inline h-4 w-4"/>Volver a ficha</Link><button onClick={()=>window.print()} className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"><Printer className="mr-2 inline h-4 w-4"/>Imprimir / guardar PDF</button></div>
-  <article className="rounded-2xl border border-slate-200 bg-white p-8 shadow-soft print:shadow-none print:border-0">
-    <header className="border-b-2 border-[#002A54] pb-6">
-      <div className="flex items-start justify-between gap-6">
-        <div><div className="text-xs font-bold uppercase tracking-[.2em] text-[#002A54]">STL SAVILLS · CERTIFICADO DE REVISIÓN</div><h1 className="mt-2 text-3xl font-black">{center.name}</h1><p className="mt-2 text-sm text-slate-500">{center.country} · {center.stl} · Código {center.code}</p></div>
-        {overrides.logoUrl?<img src={overrides.logoUrl} alt="Logo" className="h-16 w-28 object-contain"/>:<div className="text-right text-xs text-slate-400">STL SAVILLS</div>}
+import { demo } from "@/lib/data";
+import {
+blankItem,
+loadState,
+resolveCenter,
+reviewKey,
+reviewSummary,
+type Period,
+type V1State,
+type V1Status,
+} from "@/lib/v1-state";
+
+import { loadCenterImage } from "@/lib/image-storage";
+
+import { addDisplayCodes } from "@/lib/element-codes";
+
+function formatDate(value?: string | null) {
+if (!value) return "—";
+
+const date = new Date(`${value}T00:00:00`);
+
+if (Number.isNaN(date.getTime())) {
+return value;
+}
+
+return date.toLocaleDateString("es-ES");
+}
+
+function formatDateTime(value?: string | null) {
+if (!value) return "Pendiente";
+
+const date = new Date(value);
+
+if (Number.isNaN(date.getTime())) {
+return value;
+}
+
+return date.toLocaleString("es-ES");
+}
+
+function formatCenterNumber(value: unknown): string {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+
+  const [integerPart, decimalPart] = raw.split(".");
+
+  return decimalPart === undefined
+    ? integerPart.padStart(2, "0")
+    : `${integerPart.padStart(2, "0")}.${decimalPart}`;
+}
+
+function formatCenterCode(value: unknown): string {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+
+  return raw.toUpperCase();
+}
+
+function textValue(
+source: any,
+keys: string[],
+fallback = ""
+) {
+for (const key of keys) {
+const value = source?.[key];
+
+
+if (
+  value !== undefined &&
+  value !== null &&
+  String(value).trim()
+) {
+  return String(value).trim();
+}
+
+
+}
+
+return fallback;
+}
+
+function calculateNextReview(
+date: string,
+frequency: string
+) {
+if (
+!date ||
+!frequency ||
+frequency.trim().toLowerCase() === "inicial"
+) {
+return "";
+}
+
+const value = frequency.trim().toLowerCase();
+
+let months = 0;
+
+if (value.includes("bimensual")) {
+months = 2;
+} else if (value.includes("mensual")) {
+months = 1;
+} else if (value.includes("trimestral")) {
+months = 3;
+} else if (value.includes("cuatrimestral")) {
+months = 4;
+} else if (value.includes("semestral")) {
+months = 6;
+} else if (value.includes("bienal")) {
+months = 24;
+} else if (value.includes("anual")) {
+months = 12;
+} else {
+const match = value.match(
+/^(\d+(?:[.,]\d+)?)\s*(mes|meses|año|años)?$/
+);
+
+
+if (match) {
+  const amount = Number(
+    match[1].replace(",", ".")
+  );
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    return "";
+  }
+
+  months = match[2]?.startsWith("año")
+    ? Math.round(amount * 12)
+    : Math.round(amount);
+}
+
+
+}
+
+if (!months) return "";
+
+const match = date.match(
+/^(\d{4})-(\d{2})-(\d{2})$/
+);
+
+if (!match) return "";
+
+const year = Number(match[1]);
+const monthIndex = Number(match[2]) - 1;
+const day = Number(match[3]);
+
+const targetIndex =
+monthIndex + months;
+
+const targetYear =
+year +
+Math.floor(targetIndex / 12);
+
+const targetMonth =
+((targetIndex % 12) + 12) % 12;
+
+const lastDay =
+new Date(
+targetYear,
+targetMonth + 1,
+0
+).getDate();
+
+const targetDay =
+Math.min(day, lastDay);
+
+const result =
+new Date(
+targetYear,
+targetMonth,
+targetDay
+);
+
+return `${result.getFullYear()}-${String(
+    result.getMonth() + 1
+  ).padStart(2, "0")}-${String(
+    result.getDate()
+  ).padStart(2, "0")}`;
+}
+
+function resultFromStatus(
+status?: V1Status
+) {
+switch (status) {
+case "APTO":
+return "APTO";
+
+
+case "APTO CONDICIONADO":
+  return "CONDICIONADO";
+
+case "NO APTO":
+  return "NO APTO";
+
+case "PENDIENTE":
+  return "PENDIENTE";
+
+default:
+  return "SIN INFORMACIÓN";
+
+
+}
+}
+
+function resultClasses(
+result: string
+) {
+switch (result) {
+case "APTO":
+return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+
+case "CONDICIONADO":
+  return "border-amber-200 bg-amber-50 text-amber-700";
+
+case "NO APTO":
+  return "border-red-200 bg-red-50 text-red-700";
+
+default:
+  return "border-slate-200 bg-slate-50 text-slate-600";
+
+
+}
+}
+
+function complianceResult(
+score: number
+) {
+if (score > 90) {
+return {
+label: "APTO",
+classes:
+"border-emerald-300 bg-emerald-100 text-emerald-800",
+};
+}
+
+if (
+score >= 70 &&
+score <= 90
+) {
+return {
+label: "CONDICIONADO",
+classes:
+"border-amber-300 bg-amber-100 text-amber-800",
+};
+}
+
+return {
+label: "NO APTO",
+classes:
+"border-red-300 bg-red-100 text-red-800",
+};
+}
+
+function overallStatus(
+rows: Array<{
+item: {
+status?: V1Status;
+};
+}>
+): V1Status {
+if (!rows.length) {
+return "SIN INFORMACIÓN";
+}
+
+if (
+rows.some(
+row =>
+row.item.status === "NO APTO"
+)
+) {
+return "NO APTO";
+}
+
+if (
+rows.some(
+row =>
+row.item.status ===
+"APTO CONDICIONADO"
+)
+) {
+return "APTO CONDICIONADO";
+}
+
+if (
+rows.some(
+row =>
+row.item.status ===
+"SIN INFORMACIÓN"
+)
+) {
+return "SIN INFORMACIÓN";
+}
+
+if (
+rows.some(
+row =>
+row.item.status === "PENDIENTE"
+)
+) {
+return "PENDIENTE";
+}
+
+return "APTO";
+}
+
+function InfoLine({
+label,
+value,
+}: {
+label: string;
+value?: string;
+}) {
+return ( <div className="min-w-0"> <div className="text-[7px] font-black uppercase tracking-wide text-slate-400">
+{label} </div>
+
+
+  <div className="truncate text-[9px] font-medium text-slate-700">
+    {value || "—"}
+  </div>
+</div>
+
+
+);
+}
+
+function SummaryBox({
+label,
+value,
+className = "",
+}: {
+label: string;
+value: string | number;
+className?: string;
+}) {
+return (
+<div
+className={`rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 ${className}`}
+> <div className="text-[7px] font-black uppercase tracking-wide text-slate-400">
+{label} </div>
+
+
+  <div className="mt-0.5 text-xs font-black text-slate-800">
+    {value}
+  </div>
+</div>
+
+
+);
+}
+
+export default function CertificatePage() {
+const params = useParams();
+const search = useSearchParams();
+
+const id = String(params.id);
+
+const year =
+Number(
+search.get("year") || 2026
+);
+
+const period =
+(search.get("period") || "S2") as Period;
+
+const [
+state,
+setState,
+] = useState<V1State>({
+role: "ADMIN",
+centers: {},
+activeItems: {},
+reviews: {},
+});
+
+const [
+resolvedPhoto,
+setResolvedPhoto,
+] = useState<string | null>(null);
+
+const [
+resolvedLogo,
+setResolvedLogo,
+] = useState<string | null>(null);
+
+useEffect(() => {
+setState(loadState());
+}, []);
+
+const demoCenter =
+demo.centers.find(
+center => center.id === id
+) || null;
+
+const persistedCenter =
+state.centers[id] || null;
+
+const rawCenter =
+demoCenter ||
+persistedCenter;
+
+const center =
+rawCenter
+? resolveCenter(
+rawCenter as any,
+state
+)
+: null;
+
+const catalog =
+useMemo(() => {
+if (!center) return [];
+
+
+  return center.country === "España"
+    ? demo.esCatalog
+    : demo.ptCatalog;
+}, [center]);
+
+
+const overrides: any =
+center
+? state.centers[
+center.id
+] || {}
+: {};
+
+const review =
+center
+? state.reviews[
+reviewKey(
+center.id,
+year,
+period
+)
+]
+: undefined;
+
+/*
+
+* =========================================================
+* ELEMENTOS DEL CERTIFICADO
+*
+* Incluye:
+* * elementos activos del catálogo
+* * elementos personalizados
+*
+* Después se aplican los mismos displayCode que utiliza
+* la ficha del centro.
+* =========================================================
+  */
+
+const customItems =
+center
+? state.customItems?.[
+center.id
+] || []
+: [];
+
+const activeCatalogItems =
+center
+? catalog.filter(
+(item: any) =>
+state.activeItems[
+center.id
+]?.[item.id] !== false
+)
+: [];
+
+const allCenterItems =
+[
+...activeCatalogItems,
+...customItems,
+];
+
+const numberedItems =
+useMemo(() => {
+return addDisplayCodes(
+allCenterItems as any[],
+catalog as any[]
+);
+}, [
+allCenterItems,
+catalog,
+]);
+
+const rows =
+numberedItems.map(
+(x: any) => ({
+x,
+item:
+review?.items?.[x.id] ||
+blankItem(),
+})
+);
+
+/*
+
+* El resumen utiliza todos los elementos
+* que aparecen realmente en el certificado.
+  */
+  const summary =
+  reviewSummary(
+  review,
+  numberedItems.map(
+  (item: any) => item.id
+  )
+  );
+
+const score =
+Number(summary.score || 0);
+
+/*
+
+* Este es el único Resultado superior
+* que se mostrará en el certificado.
+  */
+  const result =
+  complianceResult(score);
+
+const status =
+overallStatus(rows);
+
+const confirmed =
+Boolean(review?.confirmed);
+
+const counts =
+summary.counts as Record<
+string,
+number
+>;
+
+const aptoCount =
+Number(
+counts["APTO"] || 0
+);
+
+const condicionadoCount =
+Number(
+counts[
+"APTO CONDICIONADO"
+] || 0
+);
+
+const noAptoCount =
+Number(
+counts["NO APTO"] || 0
+);
+
+const pendienteCount =
+Number(
+counts["PENDIENTE"] || 0
+);
+
+const address =
+textValue(
+center,
+["address", "direccion"]
+);
+
+const city =
+textValue(
+center,
+["city", "ciudad"]
+);
+
+const province =
+textValue(
+center,
+["province", "provincia"]
+);
+
+const country =
+textValue(
+center,
+["country", "pais"],
+center?.country || ""
+);
+
+const stl =
+textValue(
+center,
+["stl"]
+);
+
+const manager =
+textValue(
+center,
+[
+"manager",
+"managerName",
+"gestor",
+]
+);
+
+const managerPhone =
+textValue(
+center,
+[
+"managerPhone",
+"managerTel",
+"managerTelephone",
+]
+);
+
+const managerEmail =
+textValue(
+center,
+[
+"managerEmail",
+"managerMail",
+]
+);
+
+const technical =
+textValue(
+center,
+[
+"technicalResponsible",
+"technicalResponsibleName",
+"technical",
+"responsableTecnico",
+]
+);
+
+const technicalPhone =
+textValue(
+center,
+[
+"technicalPhone",
+"technicalTel",
+"technicalTelephone",
+"technicalResponsiblePhone",
+]
+);
+
+const technicalEmail =
+textValue(
+center,
+[
+"technicalEmail",
+"technicalMail",
+"technicalResponsibleEmail",
+]
+);
+
+const regulatoryFramework =
+textValue(
+center,
+[
+"regulatoryFramework",
+"normativeFramework",
+"regulatoryReference",
+"marcoNormativo",
+],
+"Marco normativo aplicable según instalación y actuación"
+);
+
+const photoSource =
+textValue(
+center,
+[
+"imageUrl",
+"photoUrl",
+]
+);
+
+const logoSource =
+textValue(
+center,
+["logoUrl"]
+);
+
+useEffect(() => {
+let cancelled = false;
+
+
+async function resolve(
+  source: string,
+  setter: (
+    value: string | null
+  ) => void
+) {
+  if (!source) {
+    setter(null);
+    return;
+  }
+
+  if (
+    !source.startsWith(
+      "indexeddb://"
+    )
+  ) {
+    setter(source);
+    return;
+  }
+
+  try {
+    const loaded =
+      await loadCenterImage(
+        source
+      );
+
+    if (!cancelled) {
+      setter(
+        loaded || null
+      );
+    }
+  } catch {
+    if (!cancelled) {
+      setter(null);
+    }
+  }
+}
+
+void resolve(
+  photoSource,
+  setResolvedPhoto
+);
+
+void resolve(
+  logoSource,
+  setResolvedLogo
+);
+
+return () => {
+  cancelled = true;
+};
+
+
+}, [
+photoSource,
+logoSource,
+]);
+
+const overdueCount =
+rows.filter(
+({
+x,
+item,
+}) => {
+const nextReview =
+calculateNextReview(
+item.date,
+String(
+x.frequency || ""
+)
+);
+
+
+    if (!nextReview) {
+      return false;
+    }
+
+    const date =
+      new Date(
+        `${nextReview}T00:00:00`
+      );
+
+    return (
+      !Number.isNaN(
+        date.getTime()
+      ) &&
+      date.getTime() <
+        Date.now()
+    );
+  }
+).length;
+
+
+const upcomingCount =
+rows.filter(
+({
+x,
+item,
+}) => {
+const nextReview =
+calculateNextReview(
+item.date,
+String(
+x.frequency || ""
+)
+);
+
+
+    if (!nextReview) {
+      return false;
+    }
+
+    const date =
+      new Date(
+        `${nextReview}T00:00:00`
+      );
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return false;
+    }
+
+    const limit =
+      new Date();
+
+    limit.setDate(
+      limit.getDate() + 90
+    );
+
+    return (
+      date >= new Date() &&
+      date <= limit
+    );
+  }
+).length;
+
+
+const riskCount =
+rows.filter(
+({ item }) =>
+/RIESGO|CRÍTICO|CRITICO/i.test(
+`${item.status || ""} ${
+            item.comment || ""
+          }`
+)
+).length;
+
+const documentationCount =
+rows.filter(
+({ item }) =>
+/DOCUMENT|CERTIFIC/i.test(
+`${item.status || ""} ${
+            item.comment || ""
+          }`
+)
+).length;
+
+const incidentCount =
+rows.filter(
+({ item }) =>
+/INCIDENCIA|INCUMPLIMIENTO/i.test(
+`${item.status || ""} ${
+            item.comment || ""
+          }`
+)
+).length;
+
+const recommendations = [
+...(noAptoCount
+? [
+`Resolver ${noAptoCount} elemento(s) NO APTO.`,
+]
+: []),
+
+
+...(condicionadoCount
+  ? [
+      `Realizar seguimiento de ${condicionadoCount} elemento(s) condicionado(s).`,
+    ]
+  : []),
+
+...(pendienteCount
+  ? [
+      `Completar ${pendienteCount} elemento(s) PENDIENTE.`,
+    ]
+  : []),
+
+...(overdueCount
+  ? [
+      `Regularizar ${overdueCount} inspección(es) vencida(s).`,
+    ]
+  : []),
+
+...(documentationCount
+  ? [
+      "Completar documentación pendiente.",
+    ]
+  : []),
+
+...(riskCount
+  ? [
+      "Realizar seguimiento de riesgos abiertos.",
+    ]
+  : []),
+
+
+].slice(0, 4);
+
+if (
+!recommendations.length
+) {
+recommendations.push(
+"Mantener el programa de revisiones y seguimiento reglamentario."
+);
+}
+
+/*
+
+* =========================================================
+* COMENTARIOS DE LA REVISIÓN
+*
+* Solo se incluyen elementos que tengan comentario.
+* =========================================================
+  */
+
+const reviewComments =
+rows.filter(
+({ item }) =>
+String(
+item.comment || ""
+).trim() !== ""
+);
+
+const participants: any[] =
+review?.participants ||
+[];
+
+const administrator =
+participants.find(
+p =>
+/ADMIN/i.test(
+String(
+p.role || ""
+)
+)
+);
+
+const management =
+participants.find(
+p =>
+/GESTOR|MANAGEMENT/i.test(
+String(
+p.role || ""
+)
+)
+);
+
+const technicalParticipant =
+participants.find(
+p =>
+/TÉCNICO|TECNICO|TECHNICAL/i.test(
+String(
+p.role || ""
+)
+)
+);
+
+const otherParticipants =
+participants.filter(
+p =>
+p !== administrator &&
+p !== management &&
+p !== technicalParticipant
+);
+
+const centerCode =
+formatCenterCode(
+center?.code
+);
+
+const certificateNumber =
+`STL-${centerCode}-${period}-${year}`;
+
+if (!center) {
+return ( <div className="mx-auto max-w-4xl p-8"> <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+Centro no encontrado. </div> </div>
+);
+}
+
+return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none print:px-0 print:py-0">
+
+
+  <div className="no-print mb-4 flex items-center justify-between gap-3">
+
+    <Link
+      href={`/centers/${center.id}`}
+      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+    >
+      <ArrowLeft className="mr-2 inline h-4 w-4" />
+      Volver a ficha
+    </Link>
+
+    <button
+      type="button"
+      onClick={() =>
+        window.print()
+      }
+      className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+    >
+      <Printer className="mr-2 inline h-4 w-4" />
+      Imprimir / guardar PDF
+    </button>
+
+  </div>
+
+  <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft print:rounded-none print:border-0 print:shadow-none">
+
+    {/* =====================================================
+        CABECERA
+        ===================================================== */}
+
+    <header className="border-b-2 border-[#002A54] px-5 py-3 print:px-4 print:py-2">
+
+      <div className="flex items-start justify-between gap-4">
+
+        <div className="flex min-w-0 items-start gap-3">
+
+          {resolvedLogo ? (
+            <img
+              src={resolvedLogo}
+              alt="Logo"
+              className="h-14 w-24 shrink-0 object-contain"
+            />
+          ) : (
+            <div className="flex h-14 w-24 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
+              <ShieldCheck className="h-7 w-7 text-[#002A54]" />
+            </div>
+          )}
+
+          <div className="min-w-0">
+
+            <div className="text-[8px] font-black uppercase tracking-[.18em] text-[#002A54]">
+              STL SAVILLS · CERTIFICADO DE REVISIÓN
+            </div>
+
+            <div className="mt-1 flex items-center gap-2">
+
+              <span className="rounded-md bg-[#002A54] px-2 py-0.5 text-sm font-black text-white">
+                {centerCode}
+              </span>
+
+              <h1 className="truncate text-xl font-black text-slate-900 print:text-lg">
+                {center.name}
+              </h1>
+
+            </div>
+
+            <div className="mt-1 text-[9px] text-slate-500">
+              {address || "Dirección no disponible"}
+              {city ? ` · ${city}` : ""}
+              {province ? ` · ${province}` : ""}
+              {country ? ` · ${country}` : ""}
+            </div>
+
+            <div className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5 text-[8px] text-slate-600">
+
+              <span>
+                <b>STL:</b>{" "}
+                {stl || "—"}
+              </span>
+
+              <span>
+                <b>Marco normativo:</b>{" "}
+                {regulatoryFramework}
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+
+          {resolvedPhoto ? (
+            <img
+              src={resolvedPhoto}
+              alt={`Fotografía de ${center.name}`}
+              className="h-16 w-24 rounded-lg border border-slate-200 object-cover"
+            />
+          ) : (
+            <div className="flex h-16 w-24 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-center text-[7px] text-slate-400">
+              Fotografía
+              <br />
+              del centro
+            </div>
+          )}
+
+          <div
+            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[7px] font-black uppercase ${
+              confirmed
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            }`}
+          >
+            {confirmed ? (
+              <CheckCircle2 className="h-3 w-3" />
+            ) : (
+              <CircleAlert className="h-3 w-3" />
+            )}
+
+            {confirmed
+              ? "VALIDADA"
+              : "NO VALIDADA"}
+          </div>
+
+        </div>
+
       </div>
+
+      <div className="mt-2 grid grid-cols-3 gap-3 border-t border-slate-100 pt-2">
+
+        <InfoLine
+          label="Responsable gestión"
+          value={
+            manager
+              ? `${manager}${
+                  managerPhone
+                    ? ` · ${managerPhone}`
+                    : ""
+                }`
+              : ""
+          }
+        />
+
+        <InfoLine
+          label="Contacto gestión"
+          value={
+            managerEmail
+          }
+        />
+
+        <InfoLine
+          label="Responsable técnico"
+          value={
+            technical
+              ? `${technical}${
+                  technicalPhone
+                    ? ` · ${technicalPhone}`
+                    : ""
+                }`
+              : technicalEmail
+          }
+        />
+
+      </div>
+
     </header>
-    <section className="mt-6 grid gap-4 md:grid-cols-4">
-      <div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-400">Revisión</div><div className="mt-1 text-lg font-black">{period} {year}</div></div>
-      <div className="rounded-xl bg-emerald-50 p-4"><div className="text-xs text-emerald-700">Cumplimiento</div><div className="mt-1 text-2xl font-black text-emerald-700">{summary.score}%</div></div>
-      <div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-400">Elementos</div><div className="mt-1 text-lg font-black">{summary.total}</div></div>
-      <div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-400">Estado</div><div className="mt-1 font-black">{review?.confirmed?"CONFIRMADA":"NO CONFIRMADA"}</div></div>
+
+    {/* =====================================================
+        CUMPLIMIENTO
+        ===================================================== */}
+
+    <section className="px-5 py-2 print:px-4 print:py-1.5">
+
+      <div className="mb-1.5 flex items-center justify-between">
+
+        <div>
+
+          <h2 className="text-sm font-black text-slate-900">
+            Cumplimiento técnico-legal
+          </h2>
+
+          <div className="text-[8px] text-slate-500">
+            Revisión {period} · {year}
+          </div>
+
+        </div>
+
+        {/* ÚNICO RESULTADO DEL CERTIFICADO */}
+
+        <div
+          className={`rounded-lg border px-3 py-1 text-center ${result.classes}`}
+        >
+          <div className="text-[7px] font-black uppercase">
+            Resultado
+          </div>
+
+          <div className="text-sm font-black">
+            {result.label}
+          </div>
+        </div>
+
+      </div>
+
+      {/* =================================================
+          FILA RESUMEN
+
+          SOLO:
+          Revisión | Cumplimiento | Elementos | Estado
+
+          Se elimina definitivamente RESULTADO.
+          ================================================= */}
+
+      <div className="grid grid-cols-4 gap-2">
+
+        <SummaryBox
+          label="Revisión"
+          value={`${period} ${year}`}
+        />
+
+        <SummaryBox
+          label="Cumplimiento"
+          value={`${score}%`}
+        />
+
+        <SummaryBox
+          label="Elementos"
+          value={summary.total}
+        />
+
+        <SummaryBox
+          label="ESTADO"
+          value={status}
+        />
+
+      </div>
+
+      <div className="mt-1.5 grid grid-cols-4 gap-2">
+
+        <SummaryBox
+          label="APTO"
+          value={aptoCount}
+        />
+
+        <SummaryBox
+          label="APTO CONDICIONADO"
+          value={condicionadoCount}
+        />
+
+        <SummaryBox
+          label="NO APTO"
+          value={noAptoCount}
+        />
+
+        <SummaryBox
+          label="PENDIENTE"
+          value={pendienteCount}
+        />
+
+      </div>
+
     </section>
-    <section className="mt-6"><h2 className="text-lg font-bold">Resumen de resultados</h2><div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">{Object.entries(summary.counts).map(([k,v])=><div key={k} className="rounded-xl border border-slate-200 p-3 text-center"><div className="text-xl font-black">{v}</div><div className="text-xs text-slate-500">{k}</div></div>)}</div></section>
-    <section className="mt-8"><h2 className="text-lg font-bold">Elementos inspeccionados</h2><div className="mt-3 overflow-hidden rounded-xl border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50"><tr><th className="px-3 py-2 text-left">Código</th><th className="px-3 py-2 text-left">Instalación</th><th className="px-3 py-2 text-left">Actuación</th><th className="px-3 py-2 text-left">Estado</th><th className="px-3 py-2 text-left">Fecha</th><th className="px-3 py-2 text-left">Empresa</th></tr></thead><tbody>{rows.map(({x,item}:any)=><tr key={x.id} className="border-t border-slate-100"><td className="px-3 py-2 font-mono">{x.code}</td><td className="px-3 py-2">{x.installation}</td><td className="px-3 py-2">{x.action}</td><td className="px-3 py-2 font-semibold">{item.status}</td><td className="px-3 py-2">{item.date||"—"}</td><td className="px-3 py-2">{item.company||"—"}</td></tr>)}</tbody></table></div></section>
-    <section className="mt-8 grid gap-6 md:grid-cols-2"><div><h2 className="text-lg font-bold">Confirmación</h2><div className="mt-3 rounded-xl bg-slate-50 p-4 text-sm"><div>Administrador: <b>{review?.confirmedBy||"Pendiente"}</b></div><div className="mt-1">Fecha: <b>{review?.confirmedAt?new Date(review.confirmedAt).toLocaleString("es-ES"):"Pendiente"}</b></div><div className="mt-3 flex items-center gap-2">{review?.confirmed?<><CheckCircle2 className="h-5 w-5 text-emerald-600"/>Revisión confirmada</>: "Revisión aún no confirmada"}</div></div></div><div><h2 className="text-lg font-bold">Firmas de participantes</h2><div className="mt-3 space-y-2">{(review?.participants||[{name:"Gestor Demo",role:"GESTOR",signed:false},{name:"Administrador Demo",role:"ADMINISTRADOR",signed:false}]).map((p,i)=><div key={i} className="flex justify-between border-b border-slate-200 pb-2 text-sm"><span>{p.name} · {p.role}</span><span>{p.signed?"Firmado":"Pendiente"}</span></div>)}</div></div></section>
-    <footer className="mt-10 border-t border-slate-200 pt-4 text-xs text-slate-400">Certificado {certificateNumber} · Documento generado desde la revisión histórica del centro. Para exportar a PDF utilice Imprimir → Guardar como PDF.</footer>
+
+    {/* =====================================================
+        INSTALACIONES Y ACTUACIONES
+        ===================================================== */}
+
+    <section className="px-5 py-1.5 print:px-4 print:py-1">
+
+      <div className="mb-1 flex items-center gap-2">
+
+        <FileText className="h-3.5 w-3.5 text-[#002A54]" />
+
+        <h2 className="text-sm font-black text-slate-900">
+          Instalaciones y actuaciones
+        </h2>
+
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-slate-200">
+
+        <table className="w-full table-fixed text-[7px] leading-tight">
+
+          <thead className="bg-slate-50">
+
+            <tr>
+
+              <th className="w-[9%] px-1 py-1 text-left">
+                Código
+              </th>
+
+              <th className="w-[19%] px-1 py-1 text-left">
+                Instalación
+              </th>
+
+              <th className="w-[21%] px-1 py-1 text-left">
+                Actuación
+              </th>
+
+              <th className="w-[13%] px-1 py-1 text-left">
+                Frecuencia
+              </th>
+
+              <th className="w-[16%] px-1 py-1 text-left">
+                ESTADO
+              </th>
+
+              <th className="w-[11%] px-1 py-1 text-left">
+                Revisión
+              </th>
+
+              <th className="w-[11%] px-1 py-1 text-left">
+                Próxima
+              </th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            {rows.map(
+              ({
+                x,
+                item,
+              }: any) => {
+
+                return (
+                  <tr
+                    key={x.id}
+                    className="border-t border-slate-100"
+                  >
+
+                    <td className="px-1 py-0.5 font-mono font-bold">
+                      {x.displayCode ||
+                        x.code ||
+                        "—"}
+                    </td>
+
+                    <td className="truncate px-1 py-0.5">
+                      {x.installation ||
+                        "—"}
+                    </td>
+
+                    <td className="truncate px-1 py-0.5">
+                      {x.action ||
+                        "—"}
+                    </td>
+
+                    <td className="truncate px-1 py-0.5">
+                      {x.frequency ||
+                        "—"}
+                    </td>
+
+                    <td className="px-1 py-0.5">
+                      {item.status ||
+                        "SIN INFORMACIÓN"}
+                    </td>
+
+                    <td className="px-1 py-0.5">
+                      {formatDate(
+                        item.date
+                      )}
+                    </td>
+
+                    <td className="px-1 py-0.5">
+                      {formatDate(
+                        calculateNextReview(
+                          item.date,
+                          String(
+                            x.frequency ||
+                              ""
+                          )
+                        )
+                      )}
+                    </td>
+
+                  </tr>
+                );
+              }
+            )}
+
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-2 py-3 text-center text-slate-400"
+                >
+                  No existen elementos activos.
+                </td>
+              </tr>
+            )}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </section>
+
+    {/* =====================================================
+        RESUMEN FINAL
+        ===================================================== */}
+
+    <section className="px-5 py-2 print:px-4 print:py-1.5">
+
+      <h2 className="mb-1.5 text-sm font-black text-slate-900">
+        Resumen final
+      </h2>
+
+      <div className="grid grid-cols-5 gap-2">
+
+        <SummaryBox
+          label="Inspecciones vencidas"
+          value={overdueCount}
+        />
+
+        <SummaryBox
+          label="Riesgos abiertos"
+          value={riskCount}
+        />
+
+        <SummaryBox
+          label="Próximos vencimientos"
+          value={upcomingCount}
+        />
+
+        <SummaryBox
+          label="Documentación pendiente"
+          value={documentationCount}
+        />
+
+        <SummaryBox
+          label="Incidencias"
+          value={incidentCount}
+        />
+
+      </div>
+
+      <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+
+        <div className="text-[7px] font-black uppercase tracking-wide text-slate-400">
+          Recomendaciones resumen
+        </div>
+
+        <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[8px] text-slate-700">
+
+          {recommendations.map(
+            (item, index) => (
+              <span key={index}>
+                • {item}
+              </span>
+            )
+          )}
+
+        </div>
+
+      </div>
+
+      {/* =================================================
+          COMENTARIOS DE LA REVISIÓN
+
+          Solo aparecen elementos que tengan comentario.
+          ================================================= */}
+
+      {reviewComments.length > 0 && (
+        <div className="mt-2 rounded-lg border border-slate-200 bg-white">
+
+          <div className="border-b border-slate-200 bg-slate-50 px-2.5 py-1.5">
+
+            <div className="text-[8px] font-black uppercase tracking-wide text-slate-500">
+              Comentarios de la revisión
+            </div>
+
+          </div>
+
+          <div className="divide-y divide-slate-100">
+
+            {reviewComments.map(
+              ({
+                x,
+                item,
+              }: any) => (
+                <div
+                  key={x.id}
+                  className="px-2.5 py-1.5"
+                >
+
+                  <div className="text-[8px] font-black text-slate-800">
+                    {x.displayCode ||
+                      x.code ||
+                      "—"}
+                    {" · "}
+                    {x.installation ||
+                      "—"}
+                    {" · "}
+                    {x.action ||
+                      "—"}
+                  </div>
+
+                  <div className="mt-0.5 whitespace-pre-wrap text-[8px] leading-snug text-slate-600">
+                    {String(
+                      item.comment
+                    ).trim()}
+                  </div>
+
+                </div>
+              )
+            )}
+
+          </div>
+
+        </div>
+      )}
+
+    </section>
+
+    {/* =====================================================
+        CONFIRMACIÓN Y FIRMAS
+        ===================================================== */}
+
+    <section className="grid grid-cols-[1fr_1.5fr] gap-4 border-t border-slate-200 px-5 py-2 print:px-4 print:py-1.5">
+
+      <div>
+
+        <h2 className="text-sm font-black text-slate-900">
+          Confirmación
+        </h2>
+
+        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
+
+          <div className="grid grid-cols-2 gap-2">
+
+            <InfoLine
+              label="Administrador"
+              value={
+                review?.confirmedBy ||
+                "Pendiente"
+              }
+            />
+
+            <InfoLine
+              label="Fecha"
+              value={formatDateTime(
+                review?.confirmedAt
+              )}
+            />
+
+          </div>
+
+          <div className="mt-1.5 flex items-center gap-2">
+
+            <div
+              className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
+                confirmed
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-slate-300 bg-white"
+              }`}
+            >
+
+              <CheckCircle2
+                className={`h-4 w-4 ${
+                  confirmed
+                    ? "text-emerald-600"
+                    : "text-slate-300"
+                }`}
+              />
+
+            </div>
+
+            <div className="text-[8px] font-black uppercase text-slate-600">
+              {confirmed
+                ? "Revisión validada"
+                : "Revisión no validada"}
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div>
+
+        <h2 className="text-sm font-black text-slate-900">
+          Firmas
+        </h2>
+
+        <div className="mt-1.5 grid grid-cols-3 gap-2">
+
+          <div className="min-h-[48px] rounded-lg border border-slate-200 px-2 py-1.5">
+
+            <div className="text-[7px] font-bold uppercase text-slate-400">
+              Responsable administrador
+            </div>
+
+            <div className="mt-2 border-t border-slate-300 pt-0.5 text-[8px]">
+              {administrator?.name ||
+                review?.confirmedBy ||
+                "Pendiente"}
+            </div>
+
+          </div>
+
+          <div className="min-h-[48px] rounded-lg border border-slate-200 px-2 py-1.5">
+
+            <div className="text-[7px] font-bold uppercase text-slate-400">
+              Responsable gestión
+            </div>
+
+            <div className="mt-2 border-t border-slate-300 pt-0.5 text-[8px]">
+              {management?.name ||
+                manager ||
+                "—"}
+            </div>
+
+          </div>
+
+          <div className="min-h-[48px] rounded-lg border border-slate-200 px-2 py-1.5">
+
+            <div className="text-[7px] font-bold uppercase text-slate-400">
+              Responsable técnico
+            </div>
+
+            <div className="mt-2 border-t border-slate-300 pt-0.5 text-[8px]">
+              {technicalParticipant?.name ||
+                technical ||
+                "—"}
+            </div>
+
+          </div>
+
+        </div>
+
+        {otherParticipants.length >
+          0 && (
+          <div className="mt-1">
+
+            <div className="text-[7px] font-bold uppercase text-slate-400">
+              Participantes de la revisión
+            </div>
+
+            <div className="mt-0.5 flex flex-wrap gap-1.5">
+
+              {otherParticipants.map(
+                (
+                  participant,
+                  index
+                ) => (
+                  <span
+                    key={`${participant.name}-${index}`}
+                    className="rounded border border-slate-200 px-1.5 py-0.5 text-[7px] text-slate-700"
+                  >
+                    {participant.name}
+                    {participant.role
+                      ? ` · ${participant.role}`
+                      : ""}
+                    {participant.signed
+                      ? " · Firmado"
+                      : ""}
+                  </span>
+                )
+              )}
+
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+    </section>
+
+    <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-1.5 text-[6.5px] text-slate-400 print:px-4">
+
+      <span>
+        Certificado{" "}
+        {certificateNumber}
+      </span>
+
+      <span>
+        Documento generado desde la revisión histórica del centro · STL SAVILLS
+      </span>
+
+    </footer>
+
   </article>
- </div>
+
+  <style jsx global>{`
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 6mm;
+      }
+
+      html,
+      body {
+        background: white !important;
+      }
+
+      body {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      article {
+        width: 100% !important;
+      }
+    }
+  `}</style>
+
+</div>
+
+
+);
 }

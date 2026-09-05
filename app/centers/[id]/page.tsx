@@ -4,18 +4,18 @@ import {
   useEffect,
   useMemo,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import {
   ArrowLeft,
-  ImagePlus,
+  ArrowUpDown,
   Plus,
-  RotateCcw,
+  Minus,
   Search,
   FileCheck2,
-  BarChart3,
   ChevronDown,
   ChevronUp,
   X,
@@ -27,7 +27,11 @@ import {
   Settings,
   CalendarDays,
   ClipboardCheck,
+  BarChart3,
   CircleAlert,
+  SlidersHorizontal,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
@@ -51,11 +55,17 @@ import {
   type V1Status,
   type Period,
   type CenterOverride,
+  type CenterItem,
 } from "@/lib/v1-state";
 
 import {
   loadCenterImage,
 } from "@/lib/image-storage";
+
+import {
+  addDisplayCodes,
+  buildElementCodes,
+} from "@/lib/element-codes";
 
 const STATUSES: V1Status[] = [
   "APTO",
@@ -69,6 +79,77 @@ type IconComponent =
   React.ComponentType<{
     className?: string;
   }>;
+
+type TableColumnKey =
+  | "code"
+  | "type"
+  | "installation"
+  | "description"
+  | "action"
+  | "frequency"
+  | "equipmentId"
+  | "company"
+  | "status"
+  | "date"
+  | "nextReview"
+  | "secondReview"
+  | "result"
+  | "comment"
+  | "actions";
+
+const TABLE_COLUMN_LABELS: Record<TableColumnKey, string> = {
+  code: "Código",
+  type: "Tipo",
+  installation: "Instalación",
+  description: "Descripción",
+  action: "Actuación",
+  frequency: "Frecuencia",
+  equipmentId: "ID equipo",
+  company: "Empresa",
+  status: "Estado revisión",
+  date: "Fecha",
+  nextReview: "Próxima revisión",
+  secondReview: "2ª revisión",
+  result: "Resultado",
+  comment: "Comentario",
+  actions: "",
+};
+
+const TABLE_COLUMN_DEFAULT_WIDTHS: Record<TableColumnKey, number> = {
+  code: 96,
+  type: 70,
+  installation: 180,
+  description: 180,
+  action: 180,
+  frequency: 120,
+  equipmentId: 130,
+  company: 140,
+  status: 155,
+  date: 125,
+  nextReview: 155,
+  secondReview: 135,
+  result: 130,
+  comment: 190,
+  actions: 52,
+};
+
+const TABLE_COLUMN_MIN_WIDTHS: Record<TableColumnKey, number> = {
+  code: 70,
+  type: 55,
+  installation: 120,
+  description: 100,
+  action: 120,
+  frequency: 90,
+  equipmentId: 90,
+  company: 90,
+  status: 110,
+  date: 100,
+  nextReview: 110,
+  secondReview: 100,
+  result: 100,
+  comment: 120,
+  actions: 44,
+};
 
 /* =========================================================
  * UTILIDADES VISUALES
@@ -240,6 +321,56 @@ function getResultVisual(
         dot: "bg-slate-300",
       };
   }
+}
+
+function formatCenterCode(value: string | number | undefined | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "—";
+
+  // Los códigos pueden ser enteros (01, 02, 11) o contener
+  // un punto decimal (14.4). El punto forma parte del código
+  // oficial y nunca debe eliminarse.
+  const numeric = raw.match(/^(\d+)([.,]\d+)?$/);
+  if (numeric) {
+    const integerPart = numeric[1].padStart(2, "0");
+    const decimalPart = numeric[2]
+      ? `.${numeric[2].slice(1)}`
+      : "";
+    return `${integerPart}${decimalPart}`;
+  }
+
+  return raw.toUpperCase();
+}
+
+function normalizeCenterCodeForCompare(value: string | number | undefined | null) {
+  const raw = String(value ?? "").trim().replace(",", ".");
+  if (!raw) return "";
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? numeric.toString() : raw.toLowerCase();
+}
+
+function sentenceCase(value: string | number | null | undefined, fallback = "—") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+function resolveBaseCode(catalog: any[], index: number): string {
+  for (let i = index; i >= 0; i -= 1) {
+    const code = String(catalog[i]?.code ?? "").trim();
+    if (code) return code;
+  }
+  return "";
+}
+
+function resolveActionCode(item: any, baseCode: string): string {
+  const explicit = String(item.actionCode ?? item.code ?? "").trim();
+  if (/^\d+\.\d+$/.test(explicit)) return explicit;
+  return baseCode;
+}
+
+function instanceCode(actionCode: string, ordinal: number): string {
+  return actionCode ? `${actionCode}.${ordinal}` : String(ordinal);
 }
 
 /* =========================================================
@@ -687,6 +818,149 @@ function formatDate(
   );
 }
 
+function HeaderField({
+  label,
+  value,
+  disabled,
+  onChange,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <label className={`min-w-0 ${className}`}>
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-[.14em] text-white/45">
+        {label}
+      </span>
+      <input
+        disabled={disabled}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full min-w-0 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default"
+        placeholder="—"
+      />
+    </label>
+  );
+}
+
+function HeaderContactRow({
+  label,
+  name,
+  phone,
+  email,
+  disabled,
+  onNameChange,
+  onPhoneChange,
+  onEmailChange,
+}: {
+  label: string;
+  name: string;
+  phone: string;
+  email: string;
+  disabled: boolean;
+  onNameChange: (value: string) => void;
+  onPhoneChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid min-w-0 grid-cols-[62px_minmax(0,1fr)] items-center gap-2">
+      <span className="truncate text-[9px] font-bold uppercase tracking-[.12em] text-white/50">
+        {label}
+      </span>
+      <div className="grid min-w-0 grid-cols-[1.05fr_.55fr_1.25fr] gap-1.5">
+        <input
+          disabled={disabled}
+          value={name}
+          onChange={e => onNameChange(e.target.value)}
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+          placeholder="NOMBRE"
+          aria-label={`${label} nombre`}
+        />
+        <input
+          disabled={disabled}
+          value={phone}
+          onChange={e => onPhoneChange(e.target.value)}
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+          placeholder="TELÉFONO"
+          aria-label={`${label} teléfono`}
+        />
+        <input
+          disabled={disabled}
+          type="email"
+          value={email}
+          onChange={e => onEmailChange(e.target.value)}
+          className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+          placeholder="EMAIL"
+          aria-label={`${label} email`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TableHeader({
+  column,
+  sort,
+  onSort,
+  onHide,
+  onResizeStart,
+  width,
+  visible,
+}: {
+  column: TableColumnKey;
+  sort: { key: TableColumnKey; direction: "asc" | "desc" };
+  onSort: (key: TableColumnKey) => void;
+  onHide: (key: TableColumnKey) => void;
+  onResizeStart: (key: TableColumnKey, event: ReactMouseEvent) => void;
+  width: number;
+  visible: boolean;
+}) {
+  const sortable = column !== "actions";
+  const active = sort.key === column;
+
+  return (
+    <th
+      className="relative px-2 py-2"
+      style={{ width, minWidth: width, display: visible ? "table-cell" : "none" }}
+    >
+      <div className="flex min-h-7 items-center gap-1">
+        <button
+          type="button"
+          disabled={!sortable}
+          onClick={() => sortable && onSort(column)}
+          className={`flex min-w-0 flex-1 items-center justify-between gap-1 text-left ${sortable ? "cursor-pointer hover:text-[#FFCC00]" : "cursor-default"}`}
+          title={sortable ? `Ordenar por ${TABLE_COLUMN_LABELS[column]}` : undefined}
+        >
+          <span className="truncate">{TABLE_COLUMN_LABELS[column]}</span>
+          {sortable && (
+            <span className="shrink-0 opacity-70">
+              {active ? (sort.direction === "asc" ? "▲" : "▼") : <ArrowUpDown className="h-3 w-3" />}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onHide(column)}
+          className="no-print shrink-0 rounded p-1 text-white/55 hover:bg-white/10 hover:text-white"
+          title={`Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
+          aria-label={`Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
+        >
+          <EyeOff className="h-3 w-3" />
+        </button>
+      </div>
+      <span
+        onMouseDown={event => onResizeStart(column, event)}
+        className="no-print absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-white/30"
+        title="Arrastrar para cambiar el ancho"
+      />
+    </th>
+  );
+}
+
 /* =========================================================
  * COMPONENTE
  * ========================================================= */
@@ -752,6 +1026,12 @@ export default function CenterDetail() {
     useState("");
 
   const [
+    centerCodeDraft,
+    setCenterCodeDraft,
+  ] =
+    useState("");
+
+  const [
     showAddElement,
     setShowAddElement,
   ] =
@@ -764,16 +1044,11 @@ export default function CenterDetail() {
     useState("");
 
   const [
-    openCenterData,
-    setOpenCenterData,
-  ] =
-    useState(true);
-
-  const [
     openHistory,
     setOpenHistory,
   ] =
-    useState(true);
+    useState(false);
+
 
   const [
     openReview,
@@ -786,6 +1061,42 @@ export default function CenterDetail() {
     setOpenInstallations,
   ] =
     useState(true);
+
+  const [showColumnOptions, setShowColumnOptions] =
+    useState(false);
+
+  const [quantityDrafts, setQuantityDrafts] =
+    useState<Record<string, string>>({});
+
+  const [columnVisibility, setColumnVisibility] =
+    useState<Record<TableColumnKey, boolean>>({
+      code: true,
+      type: true,
+      installation: true,
+      description: true,
+      action: true,
+      frequency: true,
+      equipmentId: true,
+      company: true,
+      status: true,
+      date: true,
+      nextReview: true,
+      secondReview: true,
+      result: true,
+      comment: true,
+      actions: true,
+    });
+
+  const [columnWidths, setColumnWidths] =
+    useState<Record<TableColumnKey, number>>(TABLE_COLUMN_DEFAULT_WIDTHS);
+
+  const [tableSort, setTableSort] =
+    useState<{ key: TableColumnKey; direction: "asc" | "desc" }>({
+      key: "code",
+      direction: "asc",
+    });
+
+
 
   /* -------------------------------------------------------
    * IMÁGENES RESUELTAS
@@ -963,6 +1274,30 @@ export default function CenterDetail() {
   const centerId =
     currentCenter?.id ?? "";
 
+  const centerName =
+    currentCenter?.name ??
+    "";
+
+  const centerCode =
+    currentCenter?.code ??
+    "";
+
+  const centerShortCode =
+    currentCenter?.shortCode ??
+    "";
+
+  /*
+   * IMPORTANTE: este Hook debe ejecutarse en todos los renders.
+   * Se coloca antes del return de "Centro no encontrado" para
+   * evitar React error #310 cuando un centro nuevo pasa de no
+   * estar disponible a estar disponible tras cargar el estado.
+   */
+  useEffect(() => {
+    const formatted = formatCenterCode(centerCode);
+    setCenterCodeDraft(formatted === "—" ? "" : formatted);
+  }, [centerId, centerCode]);
+
+
   /* -------------------------------------------------------
    * RESOLUCIÓN DE IMÁGENES INDEXEDDB
    *
@@ -1113,6 +1448,274 @@ export default function CenterDetail() {
     currentCenter?.logoUrl,
   ]);
 
+  /* -------------------------------------------------------
+   * CATÁLOGO
+   * ------------------------------------------------------- */
+
+  const catalog =
+    currentCenter
+      ? currentCenter.country === "España"
+        ? demo.esCatalog
+        : demo.ptCatalog
+      : [];
+
+  const overrides =
+    (
+      state.centers[
+        centerId
+      ] || {}
+    ) as CenterOverride;
+
+  const normalizedDraftCode =
+    normalizeCenterCodeForCompare(centerCodeDraft);
+
+  const codeIsOccupied =
+    normalizedDraftCode !== "" &&
+    [
+      ...demo.centers,
+      ...Object.entries(state.centers).map(([key, value]) => ({
+        id: key,
+        ...value,
+      })),
+    ].some(center => {
+      const otherId = String(center.id ?? "");
+      const otherCode = String(center.code ?? "")
+        .trim();
+      const normalizedOtherCode = normalizeCenterCodeForCompare(otherCode);
+
+      return (
+        otherId !== centerId &&
+        normalizedOtherCode !== "" &&
+        normalizedOtherCode === normalizedDraftCode
+      );
+    });
+
+  /* -------------------------------------------------------
+   * ELEMENTOS
+   * ------------------------------------------------------- */
+
+  const activeMap =
+    state.activeItems[centerId] || {};
+
+  const catalogItems = useMemo(() => {
+    return buildElementCodes(catalog as any[]);
+  }, [catalog]);
+
+  const customItems = state.customItems?.[centerId] || [];
+
+  const centerItems = useMemo(() => {
+    const baseItems = catalogItems.filter(
+      (x: any) => activeMap[x.id] !== false
+    );
+    return [...baseItems, ...customItems];
+  }, [catalogItems, activeMap, customItems]);
+
+  const numberedItems = useMemo(() => {
+    return addDisplayCodes(centerItems as any[], catalog as any[]);
+  }, [centerItems, catalog]);
+
+  const selectableItems = useMemo(() => {
+    const unique = new Map<string, any>();
+
+    catalogItems.forEach((item: any) => {
+      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
+      const key = `${item.actionCode ?? baseCode}|${item.installation}|${item.action}`;
+      if (!unique.has(key)) unique.set(key, item);
+    });
+
+    return Array.from(unique.values()).filter(
+      (x: any) =>
+        `${x.baseCode} ${sentenceCase(x.installation)} ${sentenceCase(x.action)} ${x.category}`
+          .toLowerCase()
+          .includes(addElementSearch.toLowerCase())
+    );
+  }, [catalogItems, addElementSearch]);
+
+  const elementCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    centerItems.forEach((item: any) => {
+      const baseCode = String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim();
+      counts.set(baseCode, (counts.get(baseCode) || 0) + 1);
+    });
+    return counts;
+  }, [centerItems]);
+
+  /* -------------------------------------------------------
+   * REVISIÓN
+   * ------------------------------------------------------- */
+
+  const key =
+    reviewKey(
+      centerId,
+      year,
+      period
+    );
+
+  const review =
+    state.reviews[key] || {
+      year,
+      period,
+      confirmed: false,
+      items: {},
+      participants: [],
+    };
+
+  const summary =
+    reviewSummary(
+      review,
+      centerItems.map(
+        (x: any) => x.id
+      )
+    );
+
+  const sinInformacionCount = centerItems.filter((item: any) => {
+    const reviewItem = review.items[item.id] || blankItem();
+    return reviewItem.status === "SIN INFORMACIÓN";
+  }).length;
+
+  const canValidateCenter =
+    state.role === "ADMIN" &&
+    centerItems.length > 0 &&
+    sinInformacionCount === 0 &&
+    !review.confirmed;
+
+  const categories = [
+    "Todas",
+    ...Array.from(
+      new Set(
+        catalog
+          .map((x: any) => x.category)
+          .filter(Boolean)
+      )
+    ),
+  ];
+
+  const visible = numberedItems.filter(
+    (x: any) =>
+      (category === "Todas" || x.category === category) &&
+      `${x.displayCode} ${x.installation} ${x.action} ${x.category}`
+        .toLowerCase()
+        .includes(q.toLowerCase())
+  );
+
+  const sortedVisible = useMemo(() => {
+    const getSortValue = (item: any): string => {
+      const reviewItem = review.items[item.id] || blankItem();
+      const nextDate = calculateNextReview(
+        reviewItem.date,
+        String(item.frequency || "")
+      );
+      const result = calculateResult(
+        reviewItem.status,
+        reviewItem.date,
+        reviewItem.secondReviewDate,
+        nextDate,
+        String(item.frequency || "")
+      );
+
+      switch (tableSort.key) {
+        case "code": return String(item.displayCode ?? "");
+        case "type": return String(item.category ?? "");
+        case "installation": return String(item.installation ?? "");
+        case "description": return String(item.category ?? "");
+        case "action": return String(item.action ?? "");
+        case "frequency": return String(item.frequency ?? "");
+        case "equipmentId": return String(reviewItem.equipmentId ?? "");
+        case "company": return String(reviewItem.company ?? "");
+        case "status": return String(reviewItem.status ?? "");
+        case "date": return String(reviewItem.date ?? "");
+        case "nextReview": return String(nextDate ?? "");
+        case "secondReview": return String(reviewItem.secondReviewDate ?? "");
+        case "result": return String(result ?? "");
+        case "comment": return String(reviewItem.comment ?? "");
+        case "actions": return "";
+        default: return "";
+      }
+    };
+
+    return [...visible].sort((a: any, b: any) =>
+      getSortValue(a).localeCompare(
+        getSortValue(b),
+        "es",
+        { numeric: true, sensitivity: "base" }
+      ) * (tableSort.direction === "asc" ? 1 : -1)
+    );
+  }, [visible, tableSort, review]);
+
+  const visibleColumnCount = Object.values(columnVisibility).filter(Boolean).length;
+
+  function toggleTableSort(key: TableColumnKey) {
+    setTableSort(current => ({
+      key,
+      direction:
+        current.key === key && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  }
+
+  function toggleColumnVisibility(key: TableColumnKey) {
+    setColumnVisibility(current => {
+      if (current[key] && Object.values(current).filter(Boolean).length <= 1) {
+        return current;
+      }
+      return { ...current, [key]: !current[key] };
+    });
+  }
+
+  function setColumnWidth(key: TableColumnKey, value: number) {
+    setColumnWidths(current => ({
+      ...current,
+      [key]: Math.max(TABLE_COLUMN_MIN_WIDTHS[key], value),
+    }));
+  }
+
+    function reduceAllColumns() {
+    setColumnWidths(current => {
+      const next = { ...current };
+
+      (Object.keys(TABLE_COLUMN_MIN_WIDTHS) as TableColumnKey[]).forEach(
+        column => {
+          // IMPORTANTE:
+          // Solo reducimos las columnas que están actualmente visibles.
+          // Las ocultas conservan exactamente el ancho que tenían.
+          if (columnVisibility[column]) {
+            next[column] = TABLE_COLUMN_MIN_WIDTHS[column];
+          }
+        }
+      );
+
+      return next;
+    });
+  }
+
+  function startTableColumnResize(
+    key: TableColumnKey,
+    event: ReactMouseEvent
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startWidth = columnWidths[key];
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.max(
+        TABLE_COLUMN_MIN_WIDTHS[key],
+        startWidth + moveEvent.clientX - startX
+      );
+      setColumnWidths(current => ({ ...current, [key]: nextWidth }));
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
   /*
    * -------------------------------------------------------
    * RETURN CONDICIONAL
@@ -1143,130 +1746,7 @@ export default function CenterDetail() {
     );
   }
 
-  /* -------------------------------------------------------
-   * CATÁLOGO
-   * ------------------------------------------------------- */
-
-  const catalog =
-    currentCenter.country ===
-    "España"
-      ? demo.esCatalog
-      : demo.ptCatalog;
-
-  const overrides =
-    (
-      state.centers[
-        centerId
-      ] || {}
-    ) as CenterOverride;
-
-  const centerName =
-    currentCenter.name ??
-    "";
-
-  const centerCode =
-    currentCenter.code ??
-    "";
-
-  const centerShortCode =
-    currentCenter.shortCode ??
-    "";
-
-  /* -------------------------------------------------------
-   * ELEMENTOS
-   * ------------------------------------------------------- */
-
-  const activeMap =
-    state.activeItems[
-      centerId
-    ] || {};
-
-  const activeItems =
-    catalog.filter(
-      (x: any) =>
-        activeMap[
-          x.id
-        ] !== false
-    );
-
-  const inactiveItems =
-    catalog.filter(
-      (x: any) =>
-        activeMap[
-          x.id
-        ] === false
-    );
-
-  /* -------------------------------------------------------
-   * REVISIÓN
-   * ------------------------------------------------------- */
-
-  const key =
-    reviewKey(
-      centerId,
-      year,
-      period
-    );
-
-  const review =
-    state.reviews[key] || {
-      year,
-      period,
-      confirmed: false,
-      items: {},
-      participants: [],
-    };
-
-  const summary =
-    reviewSummary(
-      review,
-      activeItems.map(
-        (x: any) =>
-          x.id
-      )
-    );
-
-  const categories = [
-    "Todas",
-    ...Array.from(
-      new Set(
-        catalog
-          .map(
-            (x: any) =>
-              x.category
-          )
-          .filter(Boolean)
-      )
-    ),
-  ];
-
-  const visible =
-    activeItems.filter(
-      (x: any) =>
-        (
-          category ===
-            "Todas" ||
-          x.category ===
-            category
-        ) &&
-        `${x.code} ${x.installation} ${x.action} ${x.category}`
-          .toLowerCase()
-          .includes(
-            q.toLowerCase()
-          )
-    );
-
-  const selectableItems =
-    catalog.filter(
-      (x: any) =>
-        `${x.code} ${x.installation} ${x.action} ${x.category}`
-          .toLowerCase()
-          .includes(
-            addElementSearch.toLowerCase()
-          )
-    );
-
-  /* -------------------------------------------------------
+    /* -------------------------------------------------------
    * ACTUALIZACIÓN DE ESTADO
    * ------------------------------------------------------- */
 
@@ -1321,8 +1801,241 @@ export default function CenterDetail() {
         },
       },
     };
-
     updateState(next);
+  }
+
+  function addElement(template: any) {
+    if (readOnly || !currentCenter) return;
+
+    // Capturamos el centro en una constante local para que TypeScript
+    // mantenga la comprobación de nulabilidad dentro de toda la función.
+    const center = currentCenter;
+
+    const templateActionCode = String(
+      template.actionCode ?? template.baseCode ?? template.code ?? ""
+    ).trim();
+
+    const reusable = catalogItems.find(
+      (item: any) =>
+        String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === templateActionCode &&
+        activeMap[item.id] === false
+    );
+
+    if (reusable) {
+      setActive(reusable.id, true);
+      return;
+    }
+
+    const customId = `custom-${centerId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const customItem: any = {
+      id: customId,
+      baseCode: String(template.baseCode ?? template.code ?? ""),
+      actionCode: templateActionCode,
+      country: center.country,
+      stl: center.stl,
+      category: template.category,
+      installation: template.installation,
+      action: template.action,
+      frequency: template.frequency,
+      normativeReference: template.normativeReference ?? null,
+    };
+
+    updateState({
+      ...state,
+      customItems: {
+        ...(state.customItems || {}),
+        [centerId]: [
+          ...(state.customItems?.[centerId] || []),
+          customItem,
+        ],
+      },
+    });
+  }
+
+  function removeElement(itemId: string) {
+    if (readOnly) return;
+
+    const isCustom = customItems.some((item: any) => item.id === itemId);
+    const nextReviews = { ...state.reviews };
+
+    Object.keys(nextReviews).forEach(reviewId => {
+      if (!nextReviews[reviewId]?.items?.[itemId]) return;
+      const nextItems = { ...nextReviews[reviewId].items };
+      delete nextItems[itemId];
+      nextReviews[reviewId] = { ...nextReviews[reviewId], items: nextItems };
+    });
+
+    if (isCustom) {
+      updateState({
+        ...state,
+        customItems: {
+          ...(state.customItems || {}),
+          [centerId]: customItems.filter((item: any) => item.id !== itemId),
+        },
+        reviews: nextReviews,
+      });
+      return;
+    }
+
+    updateState({
+      ...state,
+      activeItems: {
+        ...state.activeItems,
+        [centerId]: {
+          ...activeMap,
+          [itemId]: false,
+        },
+      },
+      reviews: nextReviews,
+    });
+  }
+
+    function setElementQuantity(template: any, desiredCount: number) {
+    if (readOnly || !currentCenter) return;
+
+    const target = Math.max(0, Math.floor(desiredCount));
+    const actionCode = String(
+      template.actionCode ??
+        template.baseCode ??
+        template.code ??
+        ""
+    ).trim();
+
+    /*
+     * En esta función customItems queda garantizado como un objeto
+     * existente, aunque V1State lo defina como propiedad opcional.
+     *
+     * Esto evita que TypeScript considere posiblemente undefined
+     * las operaciones posteriores sobre nextState.customItems.
+     */
+    let nextState: V1State & {
+      customItems: NonNullable<V1State["customItems"]>;
+    } = {
+      ...state,
+      activeItems: {
+        ...state.activeItems,
+        [centerId]: {
+          ...(state.activeItems?.[centerId] || {}),
+        },
+      },
+      customItems: {
+        ...(state.customItems || {}),
+        [centerId]: [
+          ...(state.customItems?.[centerId] || []),
+        ],
+      },
+      reviews: {
+        ...state.reviews,
+      },
+    };
+
+    const matches = () => [
+      ...catalogItems.filter(
+        (item: any) =>
+          nextState.activeItems?.[centerId]?.[item.id] !== false &&
+          String(
+            item.actionCode ??
+              item.baseCode ??
+              item.code ??
+              ""
+          ).trim() === actionCode
+      ),
+      ...(nextState.customItems[centerId] || []).filter(
+        (item: any) =>
+          String(
+            item.actionCode ??
+              item.baseCode ??
+              item.code ??
+              ""
+          ).trim() === actionCode
+      ),
+    ];
+
+    while (matches().length < target) {
+      const reusable = catalogItems.find(
+        (item: any) =>
+          nextState.activeItems?.[centerId]?.[item.id] === false &&
+          String(
+            item.actionCode ??
+              item.baseCode ??
+              item.code ??
+              ""
+          ).trim() === actionCode
+      );
+
+      if (reusable) {
+        nextState.activeItems[centerId][reusable.id] = true;
+      } else {
+        const customId = `custom-${centerId}-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`;
+
+        nextState.customItems[centerId].push({
+          id: customId,
+          baseCode: String(
+            template.baseCode ??
+              template.code ??
+              ""
+          ),
+          actionCode,
+          country: currentCenter.country,
+          stl: currentCenter.stl,
+          category: template.category,
+          installation: template.installation,
+          action: template.action,
+          frequency: template.frequency,
+          normativeReference:
+            template.normativeReference ?? null,
+        } as any);
+      }
+    }
+
+    while (matches().length > target) {
+      const current =
+        matches()[matches().length - 1];
+
+      const isCustom =
+        nextState.customItems[centerId].some(
+          (item: any) =>
+            item.id === current.id
+        );
+
+      if (isCustom) {
+        nextState.customItems[centerId] =
+          nextState.customItems[centerId].filter(
+            (item: any) =>
+              item.id !== current.id
+          );
+      } else {
+        nextState.activeItems[centerId][current.id] =
+          false;
+      }
+
+      Object.keys(nextState.reviews).forEach(
+        reviewId => {
+          if (
+            !nextState.reviews[reviewId]?.items?.[
+              current.id
+            ]
+          ) {
+            return;
+          }
+
+          const items = {
+            ...nextState.reviews[reviewId].items,
+          };
+
+          delete items[current.id];
+
+          nextState.reviews[reviewId] = {
+            ...nextState.reviews[reviewId],
+            items,
+          };
+        }
+      );
+    }
+
+    updateState(nextState);
   }
 
   function getItem(
@@ -1368,58 +2081,47 @@ export default function CenterDetail() {
   function confirmReview() {
     if (
       state.role !== "ADMIN" ||
-      summary.pendingConfirmation >
-        0
-    ) {
-      return;
-    }
+      review.confirmed ||
+      centerItems.length === 0 ||
+      sinInformacionCount > 0
+    ) return;
 
     const nextReview = {
       ...review,
       confirmed: true,
-      confirmedAt:
-        new Date().toISOString(),
-      confirmedBy:
-        "Administrador Demo",
-      participants: [
-        {
-          name: "Gestor Demo",
-          role: "GESTOR",
-          signed: true,
-        },
-        {
-          name:
-            "Administrador Demo",
-          role:
-            "ADMINISTRADOR",
-          signed: true,
-        },
-        ...(review.participants ||
-          []).filter(
-          p =>
-            p.role ===
-            "OTRO"
-        ),
-      ],
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: "Administrador",
     };
 
     updateState({
       ...state,
-      reviews: {
-        ...state.reviews,
-        [key]: nextReview,
-      },
+      reviews: { ...state.reviews, [key]: nextReview },
     });
   }
 
-  function resetPeriod() {
-    const next = {
-      ...state,
+  function unvalidateReview() {
+    if (state.role !== "ADMIN" || !review.confirmed) return;
+
+    const reason = window.prompt(
+      "Indique el motivo por el que se desvalida el centro:"
+    );
+
+    if (!reason || !reason.trim()) return;
+
+    const nextReview: any = {
+      ...review,
+      confirmed: false,
+      confirmedAt: undefined,
+      confirmedBy: undefined,
+      unconfirmedAt: new Date().toISOString(),
+      unconfirmedBy: "Administrador",
+      unconfirmationReason: reason.trim(),
     };
 
-    delete next.reviews[key];
-
-    updateState(next);
+    updateState({
+      ...state,
+      reviews: { ...state.reviews, [key]: nextReview },
+    });
   }
 
   function uploadImage(
@@ -1453,11 +2155,12 @@ export default function CenterDetail() {
     );
   }
 
+  const isInactive =
+    String(currentCenter.status ?? "Activo").toLowerCase() !== "activo";
+
   const readOnly =
-    state.role ===
-      "LECTURA" ||
-    currentCenter.status !==
-      "Activo";
+    state.role === "LECTURA" ||
+    isInactive;
 
   const admin =
     state.role ===
@@ -1523,721 +2226,208 @@ export default function CenterDetail() {
       {/* ===================================================
           CABECERA DEL CENTRO
           =================================================== */}
-
       <Card className="overflow-hidden">
+        <div
+          className={`bg-[#002A54] px-3 py-2.5 text-white sm:px-4 sm:py-3 ${
+            isInactive ? "grayscale opacity-75" : ""
+          }`}
+        >
+          <div className="grid items-stretch gap-2 lg:grid-cols-[120px_minmax(0,1fr)_190px]">
 
-        <div className="grid min-h-44 grid-cols-[1fr_180px] bg-[#002A54] text-white">
-
-          <div className="flex items-center gap-5 p-6">
-
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
-
+            {/* LOGO */}
+            <label
+              className={`group relative flex min-h-[96px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-white ${
+                readOnly ? "" : "cursor-pointer hover:bg-slate-50"
+              }`}
+              title={readOnly ? "Logo del centro" : "Pulsar para cargar o cambiar el logo"}
+            >
               {resolvedLogoUrl ? (
                 <img
-                  src={
-                    resolvedLogoUrl
-                  }
-                  alt="Logo"
-                  className="h-full w-full object-contain"
+                  src={resolvedLogoUrl}
+                  alt={`Logo ${centerName}`}
+                  className="h-full w-full object-contain p-2"
                 />
               ) : (
-                <span className="text-2xl font-black text-[#FFCC00]">
-                  {centerShortCode ||
-                    centerCode}
-                </span>
+                <Building2 className="h-11 w-11 text-slate-300" />
+              )}
+              {!readOnly && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage("logoUrl", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              )}
+            </label>
+
+            {/* INFORMACIÓN: 3 FILAS */}
+            <div className="grid min-w-0 grid-rows-[auto_auto_auto] gap-1.5">
+              {/* FILA 1 — IDENTIDAD */}
+              <div className="flex min-w-0 items-center gap-2">
+                <input
+                  disabled={readOnly}
+                  inputMode="numeric"
+                  value={centerCodeDraft}
+                  onChange={e => {
+                    const value = e.target.value.replace(/[^0-9.,]/g, "").replace(",", ".").slice(0, 8);
+                    setCenterCodeDraft(value);
+                    updateCenter("code", value);
+                  }}
+                  onBlur={() => {
+                    const value = centerCodeDraft.replace(",", ".").trim();
+                    const normalized = formatCenterCode(value) === "—" ? "" : formatCenterCode(value);
+                    setCenterCodeDraft(normalized);
+                    updateCenter("code", normalized);
+                  }}
+                  className={`w-[66px] shrink-0 rounded-lg border bg-white/10 px-2 py-1 text-2xl font-black tracking-tight text-white outline-none placeholder:text-white/30 sm:text-3xl ${
+                    codeIsOccupied
+                      ? "border-red-300 ring-2 ring-red-300/40"
+                      : "border-white/15 focus:border-[#FFCC00]"
+                  } disabled:cursor-default disabled:opacity-60`}
+                  aria-label="Número de centro"
+                  placeholder="01"
+                />
+
+                <input
+                  disabled={readOnly}
+                  value={centerName}
+                  onChange={e =>
+                    updateCenter("name", e.target.value.toUpperCase())
+                  }
+                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-2xl font-black uppercase leading-none tracking-tight text-white outline-none placeholder:text-white/40 focus:border-[#FFCC00] sm:text-3xl disabled:cursor-default disabled:opacity-60"
+                  aria-label="Nombre del centro"
+                  placeholder="NOMBRE DEL CENTRO"
+                />
+
+                <input
+                  disabled={readOnly}
+                  value={centerShortCode}
+                  onChange={e =>
+                    updateCenter("shortCode", e.target.value.toUpperCase())
+                  }
+                  className="w-[82px] shrink-0 rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-sm font-black uppercase tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                  aria-label="Código corto"
+                  placeholder="CÓDIGO"
+                />
+              </div>
+
+              {codeIsOccupied && (
+                <div className="text-[10px] font-semibold leading-none text-red-200">
+                  Este número de centro ya está ocupado por otro centro.
+                </div>
               )}
 
+              {/* FILA 2 — DIRECCIÓN + PAÍS / PROVINCIA / CIUDAD */}
+              <div className="grid min-w-0 grid-cols-[1.35fr_1fr] items-center gap-2">
+                <input
+                  disabled={readOnly}
+                  value={currentCenter.address ?? ""}
+                  onChange={e => updateCenter("address", e.target.value.toUpperCase())}
+                  className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                  placeholder="DIRECCIÓN"
+                  aria-label="Dirección"
+                />
+
+                <div className="grid min-w-0 grid-cols-3 gap-1.5">
+                  <div className="min-w-0 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-bold uppercase text-white/75" title={String(currentCenter.country ?? "").toUpperCase()}>
+                    {String(currentCenter.country ?? "").toUpperCase() || "—"}
+                  </div>
+
+                  <input
+                    disabled={readOnly}
+                    value={currentCenter.province ?? ""}
+                    onChange={e => updateCenter("province", e.target.value.toUpperCase())}
+                    className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[10px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                    placeholder="PROVINCIA"
+                    aria-label="Provincia"
+                  />
+
+                  <input
+                    disabled={readOnly}
+                    value={currentCenter.city ?? ""}
+                    onChange={e => updateCenter("city", e.target.value.toUpperCase())}
+                    className="min-w-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-[10px] font-semibold uppercase text-white outline-none placeholder:text-white/30 focus:border-[#FFCC00] disabled:cursor-default disabled:opacity-60"
+                    placeholder="CIUDAD"
+                    aria-label="Ciudad"
+                  />
+                </div>
+              </div>
+
+              {/* FILA 3 — RESPONSABLES */}
+              <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2">
+                <HeaderContactRow
+                  label="GESTIÓN"
+                  name={String(currentCenter.manager ?? "")}
+                  phone={String(currentCenter.managerPhone ?? "")}
+                  email={String(currentCenter.managerEmail ?? "")}
+                  disabled={readOnly}
+                  onNameChange={value => updateCenter("manager", value.toUpperCase())}
+                  onPhoneChange={value => updateCenter("managerPhone", value)}
+                  onEmailChange={value => updateCenter("managerEmail", value)}
+                />
+
+                <HeaderContactRow
+                  label="TÉCNICO"
+                  name={String(currentCenter.technicalResponsible ?? "")}
+                  phone={String(currentCenter.technicalResponsiblePhone ?? "")}
+                  email={String(currentCenter.technicalResponsibleEmail ?? "")}
+                  disabled={readOnly}
+                  onNameChange={value => updateCenter("technicalResponsible", value.toUpperCase())}
+                  onPhoneChange={value => updateCenter("technicalResponsiblePhone", value)}
+                  onEmailChange={value => updateCenter("technicalResponsibleEmail", value)}
+                />
+              </div>
             </div>
 
-            <div>
-
-              <div className="text-xs font-bold uppercase tracking-[.18em] text-[#FFCC00]">
-                {
-                  currentCenter.country
-                }{" "}
-                ·{" "}
-                {
-                  currentCenter.stl
-                }
-              </div>
-
-              <h1 className="mt-2 text-3xl font-black">
-                {centerName}
-              </h1>
-
-              <p className="mt-2 text-sm text-white/70">
-                {
-                  currentCenter.address ||
-                  "Dirección pendiente"
-                }
-              </p>
-
-              <div className="mt-3 flex gap-2">
-
-                <Badge tone="success">
-                  {
-                    currentCenter.status
-                  }
-                </Badge>
-
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Código{" "}
-                  {
-                    centerShortCode ||
-                    "—"
-                  }
-                </span>
-
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Nº{" "}
-                  {centerCode}
-                </span>
-
-              </div>
-
-            </div>
-
-          </div>
-
-          <div className="flex items-center justify-center bg-white/5 p-4">
-
-            {resolvedImageUrl ? (
-              <img
-                src={
-                  resolvedImageUrl
-                }
-                alt={centerName}
-                className="h-32 w-full rounded-xl object-cover"
-              />
-            ) : (
-              <div className="flex h-32 w-full items-center justify-center rounded-xl border border-dashed border-white/20 text-xs text-white/50">
-                Imagen del centro
-              </div>
-            )}
-
-          </div>
-
-        </div>
-
-      </Card>
-
-      {/* ===================================================
-          KPIs
-          =================================================== */}
-
-      <div className="grid gap-4 md:grid-cols-5">
-
-        {[
-          [
-            "Cumplimiento",
-            `${summary.score}%`,
-          ],
-          [
-            "Confirmados",
-            `${summary.confirmed}/${summary.total}`,
-          ],
-          [
-            "Pendientes",
-            summary.pendingConfirmation,
-          ],
-          [
-            "No aptos",
-            summary.counts[
-              "NO APTO"
-            ],
-          ],
-          [
-            "Condicionados",
-            summary.counts[
-              "APTO CONDICIONADO"
-            ],
-          ],
-        ].map(
-          ([t, v]) => (
-            <Card
-              key={String(t)}
-              className="p-5"
+            {/* IMAGEN DEL CENTRO */}
+            <label
+              className={`group relative flex min-h-[96px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/5 ${
+                readOnly ? "" : "cursor-pointer hover:bg-white/10"
+              }`}
+              title={readOnly ? "Imagen del centro" : "Pulsar para cargar o cambiar la imagen del centro"}
             >
-              <div className="text-2xl font-black">
-                {v}
-              </div>
-
-              <div className="mt-1 text-sm text-slate-500">
-                {t}
-              </div>
-            </Card>
-          )
-        )}
-
-      </div>
-
-      {/* ===================================================
-          DATOS DEL CENTRO
-          =================================================== */}
-
-      <Card className="p-6">
-
-        <div className="flex items-center justify-between gap-4">
-
-          <SectionTitle
-            title="Datos del centro"
-            subtitle="Edición disponible según perfil"
-            action={
-              saved ? (
-                <Badge tone="success">
-                  Guardado
-                </Badge>
-              ) : undefined
-            }
-          />
-
-          <SectionToggle
-            open={
-              openCenterData
-            }
-            onClick={() =>
-              setOpenCenterData(
-                v => !v
-              )
-            }
-          />
-
+              {resolvedImageUrl ? (
+                <img
+                  src={resolvedImageUrl}
+                  alt={centerName || "Imagen del centro"}
+                  className="h-full min-h-[96px] w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full min-h-[116px] w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-white/20 text-white/40">
+                  <Building2 className="h-8 w-8" />
+                  <span className="text-[9px] font-semibold uppercase tracking-[.12em]">
+                    Imagen del centro
+                  </span>
+                </div>
+              )}
+              {!readOnly && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage("imageUrl", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              )}
+            </label>
+          </div>
         </div>
-
-        {openCenterData && (
-          <>
-
-            <div className="grid gap-4 md:grid-cols-4">
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Nº centro
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    centerCode
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "code",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Código corto
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    centerShortCode
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "shortCode",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-mono uppercase outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-2">
-
-                <span className="text-xs text-slate-400">
-                  Nombre completo del centro
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    centerName
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "name",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 font-semibold outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Propiedad
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.property ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "property",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-3">
-
-                <span className="text-xs text-slate-400">
-                  Dirección
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.address ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "address",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-2">
-
-                <span className="text-xs text-slate-400">
-                  Ciudad
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.city ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "city",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm md:col-span-2">
-
-                <span className="text-xs text-slate-400">
-                  Provincia
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.province ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "province",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Gerente
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.manager ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "manager",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Teléfono gerente
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.managerPhone ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "managerPhone",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Email gerente
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  type="email"
-                  value={
-                    currentCenter.managerEmail ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "managerEmail",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <div />
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Responsable técnico
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.technicalResponsible ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "technicalResponsible",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Teléfono responsable técnico
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  value={
-                    currentCenter.technicalResponsiblePhone ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "technicalResponsiblePhone",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <label className="text-sm">
-
-                <span className="text-xs text-slate-400">
-                  Email responsable técnico
-                </span>
-
-                <input
-                  disabled={
-                    readOnly
-                  }
-                  type="email"
-                  value={
-                    currentCenter.technicalResponsibleEmail ??
-                    ""
-                  }
-                  onChange={e =>
-                    updateCenter(
-                      "technicalResponsibleEmail",
-                      e.target.value
-                    )
-                  }
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none disabled:bg-slate-50"
-                />
-
-              </label>
-
-              <div />
-
-            </div>
-
-            {!readOnly && (
-              <div className="mt-5 flex flex-wrap gap-3">
-
-                <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
-                  <ImagePlus className="mr-2 inline h-4 w-4" />
-
-                  Logo
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const f =
-                        e.target.files?.[0];
-
-                      if (f) {
-                        uploadImage(
-                          "logoUrl",
-                          f
-                        );
-                      }
-                    }}
-                  />
-
-                </label>
-
-                <label className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-
-                  <ImagePlus className="mr-2 inline h-4 w-4" />
-
-                  Imagen centro
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const f =
-                        e.target.files?.[0];
-
-                      if (f) {
-                        uploadImage(
-                          "imageUrl",
-                          f
-                        );
-                      }
-                    }}
-                  />
-
-                </label>
-
-              </div>
-            )}
-
-          </>
-        )}
-
-      </Card>
-
-      {/* ===================================================
-          HISTÓRICO
-          =================================================== */}
-
-      <Card className="p-6">
-
-        <div className="flex items-center justify-between gap-4">
-
-          <SectionTitle
-            title="Histórico de cumplimiento"
-            subtitle="Revisiones realizadas del centro hasta la fecha actual"
-          />
-
-          <SectionToggle
-            open={
-              openHistory
-            }
-            onClick={() =>
-              setOpenHistory(
-                v => !v
-              )
-            }
-          />
-
-        </div>
-
-        {openHistory && (
-          <>
-
-            {reviewYears.length ===
-            0 ? (
-              <div className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                No hay revisiones históricas cargadas.
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3 md:grid-cols-4">
-
-                {reviewYears.flatMap(
-                  y =>
-                    (
-                      [
-                        "S1",
-                        "S2",
-                      ] as Period[]
-                    ).map(p => {
-                      const r =
-                        state
-                          .reviews[
-                          reviewKey(
-                            centerId,
-                            y,
-                            p
-                          )
-                        ];
-
-                      const historicalActiveIds =
-                        catalog
-                          .filter(
-                            (x: any) =>
-                              activeMap[
-                                x.id
-                              ] !==
-                              false
-                          )
-                          .map(
-                            (x: any) =>
-                              x.id
-                          );
-
-                      const sum =
-                        reviewSummary(
-                          r,
-                          historicalActiveIds
-                        );
-
-                      return (
-                        <div
-                          key={`${y}-${p}`}
-                          className="rounded-xl border border-slate-200 p-4"
-                        >
-
-                          <div className="flex items-center justify-between">
-
-                            <div className="text-xs font-semibold text-slate-400">
-                              {p}{" "}
-                              {y}
-                            </div>
-
-                            {r?.confirmed && (
-                              <Badge tone="success">
-                                Confirmada
-                              </Badge>
-                            )}
-
-                          </div>
-
-                          <div className="mt-2 text-xl font-black">
-                            {r
-                              ? `${sum.score}%`
-                              : "—"}
-                          </div>
-
-                          <div className="mt-1 text-xs text-slate-500">
-                            {r
-                              ? r.confirmed
-                                ? "Revisión confirmada"
-                                : "Revisión cargada sin confirmar"
-                              : "Sin revisión cargada"}
-                          </div>
-
-                        </div>
-                      );
-                    })
-                )}
-
-              </div>
-            )}
-
-            <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-
-              <BarChart3 className="h-4 w-4" />
-
-              El histórico muestra únicamente años hasta el año actual.
-
-            </div>
-
-          </>
-        )}
-
       </Card>
 
       {/* ===================================================
           REVISIÓN
           =================================================== */}
 
-      <Card className="p-6">
+      <Card className="p-3 sm:p-4">
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
 
           <SectionTitle
             title="Revisión técnico-legal"
@@ -2260,7 +2450,7 @@ export default function CenterDetail() {
         {openReview && (
           <>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
 
               <Select
                 value={String(
@@ -2300,23 +2490,112 @@ export default function CenterDetail() {
                 </option>
               </Select>
 
-              {admin && (
-                <Button
-                  variant="secondary"
-                  onClick={
-                    resetPeriod
-                  }
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setOpenHistory(v => !v)}
+                  title={openHistory ? "Ocultar histórico de cumplimiento" : "Mostrar histórico de cumplimiento"}
+                  aria-label={openHistory ? "Ocultar histórico de cumplimiento" : "Mostrar histórico de cumplimiento"}
+                  className={`rounded-xl border p-2 transition ${
+                    openHistory
+                      ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
+                      : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                  }`}
                 >
-                  <RotateCcw className="mr-2 inline h-4 w-4" />
-                  Reiniciar demo
-                </Button>
-              )}
+                  <BarChart3 className="h-4 w-4" />
+                </button>
+              </div>
 
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
+            {openHistory && (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">
+                      Histórico de cumplimiento
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Revisiones realizadas del centro hasta la fecha actual.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenHistory(false)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700"
+                    title="Ocultar histórico"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
 
-              <div className="rounded-xl bg-slate-50 p-4">
+                {reviewYears.length === 0 ? (
+                  <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
+                    No hay revisiones históricas cargadas.
+                  </div>
+                ) : (
+                  <div className="grid gap-1.5 md:grid-cols-4">
+                    {reviewYears.flatMap(
+                      y =>
+                        (["S1", "S2"] as Period[]).map(p => {
+                          const r =
+                            state.reviews[reviewKey(centerId, y, p)];
+
+                          const historicalActiveIds =
+                            catalog
+                              .filter(
+                                (x: any) =>
+                                  activeMap[x.id] !== false
+                              )
+                              .map((x: any) => x.id);
+
+                          const sum = reviewSummary(
+                            r,
+                            historicalActiveIds
+                          );
+
+                          return (
+                            <div
+                              key={`${y}-${p}`}
+                              className="rounded-lg border border-slate-200 bg-white p-2"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs font-semibold text-slate-400">
+                                  {p} {y}
+                                </div>
+                                {r?.confirmed && (
+                                  <Badge tone="success">
+                                    Confirmada
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="mt-0.5 text-base font-black">
+                                {r ? `${sum.score}%` : "—"}
+                              </div>
+                              <div className="mt-0.5 text-[10px] text-slate-500">
+                                {r
+                                  ? r.confirmed
+                                    ? "Revisión confirmada"
+                                    : "Revisión cargada sin confirmar"
+                                  : "Sin revisión cargada"}
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <BarChart3 className="h-4 w-4" />
+                  El histórico muestra únicamente años hasta el año actual.
+                </div>
+              </div>
+            )}
+
+            <div className="mt-2 grid gap-1.5 md:grid-cols-4">
+
+              <div className="rounded-lg bg-slate-50 p-2.5">
 
                 <div className="text-xs text-slate-400">
                   Estado
@@ -2330,7 +2609,7 @@ export default function CenterDetail() {
 
               </div>
 
-              <div className="rounded-xl bg-slate-50 p-4">
+              <div className="rounded-lg bg-slate-50 p-2.5">
 
                 <div className="text-xs text-slate-400">
                   Elementos
@@ -2347,13 +2626,13 @@ export default function CenterDetail() {
 
               </div>
 
-              <div className="rounded-xl bg-amber-50 p-4">
+              <div className="rounded-lg bg-amber-50 p-2.5">
 
                 <div className="text-xs text-amber-700">
                   Pendientes confirmar
                 </div>
 
-                <div className="mt-1 text-xl font-black text-amber-700">
+                <div className="mt-0.5 text-lg font-black text-amber-700">
                   {
                     summary.pendingConfirmation
                   }
@@ -2361,13 +2640,13 @@ export default function CenterDetail() {
 
               </div>
 
-              <div className="rounded-xl bg-emerald-50 p-4">
+              <div className="rounded-lg bg-emerald-50 p-2.5">
 
                 <div className="text-xs text-emerald-700">
                   Cumplimiento
                 </div>
 
-                <div className="mt-1 text-xl font-black text-emerald-700">
+                <div className="mt-0.5 text-lg font-black text-emerald-700">
                   {
                     summary.score
                   }%
@@ -2377,13 +2656,13 @@ export default function CenterDetail() {
 
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px]">
 
               {STATUSES.map(
                 s => (
                   <span
                     key={s}
-                    className="rounded-full border border-slate-200 px-3 py-1"
+                    className="rounded-full border border-slate-200 px-2 py-0.5"
                   >
                     <b>
                       {
@@ -2400,7 +2679,7 @@ export default function CenterDetail() {
             </div>
 
             {review.confirmed && (
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
 
                 <div>
 
@@ -2428,24 +2707,47 @@ export default function CenterDetail() {
 
                 </div>
 
-                <Link
-                  href={`/centers/${centerId}/certificate?year=${year}&period=${period}`}
+                <div className="flex flex-wrap items-center gap-2">
+                  {admin && (
+                    <Button variant="secondary" onClick={unvalidateReview}>
+                      Desvalidar centro
+                    </Button>
+                  )}
+                  <Link
+                    href={`/centers/${centerId}/certificate?year=${year}&period=${period}`}
                   className="rounded-xl bg-[#002A54] px-4 py-2 text-sm font-semibold text-white"
                 >
                   <FileCheck2 className="mr-2 inline h-4 w-4" />
                   Ver / exportar certificado
-                </Link>
+                  </Link>
+                </div>
 
               </div>
             )}
 
-            <div className="mt-5 rounded-xl border border-slate-200 p-4">
+            {!review.confirmed && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                <div className="text-xs text-slate-600">
+                  {sinInformacionCount > 0
+                    ? `${sinInformacionCount} elemento(s) sin información. Debe completarse antes de validar.`
+                    : centerItems.length === 0
+                      ? "No hay elementos activos para validar."
+                      : "El centro puede validarse aunque existan elementos PENDIENTE."}
+                </div>
+                <Button variant="primary" disabled={!canValidateCenter} onClick={confirmReview}>
+                  <ClipboardCheck className="mr-2 inline h-4 w-4" />
+                  Validar centro
+                </Button>
+              </div>
+            )}
+
+            <div className="mt-2 rounded-lg border border-slate-200 p-2.5">
 
               <div className="text-sm font-bold">
                 Participantes de la revisión
               </div>
 
-              <div className="mt-2 space-y-2">
+              <div className="mt-1 space-y-1">
 
                 {(
                   review.participants ||
@@ -2595,72 +2897,143 @@ export default function CenterDetail() {
           INSTALACIONES
           =================================================== */}
 
-      <Card className="p-6">
+      <Card className="p-3 sm:p-4">
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
 
           <SectionTitle
             title="Instalaciones y actuaciones"
-            subtitle={`${activeItems.length} elementos activos · ${inactiveItems.length} elementos no activos`}
+            subtitle={`${centerItems.length} elementos configurados`}
           />
 
-          <SectionToggle
-            open={
-              openInstallations
-            }
-            onClick={() =>
-              setOpenInstallations(
-                v => !v
-              )
-            }
-          />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowColumnOptions(v => !v)}
+              title="Configurar columnas"
+              aria-label="Configurar columnas"
+              className={`rounded-xl border p-2 transition ${
+                showColumnOptions
+                  ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={() => setShowAddElement(v => !v)}
+              title={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
+              aria-label={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
+              className={`rounded-xl border p-2 transition ${showAddElement ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]" : "border-slate-200 text-slate-500 hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <SectionToggle
+              open={openInstallations}
+              onClick={() => setOpenInstallations(v => !v)}
+            />
+          </div>
 
         </div>
 
         {openInstallations && (
           <>
 
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-
-              <div className="flex flex-wrap items-center gap-2">
-
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-
-                  <ClipboardCheck className="h-4 w-4" />
-
-                  Leyenda de resultados
-
+            {showColumnOptions && (
+              <div className="mb-2 mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs font-bold text-slate-700">Configuración de columnas</div>
+                    <button
+                      type="button"
+                      onClick={reduceAllColumns}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                      title="Reducir todas las columnas al mínimo"
+                    >
+                      <Minus className="h-3 w-3" />
+                      Reducir todas
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-slate-400">Pulsa el título para ordenar. Arrastra el borde de cada encabezado para ajustar su ancho.</div>
                 </div>
-
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  FAVORABLE
-                </span>
-
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                  CONDICIONADO
-                </span>
-
-                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                  DESFAVORABLE
-                </span>
-
-                <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                  PTE.
-                </span>
-
-                <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  ERROR
-                </span>
-
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
+                    <div key={column} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleColumnVisibility(column)}
+                          className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"
+                          title={columnVisibility[column] ? `Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}` : `Mostrar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
+                        >
+                          {columnVisibility[column] ? <Eye className="h-3.5 w-3.5 shrink-0" /> : <EyeOff className="h-3.5 w-3.5 shrink-0" />}
+                          <span className="truncate">{TABLE_COLUMN_LABELS[column] || "Acciones"}</span>
+                        </button>
+                        <span className="shrink-0 text-[10px] font-mono text-slate-400">{columnWidths[column]} px</span>
+                      </div>
+                      {columnVisibility[column] && (
+                        <input
+                          className="mt-1 w-full"
+                          type="range"
+                          min={TABLE_COLUMN_MIN_WIDTHS[column]}
+                          max="320"
+                          step="5"
+                          value={columnWidths[column]}
+                          onChange={e => setColumnWidth(column, Number(e.target.value))}
+                          aria-label={`Ancho de ${TABLE_COLUMN_LABELS[column] || "acciones"}`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
 
-            </div>
+            {showAddElement && !readOnly && (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">Añadir elementos</div>
+                    <div className="text-[10px] text-slate-500">Selecciona una actuación y modifica la cantidad con −, + o escribiendo directamente el número.</div>
+                  </div>
+                  <button type="button" onClick={() => setShowAddElement(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700" title="Cerrar">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input value={addElementSearch} onChange={e => setAddElementSearch(e.target.value)} placeholder="Buscar instalación o actuación..." className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs outline-none focus:border-[#002A54]" />
+                </div>
+                <div className="grid max-h-56 gap-1.5 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
+                  {selectableItems.map((x: any) => {
+                    const actionCode = String(x.actionCode ?? x.baseCode ?? x.code ?? "").trim();
+                    const count = elementCounts.get(actionCode) || 0;
+                    const last = [...centerItems].reverse().find((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
+                    return (
+                      <div key={`${actionCode}-${x.installation}-${x.action}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-800">{actionCode} · {x.installation}</div>
+                          <div className="truncate text-[10px] text-slate-400">{x.action || "Actuación"} · {count} elemento{count === 1 ? "" : "s"}</div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button type="button" disabled={!last} onClick={() => last && removeElement(last.id)} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30" title="Eliminar un elemento"><Minus className="h-3 w-3" /></button>
+                          <input type="number" min="0" step="1" value={quantityDrafts[actionCode] ?? String(count)} onChange={e => setQuantityDrafts(current => ({ ...current, [actionCode]: e.target.value.replace(/\D/g, "") }))} onBlur={e => { const value = Math.max(0, Number.parseInt(e.target.value || "0", 10)); setElementQuantity(x, value); setQuantityDrafts(current => { const next = { ...current }; delete next[actionCode]; return next; }); }} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} className="h-6 w-12 rounded-md border border-slate-200 text-center text-xs font-bold text-slate-700 outline-none focus:border-[#002A54]" aria-label={`Cantidad de ${x.installation} ${x.action || ""}`} />
+                          <button type="button" onClick={() => addElement(x)} className="flex h-6 w-6 items-center justify-center rounded-md bg-[#002A54] text-white hover:bg-[#003a73]" title="Añadir un elemento"><Plus className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-            <div className="mb-4 mt-5 flex flex-col gap-3 xl:flex-row">
+            <div className="mb-2 mt-3 flex flex-col gap-2 xl:flex-row">
 
               <div className="relative min-w-0 flex-1">
 
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
 
                 <input
                   value={q}
@@ -2701,73 +3074,41 @@ export default function CenterDetail() {
 
               <div className="overflow-x-auto">
 
-                <table className="min-w-[1700px] w-full text-sm">
+                <table className="w-max table-fixed text-xs">
 
-                  <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white">
+                  <colgroup>
+                    {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
+                      <col
+                        key={column}
+                        style={{
+                          width: columnWidths[column],
+                          minWidth: columnWidths[column],
+                          display: columnVisibility[column] ? "table-column" : "none",
+                        }}
+                      />
+                    ))}
+                  </colgroup>
 
+                  <thead className="sticky top-0 z-10 bg-[#002A54] text-left text-xs font-bold tracking-wide text-white">
                     <tr>
-
-                      <th className="w-24 px-3 py-3">
-                        Código
-                      </th>
-
-                      <th className="w-16 px-2 py-3 text-center">
-                        Tipo
-                      </th>
-
-                      <th className="min-w-[180px] px-3 py-3">
-                        Instalación
-                      </th>
-
-                      <th className="min-w-[180px] px-3 py-3">
-                        Actuación
-                      </th>
-
-                      <th className="w-28 px-3 py-3">
-                        Frecuencia
-                      </th>
-
-                      <th className="w-36 px-3 py-3">
-                        ID equipo
-                      </th>
-
-                      <th className="w-40 px-3 py-3">
-                        Empresa
-                      </th>
-
-                      <th className="w-48 px-3 py-3">
-                        Estado revisión
-                      </th>
-
-                      <th className="w-36 px-3 py-3">
-                        Fecha
-                      </th>
-
-                      <th className="w-40 px-3 py-3">
-                        Próxima revisión
-                      </th>
-
-                      <th className="w-36 px-3 py-3">
-                        2ª revisión
-                      </th>
-
-                      <th className="w-40 px-3 py-3">
-                        Resultado
-                      </th>
-
-                      <th className="min-w-[220px] px-3 py-3">
-                        Comentario
-                      </th>
-
-                      <th className="w-12 px-3 py-3" />
-
+                      {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
+                        <TableHeader
+                          key={column}
+                          column={column}
+                          sort={tableSort}
+                          onSort={toggleTableSort}
+                          onHide={toggleColumnVisibility}
+                          onResizeStart={startTableColumnResize}
+                          width={columnWidths[column]}
+                          visible={columnVisibility[column]}
+                        />
+                      ))}
                     </tr>
-
                   </thead>
 
                   <tbody>
 
-                    {visible.map(
+                    {sortedVisible.map(
                       (
                         x: any
                       ) => {
@@ -2824,49 +3165,67 @@ export default function CenterDetail() {
                             className="border-t border-slate-100 hover:bg-slate-50"
                           >
 
-                            <td className="px-3 py-3 align-top font-mono text-xs font-bold text-slate-600">
-                              {x.code}
+                            <td data-column="code" style={{
+  width: columnWidths["code"],
+  minWidth: columnWidths["code"],
+  display: columnVisibility["code"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top font-mono text-xs font-bold text-slate-600">
+                              {x.displayCode}
                             </td>
 
-                            <td className="px-2 py-3 align-top">
+                            <td data-column="type" style={{
+  width: columnWidths["type"],
+  minWidth: columnWidths["type"],
+  display: columnVisibility["type"] ? "table-cell" : "none",
+}}className="px-1.5 py-2 align-top">
 
                               <div
-                                className={`mx-auto flex h-9 w-9 items-center justify-center rounded-xl border ${visual.wrapper}`}
+                                className={`mx-auto flex h-7 w-7 items-center justify-center rounded-xl border ${visual.wrapper}`}
                                 title={
                                   x.category ||
                                   x.installation
                                 }
                               >
                                 <Icon
-                                  className={`h-4 w-4 ${visual.icon}`}
+                                  className={`h-3.5 w-3.5 ${visual.icon}`}
                                 />
                               </div>
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
-
-                              <div className="font-semibold text-slate-800">
-                                {
-                                  x.installation
-                                }
+                            <td data-column="installation" style={{
+  width: columnWidths["installation"],
+  minWidth: columnWidths["installation"],
+  display: columnVisibility["installation"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
+                              <div className="font-semibold leading-tight text-slate-800">
+                                {x.installation}
                               </div>
-
-                              {x.category && (
-                                <div className="mt-1 text-xs text-slate-400">
-                                  {
-                                    x.category
-                                  }
-                                </div>
-                              )}
-
                             </td>
 
-                            <td className="px-3 py-3 align-top text-slate-600">
+                            <td data-column="description" style={{
+  width: columnWidths["description"],
+  minWidth: columnWidths["description"],
+  display: columnVisibility["description"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top text-slate-400">
+                              <div className="truncate" title={x.category || ""}>
+                                {sentenceCase(x.category)}
+                              </div>
+                            </td>
+
+                            <td data-column="action" style={{
+  width: columnWidths["action"],
+  minWidth: columnWidths["action"],
+  display: columnVisibility["action"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top text-slate-600">
                               {x.action}
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="frequency" style={{
+  width: columnWidths["frequency"],
+  minWidth: columnWidths["frequency"],
+  display: columnVisibility["frequency"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
 
@@ -2881,7 +3240,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="equipmentId" style={{
+  width: columnWidths["equipmentId"],
+  minWidth: columnWidths["equipmentId"],
+  display: columnVisibility["equipmentId"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -2900,12 +3263,16 @@ export default function CenterDetail() {
                                   )
                                 }
                                 placeholder="ID equipo"
-                                className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                className="w-28 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="company" style={{
+  width: columnWidths["company"],
+  minWidth: columnWidths["company"],
+  display: columnVisibility["company"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -2924,12 +3291,16 @@ export default function CenterDetail() {
                                   )
                                 }
                                 placeholder="Empresa"
-                                className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                className="w-28 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="status" style={{
+  width: columnWidths["status"],
+  minWidth: columnWidths["status"],
+  display: columnVisibility["status"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <select
                                 disabled={
@@ -2947,7 +3318,7 @@ export default function CenterDetail() {
                                     }
                                   )
                                 }
-                                className={`w-44 rounded-lg border px-2 py-1.5 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
+                                className={`w-36 rounded-lg border px-1.5 py-1 text-xs font-semibold outline-none disabled:cursor-not-allowed disabled:opacity-70 ${getStatusClasses(
                                   item.status
                                 )}`}
                               >
@@ -2962,7 +3333,7 @@ export default function CenterDetail() {
                                         s
                                       }
                                     >
-                                      {s}
+                                      {sentenceCase(s)}
                                     </option>
                                   )
                                 )}
@@ -2971,7 +3342,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="date" style={{
+  width: columnWidths["date"],
+  minWidth: columnWidths["date"],
+  display: columnVisibility["date"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <input
                                 disabled={
@@ -2990,16 +3365,20 @@ export default function CenterDetail() {
                                     }
                                   )
                                 }
-                                className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                className="w-28 rounded-lg border border-slate-200 px-1.5 py-1 text-xs disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="nextReview" style={{
+  width: columnWidths["nextReview"],
+  minWidth: columnWidths["nextReview"],
+  display: columnVisibility["nextReview"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <div className="flex min-h-8 items-center gap-2">
 
-                                <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+                                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
 
                                 {nextDate ? (
                                   <div>
@@ -3035,7 +3414,11 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="secondReview" style={{
+  width: columnWidths["secondReview"],
+  minWidth: columnWidths["secondReview"],
+  display: columnVisibility["secondReview"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               {item.status ===
                               "APTO CONDICIONADO" ? (
@@ -3056,7 +3439,7 @@ export default function CenterDetail() {
                                       }
                                     )
                                   }
-                                  className="w-32 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs disabled:bg-slate-50"
+                                  className="w-28 rounded-lg border border-amber-200 bg-amber-50 px-1.5 py-1 text-xs disabled:bg-slate-50"
                                 />
                               ) : (
                                 <span className="text-xs text-slate-300">
@@ -3066,25 +3449,31 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="result" style={{
+  width: columnWidths["result"],
+  minWidth: columnWidths["result"],
+  display: columnVisibility["result"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <span
-                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${resultVisual.className}`}
+                                className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-bold ${resultVisual.className}`}
                               >
 
                                 <span
                                   className={`h-2 w-2 rounded-full ${resultVisual.dot}`}
                                 />
 
-                                {
-                                  result
-                                }
+                                {sentenceCase(result)}
 
                               </span>
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="comment" style={{
+  width: columnWidths["comment"],
+  minWidth: columnWidths["comment"],
+  display: columnVisibility["comment"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               <textarea
                                 disabled={
@@ -3104,12 +3493,16 @@ export default function CenterDetail() {
                                 }
                                 placeholder="Introducir comentario..."
                                 rows={2}
-                                className="w-52 resize-y rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                className="w-40 resize-y rounded-lg border border-slate-200 px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>
 
-                            <td className="px-3 py-3 align-top">
+                            <td data-column="actions" style={{
+  width: columnWidths["actions"],
+  minWidth: columnWidths["actions"],
+  display: columnVisibility["actions"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
 
                               {!readOnly &&
                                 !review.confirmed && (
@@ -3124,7 +3517,7 @@ export default function CenterDetail() {
                                     title="Eliminar del listado activo"
                                     className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
                                   >
-                                    <X className="h-4 w-4" />
+                                    <X className="h-3.5 w-3.5" />
                                   </button>
                                 )}
 
@@ -3140,9 +3533,7 @@ export default function CenterDetail() {
                       <tr>
 
                         <td
-                          colSpan={
-                            15
-                          }
+                          colSpan={visibleColumnCount}
                           className="px-6 py-12 text-center text-sm text-slate-400"
                         >
                           No hay elementos que coincidan con la búsqueda.
@@ -3159,257 +3550,12 @@ export default function CenterDetail() {
 
             </div>
 
-            <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
+            <div className="mt-2 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-[10px] text-blue-800">
 
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 
               <div>
                 En esta fase, la próxima revisión se calcula exclusivamente como fecha de ejecución + frecuencia. Todavía no se aplican sábados, domingos ni festivos.
-              </div>
-
-            </div>
-
-            {/* =================================================
-                ELEMENTOS NO ACTIVOS
-                ================================================= */}
-
-            <div className="mt-6 rounded-2xl border border-slate-200 p-5">
-
-              <div className="flex items-center justify-between gap-4">
-
-                <SectionTitle
-                  title="Elementos no activos"
-                  subtitle="No computan, no generan vencimientos y conservan su histórico"
-                  action={
-                    !readOnly ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          setShowAddElement(
-                            v =>
-                              !v
-                          )
-                        }
-                      >
-                        <Plus className="mr-2 inline h-4 w-4" />
-                        Añadir elemento
-                      </Button>
-                    ) : undefined
-                  }
-                />
-
-              </div>
-
-              {showAddElement &&
-                !readOnly && (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-
-                    <div className="mb-3 text-sm font-bold">
-                      Seleccionar elemento del catálogo
-                    </div>
-
-                    <div className="relative mb-3">
-
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-
-                      <input
-                        value={
-                          addElementSearch
-                        }
-                        onChange={e =>
-                          setAddElementSearch(
-                            e.target.value
-                          )
-                        }
-                        placeholder="Buscar cualquier elemento..."
-                        className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
-                      />
-
-                    </div>
-
-                    <div className="max-h-80 space-y-2 overflow-y-auto">
-
-                      {selectableItems.map(
-                        (
-                          x: any
-                        ) => {
-
-                          const isActive =
-                            activeMap[
-                              x.id
-                            ] !==
-                            false;
-
-                          const visual =
-                            getInstallationVisual(
-                              x.installation,
-                              x.category
-                            );
-
-                          const Icon =
-                            visual.Icon;
-
-                          return (
-                            <div
-                              key={
-                                x.id
-                              }
-                              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
-                            >
-
-                              <div className="flex min-w-0 items-center gap-3">
-
-                                <div
-                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                                >
-                                  <Icon
-                                    className={`h-4 w-4 ${visual.icon}`}
-                                  />
-                                </div>
-
-                                <div className="min-w-0">
-
-                                  <div className="truncate text-sm font-semibold">
-                                    {
-                                      x.code
-                                    }{" "}
-                                    ·{" "}
-                                    {
-                                      x.installation
-                                    }
-                                  </div>
-
-                                  <div className="truncate text-xs text-slate-500">
-                                    {
-                                      x.action
-                                    }{" "}
-                                    ·{" "}
-                                    {
-                                      x.frequency
-                                    }
-                                  </div>
-
-                                </div>
-
-                              </div>
-
-                              {isActive ? (
-                                <Badge>
-                                  Activo
-                                </Badge>
-                              ) : (
-                                <Button
-                                  variant="secondary"
-                                  onClick={() =>
-                                    setActive(
-                                      x.id,
-                                      true
-                                    )
-                                  }
-                                >
-                                  Activar
-                                </Button>
-                              )}
-
-                            </div>
-                          );
-                        }
-                      )}
-
-                    </div>
-
-                  </div>
-                )}
-
-              <div className="mt-4">
-
-                {inactiveItems.length ===
-                0 ? (
-                  <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    No hay elementos no activos actualmente.
-                    Utiliza “Añadir elemento” para consultar y activar cualquier elemento del catálogo.
-                  </div>
-                ) : (
-                  <div className="grid gap-2 md:grid-cols-2">
-
-                    {inactiveItems.map(
-                      (
-                        x: any
-                      ) => {
-
-                        const visual =
-                          getInstallationVisual(
-                            x.installation,
-                            x.category
-                          );
-
-                        const Icon =
-                          visual.Icon;
-
-                        return (
-                          <div
-                            key={
-                              x.id
-                            }
-                            className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-sm"
-                          >
-
-                            <div className="flex min-w-0 items-center gap-3">
-
-                              <div
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                              >
-                                <Icon
-                                  className={`h-4 w-4 ${visual.icon}`}
-                                />
-                              </div>
-
-                              <div className="min-w-0">
-
-                                <div className="truncate">
-                                  <b>
-                                    {
-                                      x.code
-                                    }
-                                  </b>{" "}
-                                  ·{" "}
-                                  {
-                                    x.installation
-                                  }
-                                </div>
-
-                                <div className="truncate text-xs text-slate-500">
-                                  {
-                                    x.action
-                                  }
-                                </div>
-
-                              </div>
-
-                            </div>
-
-                            {!readOnly && (
-                              <Button
-                                variant="secondary"
-                                onClick={() =>
-                                  setActive(
-                                    x.id,
-                                    true
-                                  )
-                                }
-                              >
-                                Activar
-                              </Button>
-                            )}
-
-                          </div>
-                        );
-                      }
-                    )}
-
-                  </div>
-                )}
-
               </div>
 
             </div>

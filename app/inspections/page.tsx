@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 
 import Link from "next/link";
@@ -17,6 +18,10 @@ import {
   ChevronUp,
   ChevronDown,
   CalendarDays,
+  EyeOff,
+  Eye,
+  Minus,
+  FileCheck2,
 } from "lucide-react";
 
 import {
@@ -31,6 +36,7 @@ import { demo } from "@/lib/data";
 
 import {
   loadState,
+  saveState,
   resolveCenters,
   reviewKey,
   reviewSummary,
@@ -54,6 +60,7 @@ type ViewMode =
 type SortKey =
   | "code"
   | "name"
+  | "status"
   | "score"
   | "apto"
   | "condicionado"
@@ -73,6 +80,103 @@ type HistoricalReview = {
   item: ReturnType<
     typeof blankItem
   >;
+};
+
+type SummaryColumnKey =
+  | "code"
+  | "name"
+  | "status"
+  | "score"
+  | "apto"
+  | "condicionado"
+  | "noApto"
+  | "pendiente"
+  | "confirmation";
+
+/* =========================================================
+ * COLUMNAS DEL RESUMEN
+ * ========================================================= */
+
+const SUMMARY_COLUMNS: {
+  key: SummaryColumnKey;
+  label: string;
+  sortKey?: SortKey;
+}[] = [
+  {
+    key: "code",
+    label: "Nº centro",
+    sortKey: "code",
+  },
+  {
+    key: "name",
+    label: "Centro",
+    sortKey: "name",
+  },
+  {
+    key: "status",
+    label: "Estado",
+    sortKey: "status",
+  },
+  {
+    key: "score",
+    label: "Cumplimiento",
+    sortKey: "score",
+  },
+  {
+    key: "apto",
+    label: "Apto",
+    sortKey: "apto",
+  },
+  {
+    key: "condicionado",
+    label: "Apto condicionado",
+    sortKey: "condicionado",
+  },
+  {
+    key: "noApto",
+    label: "No apto",
+    sortKey: "noApto",
+  },
+  {
+    key: "pendiente",
+    label: "Pendiente",
+    sortKey: "pendiente",
+  },
+  {
+    key: "confirmation",
+    label: "Confirmación",
+    sortKey: "confirmation",
+  },
+];
+
+const SUMMARY_DEFAULT_WIDTHS: Record<
+  SummaryColumnKey,
+  number
+> = {
+  code: 105,
+  name: 250,
+  status: 175,
+  score: 125,
+  apto: 90,
+  condicionado: 135,
+  noApto: 105,
+  pendiente: 105,
+  confirmation: 190,
+};
+
+const SUMMARY_MIN_WIDTHS: Record<
+  SummaryColumnKey,
+  number
+> = {
+  code: 72,
+  name: 140,
+  status: 120,
+  score: 100,
+  apto: 65,
+  condicionado: 90,
+  noApto: 75,
+  pendiente: 75,
+  confirmation: 145,
 };
 
 /* =========================================================
@@ -276,11 +380,6 @@ function parseFrequency(
  *
  * Si el día no existe en el mes de destino,
  * se utiliza el último día disponible.
- *
- * Ejemplo:
- *
- * 31/01 + 1 mes → 28/02
- * 31/01 + 2 meses → 31/03
  */
 function calculateNextReview(
   date: string,
@@ -356,14 +455,6 @@ function calculateNextReview(
     return "";
   }
 
-  /*
-   * El índice del mes se trabaja en base 0:
-   *
-   * enero = 0
-   * febrero = 1
-   * ...
-   * diciembre = 11
-   */
   const targetMonthIndex =
     month -
     1 +
@@ -382,9 +473,6 @@ function calculateNextReview(
       12) %
     12;
 
-  /*
-   * Último día real del mes de destino.
-   */
   const lastDayOfTargetMonth =
     new Date(
       targetYear,
@@ -446,13 +534,6 @@ function calculateNextReview(
  * FECHAS
  * ========================================================= */
 
-/**
- * Formato reducido de fecha para la matriz.
- *
- * Ejemplo:
- *
- * 2026-01-15 → 01/26
- */
 function formatMonthYear(
   value: string
 ): string {
@@ -472,10 +553,6 @@ function formatMonthYear(
   return `${match[2]}/${match[1].slice(-2)}`;
 }
 
-/**
- * Convierte una fecha ISO en valor numérico
- * para poder ordenar cronológicamente.
- */
 function dateValue(
   value: string
 ): number {
@@ -493,6 +570,62 @@ function dateValue(
   )
     ? 0
     : time;
+}
+
+/* =========================================================
+ * CÓDIGO DE CENTRO
+ * ========================================================= */
+
+/**
+ * Formato oficial del número/código del centro.
+ *
+ * 1    → 01
+ * 8    → 08
+ * 11   → 11
+ * 14.4 → 14.4
+ * 1.4  → 01.4
+ */
+function formatCenterCode(
+  value: unknown
+): string {
+  const raw =
+    String(
+      value ?? ""
+    )
+      .trim()
+      .replace(
+        ",",
+        "."
+      );
+
+  if (!raw) {
+    return "";
+  }
+
+  if (
+    /^\d+(?:\.\d+)?$/.test(
+      raw
+    )
+  ) {
+    const [
+      integerPart,
+      decimalPart,
+    ] =
+      raw.split(".");
+
+    const paddedInteger =
+      integerPart.padStart(
+        2,
+        "0"
+      );
+
+    return decimalPart !==
+      undefined
+      ? `${paddedInteger}.${decimalPart}`
+      : paddedInteger;
+  }
+
+  return raw.toUpperCase();
 }
 
 /* =========================================================
@@ -555,14 +688,39 @@ function getStatusClasses(
   }
 }
 
+/**
+ * Texto corto y legible para el estado global.
+ */
+function formatOverallStatus(
+  status:
+    | V1Status
+    | "EN CURSO"
+): string {
+  switch (status) {
+    case "APTO":
+      return "Apto";
+
+    case "APTO CONDICIONADO":
+      return "Apto condicionado";
+
+    case "NO APTO":
+      return "No apto";
+
+    case "PENDIENTE":
+      return "Pendiente";
+
+    case "SIN INFORMACIÓN":
+      return "Sin información";
+
+    default:
+      return "En curso";
+  }
+}
+
 /* =========================================================
  * HISTÓRICO
  * ========================================================= */
 
-/**
- * Obtiene todas las revisiones históricas de un elemento
- * para un centro concreto.
- */
 function getHistoricalReviews(
   state: V1State,
   centerId: string,
@@ -668,9 +826,6 @@ function getHistoricalReviews(
   );
 }
 
-/**
- * Obtiene la última revisión registrada.
- */
 function getLastReview(
   state: V1State,
   centerId: string,
@@ -689,10 +844,6 @@ function getLastReview(
   );
 }
 
-/**
- * Calcula la próxima revisión
- * utilizando la última revisión histórica.
- */
 function getNextReview(
   state: V1State,
   centerId: string,
@@ -720,23 +871,6 @@ function getNextReview(
  * ORDENACIÓN
  * ========================================================= */
 
-/**
- * Ordenación del número de centro.
- *
- * Los códigos numéricos se ordenan numéricamente.
- *
- * Ejemplo:
- *
- * 2
- * 10
- * 25
- *
- * y no:
- *
- * 10
- * 2
- * 25
- */
 function compareCenterCode(
   a: {
     code?: unknown;
@@ -800,6 +934,245 @@ function compareCenterCode(
         "base",
     }
   );
+}
+
+/* =========================================================
+ * VALIDACIÓN DE CENTRO
+ * ========================================================= */
+
+function getCenterValidationState(
+  review: V1State["reviews"][string] | undefined,
+  activeIds: string[]
+) {
+  const items = activeIds.map(
+    itemId => review?.items?.[itemId] || blankItem()
+  );
+
+  // PENDIENTE es un estado revisado y NO bloquea la validación.
+  // Únicamente SIN INFORMACIÓN impide validar el centro.
+  const pending = items.filter(
+    item => item.status === "SIN INFORMACIÓN"
+  ).length;
+
+  const total = items.length;
+  const reviewed = total - pending;
+  const allReviewed = total > 0 && pending === 0;
+
+  let overallStatus: V1Status | "EN CURSO" = "EN CURSO";
+
+  if (review?.confirmed) {
+    if (items.some(item => item.status === "NO APTO")) {
+      overallStatus = "NO APTO";
+    } else if (items.some(item => item.status === "APTO CONDICIONADO")) {
+      overallStatus = "APTO CONDICIONADO";
+    } else if (items.some(item => item.status === "PENDIENTE")) {
+      overallStatus = "PENDIENTE";
+    } else if (items.length > 0 && items.every(item => item.status === "APTO")) {
+      overallStatus = "APTO";
+    } else {
+      overallStatus = "SIN INFORMACIÓN";
+    }
+  }
+
+  return {
+    total,
+    reviewed,
+    pending,
+    allReviewed,
+    overallStatus,
+  };
+}
+
+/* =========================================================
+ * TEXTO CORTO PARA MATRIZ
+ * ========================================================= */
+
+function getMatrixShortTitle(
+  item: any
+): string {
+  const code =
+    String(
+      item.code ?? ""
+    ).trim();
+
+  const installation =
+    String(
+      item.installation ??
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    installation.includes(
+      "ascensor"
+    ) ||
+    installation.includes(
+      "montacarga"
+    ) ||
+    installation.includes(
+      "montacargas"
+    )
+  ) {
+    return `Ascen. ${code}`;
+  }
+
+  if (
+    installation.includes(
+      "alta tensión"
+    ) ||
+    installation.includes(
+      "alta tension"
+    )
+  ) {
+    return "A.T.";
+  }
+
+  if (
+    installation.includes(
+      "baja tensión"
+    ) ||
+    installation.includes(
+      "baja tension"
+    )
+  ) {
+    return "B.T.";
+  }
+
+  if (
+    installation.includes(
+      "protección contra incendios"
+    ) ||
+    installation.includes(
+      "proteccion contra incendios"
+    )
+  ) {
+    return "P.C.I.";
+  }
+
+  if (
+    installation.includes(
+      "climatización"
+    ) ||
+    installation.includes(
+      "climatizacion"
+    )
+  ) {
+    return "Clim.";
+  }
+
+  if (
+    installation.includes(
+      "instalación eléctrica"
+    ) ||
+    installation.includes(
+      "instalacion electrica"
+    ) ||
+    installation.includes(
+      "eléctrica"
+    ) ||
+    installation.includes(
+      "electrica"
+    )
+  ) {
+    return "I.E.";
+  }
+
+  if (
+    installation.includes(
+      "gas"
+    )
+  ) {
+    return "Gas";
+  }
+
+  if (
+    installation.includes(
+      "fontanería"
+    ) ||
+    installation.includes(
+      "fontaneria"
+    )
+  ) {
+    return "Font.";
+  }
+
+  if (
+    installation.includes(
+      "puertas"
+    )
+  ) {
+    return "Puert.";
+  }
+
+  if (
+    installation.includes(
+      "cubierta"
+    )
+  ) {
+    return "Cub.";
+  }
+
+  if (
+    installation.includes(
+      "estructura"
+    )
+  ) {
+    return "Estr.";
+  }
+
+  if (
+    installation.includes(
+      "aparatos a presión"
+    ) ||
+    installation.includes(
+      "aparatos a presion"
+    )
+  ) {
+    return "A.P.";
+  }
+
+  if (
+    installation.includes(
+      "instalación térmica"
+    ) ||
+    installation.includes(
+      "instalacion termica"
+    )
+  ) {
+    return "I.T.";
+  }
+
+  const clean =
+    String(
+      item.installation ||
+        item.action ||
+        item.category ||
+        ""
+    )
+      .trim();
+
+  if (!clean) {
+    return code;
+  }
+
+  if (
+    clean.length <= 18
+  ) {
+    return code
+      ? `${code} · ${clean}`
+      : clean;
+  }
+
+  const shortened =
+    `${clean.slice(
+      0,
+      17
+    )}…`;
+
+  return code
+    ? `${code} · ${shortened}`
+    : shortened;
 }
 
 /* =========================================================
@@ -892,6 +1265,40 @@ export default function Inspections() {
   ] =
     useState(false);
 
+  const [
+    columnWidths,
+    setColumnWidths,
+  ] =
+    useState<
+      Record<
+        SummaryColumnKey,
+        number
+      >
+    >(
+      SUMMARY_DEFAULT_WIDTHS
+    );
+
+  const [
+    hiddenColumns,
+    setHiddenColumns,
+  ] =
+    useState<
+      Record<
+        SummaryColumnKey,
+        boolean
+      >
+    >({
+      code: false,
+      name: false,
+      status: false,
+      score: false,
+      apto: false,
+      condicionado: false,
+      noApto: false,
+      pendiente: false,
+      confirmation: false,
+    });
+
   /* =======================================================
    * CARGA Y SINCRONIZACIÓN DEL ESTADO
    * ======================================================= */
@@ -959,9 +1366,6 @@ export default function Inspections() {
       /*
        * La resolución de centros está centralizada
        * exclusivamente en lib/v1-state.ts.
-       *
-       * Esta pantalla NO contiene una implementación
-       * propia de resolveCenter().
        */
       return resolveCenters(
         demo.centers,
@@ -1023,59 +1427,43 @@ export default function Inspections() {
    * MATRIZ
    * ======================================================= */
 
+  /**
+   * IMPORTANTE:
+   *
+   * La búsqueda NO filtra las columnas de la matriz.
+   *
+   * De esta forma, si buscamos un centro,
+   * siguen apareciendo todos sus elementos.
+   *
+   * La categoría sí determina las columnas visibles.
+   */
   const matrixItems =
     useMemo(() => {
       return catalog.filter(
-        (item: any) => {
-          const matchesCategory =
-            category ===
-              "Todas" ||
-            item.category ===
-              category;
-
-          const text =
-            `${item.code} ${item.installation} ${item.action} ${
-              item.category || ""
-            }`;
-
-          const matchesSearch =
-            text
-              .toLowerCase()
-              .includes(
-                q.toLowerCase()
-              );
-
-          return (
-            matchesCategory &&
-            matchesSearch
-          );
-        }
+        (item: any) =>
+          category ===
+            "Todas" ||
+          item.category ===
+            category
       );
     }, [
       catalog,
       category,
-      q,
     ]);
 
   /* =======================================================
-   * RESUMEN
+   * RESUMEN / FILAS
    * ======================================================= */
 
   const rows =
     useMemo(() => {
+      const normalizedQuery =
+        q
+          .trim()
+          .toLowerCase();
+
       const result =
         centers
-          .filter(
-            center =>
-              `${center.name} ${center.code} ${
-                center.shortCode ||
-                ""
-              }`
-                .toLowerCase()
-                .includes(
-                  q.toLowerCase()
-                )
-          )
           .map(
             center => {
               /*
@@ -1112,13 +1500,84 @@ export default function Inspections() {
                   )
                 );
 
+              const validation =
+                getCenterValidationState(
+                  review,
+                  active.map(
+                    (item: any) =>
+                      String(
+                        item.id
+                      )
+                  )
+                );
+
               return {
                 c:
                   center,
                 active,
                 review,
                 summary,
+                validation,
               };
+            }
+          )
+          .filter(
+            row => {
+              if (
+                !normalizedQuery
+              ) {
+                return true;
+              }
+
+              const centerText =
+                `${row.c.name} ${
+                  row.c.code
+                } ${
+                  row.c.shortCode ||
+                  ""
+                }`
+                  .toLowerCase();
+
+              if (
+                centerText.includes(
+                  normalizedQuery
+                )
+              ) {
+                return true;
+              }
+
+              /*
+               * En Matriz también permitimos buscar
+               * por elemento, pero solo mostramos
+               * los centros que contienen ese elemento.
+               *
+               * Las columnas de la matriz NO se reducen.
+               */
+              if (
+                mode ===
+                "matrix"
+              ) {
+                return row.active.some(
+                  (item: any) => {
+                    const itemText =
+                      `${item.code} ${
+                        item.installation
+                      } ${
+                        item.action
+                      } ${
+                        item.category ||
+                        ""
+                      }`
+                        .toLowerCase();
+
+                    return itemText.includes(
+                      normalizedQuery
+                    );
+                  }
+                );
+              }
+
+              return false;
             }
           );
 
@@ -1146,6 +1605,18 @@ export default function Inspections() {
                   String(
                     b.c.name
                   ),
+                  "es",
+                  {
+                    sensitivity:
+                      "base",
+                  }
+                );
+              break;
+
+            case "status":
+              comparison =
+                a.validation.overallStatus.localeCompare(
+                  b.validation.overallStatus,
                   "es",
                   {
                     sensitivity:
@@ -1222,10 +1693,26 @@ export default function Inspections() {
 
             case "confirmation":
               comparison =
-                a.summary
-                  .pendingConfirmation -
-                b.summary
-                  .pendingConfirmation;
+                Number(
+                  a.review
+                    ?.confirmed
+                ) -
+                Number(
+                  b.review
+                    ?.confirmed
+                );
+
+              if (
+                comparison ===
+                0
+              ) {
+                comparison =
+                  a.validation
+                    .pending -
+                  b.validation
+                    .pending;
+              }
+
               break;
           }
 
@@ -1248,6 +1735,7 @@ export default function Inspections() {
       period,
       sortKey,
       sortDirection,
+      mode,
     ]);
 
   /* =======================================================
@@ -1348,16 +1836,220 @@ export default function Inspections() {
       sortKey !== column
     ) {
       return (
-        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+        <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" />
       );
     }
 
     return sortDirection ===
       "asc" ? (
-      <ChevronUp className="h-3.5 w-3.5" />
+      <ChevronUp className="h-3.5 w-3.5 shrink-0" />
     ) : (
-      <ChevronDown className="h-3.5 w-3.5" />
+      <ChevronDown className="h-3.5 w-3.5 shrink-0" />
     );
+  }
+
+  /* =======================================================
+   * COLUMNAS DEL RESUMEN
+   * ======================================================= */
+
+  function hideSummaryColumn(
+    key: SummaryColumnKey
+  ) {
+    setHiddenColumns(
+      current => ({
+        ...current,
+        [key]: true,
+      })
+    );
+  }
+
+  function restoreSummaryColumn(
+    key: SummaryColumnKey
+  ) {
+    setHiddenColumns(
+      current => ({
+        ...current,
+        [key]: false,
+      })
+    );
+  }
+
+  function reduceAllSummaryColumns() {
+    setColumnWidths(
+      {
+        code:
+          SUMMARY_MIN_WIDTHS.code,
+        name:
+          SUMMARY_MIN_WIDTHS.name,
+        status:
+          SUMMARY_MIN_WIDTHS.status,
+        score:
+          SUMMARY_MIN_WIDTHS.score,
+        apto:
+          SUMMARY_MIN_WIDTHS.apto,
+        condicionado:
+          SUMMARY_MIN_WIDTHS.condicionado,
+        noApto:
+          SUMMARY_MIN_WIDTHS.noApto,
+        pendiente:
+          SUMMARY_MIN_WIDTHS.pendiente,
+        confirmation:
+          SUMMARY_MIN_WIDTHS.confirmation,
+      }
+    );
+  }
+
+  function startColumnResize(
+    key: SummaryColumnKey,
+    event: ReactMouseEvent
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX =
+      event.clientX;
+
+    const startWidth =
+      columnWidths[key];
+
+    const handleMouseMove =
+      (
+        moveEvent: MouseEvent
+      ) => {
+        const delta =
+          moveEvent.clientX -
+          startX;
+
+        const nextWidth =
+          Math.max(
+            SUMMARY_MIN_WIDTHS[
+              key
+            ],
+            startWidth +
+              delta
+          );
+
+        setColumnWidths(
+          current => ({
+            ...current,
+            [key]:
+              nextWidth,
+          })
+        );
+      };
+
+    const handleMouseUp =
+      () => {
+        window.removeEventListener(
+          "mousemove",
+          handleMouseMove
+        );
+
+        window.removeEventListener(
+          "mouseup",
+          handleMouseUp
+        );
+      };
+
+    window.addEventListener(
+      "mousemove",
+      handleMouseMove
+    );
+
+    window.addEventListener(
+      "mouseup",
+      handleMouseUp
+    );
+  }
+
+  const visibleSummaryColumns =
+    SUMMARY_COLUMNS.filter(
+      column =>
+        !hiddenColumns[
+          column.key
+        ]
+    );
+
+  const hiddenSummaryColumns =
+    SUMMARY_COLUMNS.filter(
+      column =>
+        hiddenColumns[
+          column.key
+        ]
+    );
+
+  /* =======================================================
+   * VALIDACIÓN DEL CENTRO
+   * ======================================================= */
+
+  function validateCenter(
+    row: (typeof rows)[number]
+  ) {
+    if (state.role !== "ADMIN" || row.review?.confirmed) return;
+
+    // Solo SIN INFORMACIÓN bloquea la validación.
+    if (!row.validation.allReviewed) return;
+
+    const key = reviewKey(row.c.id, year, period);
+    const currentReview = state.reviews?.[key];
+    if (!currentReview) return;
+
+    const nextReview = {
+      ...currentReview,
+      confirmed: true,
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: "Administrador",
+    };
+
+    const nextState: V1State = {
+      ...state,
+      reviews: {
+        ...state.reviews,
+        [key]: nextReview,
+      },
+    };
+
+    saveState(nextState);
+    setState(nextState);
+    window.dispatchEvent(new Event("stl-state-change"));
+  }
+
+  function unvalidateCenter(
+    row: (typeof rows)[number]
+  ) {
+    if (state.role !== "ADMIN" || !row.review?.confirmed) return;
+
+    const reason = window.prompt(
+      "Indique el motivo por el que se desvalida el centro:"
+    );
+
+    if (!reason || !reason.trim()) return;
+
+    const key = reviewKey(row.c.id, year, period);
+    const currentReview = state.reviews?.[key];
+    if (!currentReview) return;
+
+    const nextReview: any = {
+      ...currentReview,
+      confirmed: false,
+      confirmedAt: undefined,
+      confirmedBy: undefined,
+      unconfirmedAt: new Date().toISOString(),
+      unconfirmedBy: "Administrador",
+      unconfirmationReason: reason.trim(),
+    };
+
+    const nextState: V1State = {
+      ...state,
+      reviews: {
+        ...state.reviews,
+        [key]: nextReview,
+      },
+    };
+
+    saveState(nextState);
+    setState(nextState);
+    window.dispatchEvent(new Event("stl-state-change"));
   }
 
   /* =======================================================
@@ -1517,6 +2209,7 @@ export default function Inspections() {
             </option>
           </Select>
 
+          {/* ÚNICO selector de categoría */}
           {mode ===
             "matrix" && (
             <Select
@@ -1590,64 +2283,69 @@ export default function Inspections() {
 
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-slate-100 pt-4">
+        {/* ===================================================
+         * FECHAS SOLO EN MATRIZ
+         * =================================================== */}
 
-          <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
-            Fechas en matriz
-          </div>
+        {mode ===
+          "matrix" && (
+          <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-slate-100 pt-4">
 
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <div className="text-xs font-bold text-slate-400">
+              Fechas en matriz
+            </div>
 
-            <input
-              type="checkbox"
-              checked={
-                showLast
-              }
-              onChange={event =>
-                setShowLast(
-                  event.target.checked
-                )
-              }
-              className="h-4 w-4 rounded border-slate-300"
-            />
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
 
-            <span>
-              Última revisión
-            </span>
+              <input
+                type="checkbox"
+                checked={
+                  showLast
+                }
+                onChange={event =>
+                  setShowLast(
+                    event.target.checked
+                  )
+                }
+                className="h-4 w-4 rounded border-slate-300"
+              />
 
-          </label>
+              <span>
+                Última revisión
+              </span>
 
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            </label>
 
-            <input
-              type="checkbox"
-              checked={
-                showNext
-              }
-              onChange={event =>
-                setShowNext(
-                  event.target.checked
-                )
-              }
-              className="h-4 w-4 rounded border-slate-300"
-            />
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
 
-            <span>
-              Próxima revisión
-            </span>
+              <input
+                type="checkbox"
+                checked={
+                  showNext
+                }
+                onChange={event =>
+                  setShowNext(
+                    event.target.checked
+                  )
+                }
+                className="h-4 w-4 rounded border-slate-300"
+              />
 
-          </label>
+              <span>
+                Próxima revisión
+              </span>
 
-          {mode ===
-            "matrix" &&
-            (showLast ||
+            </label>
+
+            {(showLast ||
               showNext) && (
               <div className="text-xs text-slate-400">
                 Formato de fecha: MM/AA
               </div>
             )}
 
-        </div>
+          </div>
+        )}
 
       </Card>
 
@@ -1659,7 +2357,7 @@ export default function Inspections() {
         "summary" && (
         <Card className="p-6 summary-report">
 
-          <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
 
             <div>
               <div className="text-lg font-black text-slate-800">
@@ -1673,148 +2371,208 @@ export default function Inspections() {
               </div>
             </div>
 
-            <div className="no-print">
+            <div className="flex flex-wrap items-center gap-2 no-print">
+
               <Badge>
                 {
                   rows.length
                 }{" "}
                 centros
               </Badge>
+
+              <button
+                type="button"
+                onClick={
+                  reduceAllSummaryColumns
+                }
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                title="Reducir todas las columnas al mínimo"
+              >
+                <Minus className="h-3.5 w-3.5" />
+                Reducir columnas
+              </button>
+
+              {hiddenSummaryColumns.length >
+                0 && (
+                <div className="group relative">
+
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                    title="Mostrar columnas ocultas"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Mostrar columnas
+                  </button>
+
+                  <div className="invisible absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-2 opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100">
+
+                    {hiddenSummaryColumns.map(
+                      column => (
+                        <button
+                          key={
+                            column.key
+                          }
+                          type="button"
+                          onClick={() =>
+                            restoreSummaryColumn(
+                              column.key
+                            )
+                          }
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50"
+                        >
+                          <span>
+                            {
+                              column.label
+                            }
+                          </span>
+
+                          <Eye className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
+                      )
+                    )}
+
+                  </div>
+
+                </div>
+              )}
+
             </div>
 
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-200">
 
-            <table className="w-full min-w-[1100px] text-sm">
+            <table
+              className="text-sm"
+              style={{
+                minWidth:
+                  visibleSummaryColumns.reduce(
+                    (
+                      total,
+                      column
+                    ) =>
+                      total +
+                      columnWidths[
+                        column.key
+                      ],
+                    0
+                  ),
+              }}
+            >
 
-              <thead className="bg-[#002A54] text-left text-xs font-bold uppercase tracking-wide text-white print-table-header">
+              <thead className="bg-[#002A54] text-left text-xs font-bold text-white print-table-header">
 
                 <tr>
 
-                  <th className="w-28 px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "code"
-                        )
-                      }
-                      className="flex items-center gap-1"
-                    >
-                      Nº centro
-                      <SortIcon column="code" />
-                    </button>
-                  </th>
+                  {visibleSummaryColumns.map(
+                    column => {
+                      const width =
+                        columnWidths[
+                          column.key
+                        ];
 
-                  <th className="min-w-[240px] px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "name"
-                        )
-                      }
-                      className="flex items-center gap-1"
-                    >
-                      Centro
-                      <SortIcon column="name" />
-                    </button>
-                  </th>
+                      const sort =
+                        column.sortKey;
 
-                  <th className="w-36 px-3 py-3">
-                    Estado
-                  </th>
+                      return (
+                        <th
+                          key={
+                            column.key
+                          }
+                          style={{
+                            width: `${width}px`,
+                            minWidth: `${width}px`,
+                          }}
+                          className={`relative border-r border-white/10 px-2 py-2 ${
+                            column.key ===
+                              "apto" ||
+                            column.key ===
+                              "condicionado" ||
+                            column.key ===
+                              "noApto" ||
+                            column.key ===
+                              "pendiente"
+                              ? "text-center"
+                              : ""
+                          }`}
+                        >
 
-                  <th className="w-32 px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "score"
-                        )
-                      }
-                      className="flex items-center gap-1"
-                    >
-                      Cumplimiento
-                      <SortIcon column="score" />
-                    </button>
-                  </th>
+                          <div
+                            className={`flex min-h-[28px] items-center gap-1 ${
+                              column.key ===
+                                "apto" ||
+                              column.key ===
+                                "condicionado" ||
+                              column.key ===
+                                "noApto" ||
+                              column.key ===
+                                "pendiente"
+                                ? "justify-center"
+                                : "justify-between"
+                            }`}
+                          >
 
-                  <th className="w-20 px-3 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "apto"
-                        )
-                      }
-                      className="mx-auto flex items-center gap-1"
-                    >
-                      APTO
-                      <SortIcon column="apto" />
-                    </button>
-                  </th>
+                            {sort ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleSort(
+                                    sort
+                                  )
+                                }
+                                className="flex min-w-0 items-center gap-1 text-left"
+                              >
+                                <span className="truncate">
+                                  {
+                                    column.label
+                                  }
+                                </span>
 
-                  <th className="w-24 px-3 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "condicionado"
-                        )
-                      }
-                      className="mx-auto flex items-center gap-1"
-                    >
-                      COND.
-                      <SortIcon column="condicionado" />
-                    </button>
-                  </th>
+                                <SortIcon
+                                  column={
+                                    sort
+                                  }
+                                />
+                              </button>
+                            ) : (
+                              <span className="truncate">
+                                {
+                                  column.label
+                                }
+                              </span>
+                            )}
 
-                  <th className="w-24 px-3 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "noApto"
-                        )
-                      }
-                      className="mx-auto flex items-center gap-1"
-                    >
-                      NO APTO
-                      <SortIcon column="noApto" />
-                    </button>
-                  </th>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                hideSummaryColumn(
+                                  column.key
+                                )
+                              }
+                              className="no-print ml-auto shrink-0 rounded p-1 text-white/60 transition hover:bg-white/10 hover:text-white"
+                              title={`Ocultar ${column.label}`}
+                            >
+                              <EyeOff className="h-3 w-3" />
+                            </button>
 
-                  <th className="w-24 px-3 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "pendiente"
-                        )
-                      }
-                      className="mx-auto flex items-center gap-1"
-                    >
-                      PEND.
-                      <SortIcon column="pendiente" />
-                    </button>
-                  </th>
+                          </div>
 
-                  <th className="w-36 px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSort(
-                          "confirmation"
-                        )
-                      }
-                      className="flex items-center gap-1"
-                    >
-                      Confirmación
-                      <SortIcon column="confirmation" />
-                    </button>
-                  </th>
+                          <span
+                            onMouseDown={event =>
+                              startColumnResize(
+                                column.key,
+                                event
+                              )
+                            }
+                            className="no-print absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-white/30"
+                            title="Arrastrar para cambiar el ancho"
+                          />
+
+                        </th>
+                      );
+                    }
+                  )}
 
                 </tr>
 
@@ -1825,9 +2583,18 @@ export default function Inspections() {
                 {rows.map(
                   row => {
                     const pending =
-                      row
-                        .summary
-                        .pendingConfirmation;
+                      row.validation
+                        .pending;
+
+                    const overallStatus =
+                      row.validation
+                        .overallStatus;
+
+                    const confirmed =
+                      Boolean(
+                        row.review
+                          ?.confirmed
+                      );
 
                     return (
                       <tr
@@ -1837,122 +2604,278 @@ export default function Inspections() {
                         className="border-t border-slate-100 hover:bg-slate-50"
                       >
 
-                        <td className="px-3 py-3 align-middle font-mono text-sm font-black text-slate-700">
-                          {
-                            row.c
-                              .code
-                          }
-                        </td>
+                        {visibleSummaryColumns.map(
+                          column => {
+                            switch (
+                              column.key
+                            ) {
+                              case "code":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.code}px`,
+                                      minWidth: `${columnWidths.code}px`,
+                                    }}
+                                    className="px-2 py-1.5 align-middle font-mono text-xs font-black text-slate-700"
+                                  >
+                                    {
+                                      formatCenterCode(
+                                        row.c.code
+                                      )
+                                    }
+                                  </td>
+                                );
 
-                        <td className="px-3 py-3 align-middle">
+                              case "name":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.name}px`,
+                                      minWidth: `${columnWidths.name}px`,
+                                    }}
+                                    className="px-2 py-1.5 align-middle"
+                                  >
+                                    <Link
+                                      href={`/centers/${encodeURIComponent(
+                                        row.c.id
+                                      )}`}
+                                      className="font-bold uppercase text-slate-800 hover:text-[#002A54] hover:underline"
+                                    >
+                                      {
+                                        row.c
+                                          .name
+                                      }
+                                    </Link>
+                                  </td>
+                                );
 
-                          <Link
-                            href={`/centers/${encodeURIComponent(
-                              row.c.id
-                            )}`}
-                            className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
-                          >
-                            {
-                              row.c
-                                .name
+                              case "status":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.status}px`,
+                                      minWidth: `${columnWidths.status}px`,
+                                    }}
+                                    className="px-2 py-1.5 align-middle"
+                                  >
+                                    {confirmed ? (
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <Badge tone="success">
+                                          CONFIRMADA
+                                        </Badge>
+
+                                        <span className="text-[11px] font-semibold text-slate-600">
+                                          ·{" "}
+                                          {
+                                            formatOverallStatus(
+                                              overallStatus
+                                            )
+                                          }
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <Badge tone="warning">
+                                        EN CURSO
+                                      </Badge>
+                                    )}
+                                  </td>
+                                );
+
+                              case "score":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.score}px`,
+                                      minWidth: `${columnWidths.score}px`,
+                                    }}
+                                    className="px-2 py-1.5 align-middle"
+                                  >
+                                    <span className="text-base font-black">
+                                      {
+                                        row
+                                          .summary
+                                          .score
+                                      }
+                                      %
+                                    </span>
+                                  </td>
+                                );
+
+                              case "apto":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.apto}px`,
+                                      minWidth: `${columnWidths.apto}px`,
+                                    }}
+                                    className="px-2 py-1.5 text-center align-middle font-semibold text-emerald-700"
+                                  >
+                                    {
+                                      row
+                                        .summary
+                                        .counts[
+                                        "APTO"
+                                      ]
+                                    }
+                                  </td>
+                                );
+
+                              case "condicionado":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.condicionado}px`,
+                                      minWidth: `${columnWidths.condicionado}px`,
+                                    }}
+                                    className="px-2 py-1.5 text-center align-middle font-semibold text-amber-700"
+                                  >
+                                    {
+                                      row
+                                        .summary
+                                        .counts[
+                                        "APTO CONDICIONADO"
+                                      ]
+                                    }
+                                  </td>
+                                );
+
+                              case "noApto":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.noApto}px`,
+                                      minWidth: `${columnWidths.noApto}px`,
+                                    }}
+                                    className="px-2 py-1.5 text-center align-middle font-semibold text-red-700"
+                                  >
+                                    {
+                                      row
+                                        .summary
+                                        .counts[
+                                        "NO APTO"
+                                      ]
+                                    }
+                                  </td>
+                                );
+
+                              case "pendiente":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.pendiente}px`,
+                                      minWidth: `${columnWidths.pendiente}px`,
+                                    }}
+                                    className="px-2 py-1.5 text-center align-middle font-semibold text-orange-700"
+                                  >
+                                    {
+                                      row
+                                        .summary
+                                        .counts[
+                                        "PENDIENTE"
+                                      ] +
+                                      row
+                                        .summary
+                                        .counts[
+                                        "SIN INFORMACIÓN"
+                                      ]
+                                    }
+                                  </td>
+                                );
+
+                              case "confirmation":
+                                return (
+                                  <td
+                                    key={
+                                      column.key
+                                    }
+                                    style={{
+                                      width: `${columnWidths.confirmation}px`,
+                                      minWidth: `${columnWidths.confirmation}px`,
+                                    }}
+                                    className="px-2 py-1.5 align-middle"
+                                  >
+
+                                    {confirmed ? (
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge tone="success">Validada</Badge>
+                                        <span className="text-[11px] text-slate-500">
+                                          {formatOverallStatus(overallStatus)}
+                                        </span>
+                                        <Link
+                                          href={`/centers/${encodeURIComponent(row.c.id)}/certificate?year=${year}&period=${period}`}
+                                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-[#002A54] hover:bg-slate-50"
+                                          title="Ver / exportar certificado"
+                                          aria-label="Ver / exportar certificado"
+                                        >
+                                          <FileCheck2 className="h-4 w-4" />
+                                        </Link>
+                                        {state.role === "ADMIN" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => unvalidateCenter(row)}
+                                            className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-100"
+                                          >
+                                            Desvalidar
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : row.validation.allReviewed && state.role === "ADMIN" ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => validateCenter(row)}
+                                        className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                                      >
+                                        Validar centro
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        disabled
+                                        className="inline-flex cursor-not-allowed items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-400"
+                                        title={
+                                          state.role !== "ADMIN"
+                                            ? "Solo un administrador puede validar el centro."
+                                            : "El centro tiene elementos SIN INFORMACIÓN."
+                                        }
+                                      >
+                                        {state.role !== "ADMIN"
+                                          ? "Validación restringida"
+                                          : `${pending} sin información`}
+                                      </button>
+                                    )}
+
+                                  </td>
+                                );
+
+                              default:
+                                return null;
                             }
-                          </Link>
-
-                        </td>
-
-                        <td className="px-3 py-3 align-middle">
-
-                          {row.review
-                            ?.confirmed ? (
-                            <Badge tone="success">
-                              CONFIRMADA
-                            </Badge>
-                          ) : (
-                            <Badge tone="warning">
-                              EN CURSO
-                            </Badge>
-                          )}
-
-                        </td>
-
-                        <td className="px-3 py-3 align-middle">
-
-                          <span className="text-lg font-black">
-                            {
-                              row
-                                .summary
-                                .score
-                            }
-                            %
-                          </span>
-
-                        </td>
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-emerald-700">
-                          {
-                            row
-                              .summary
-                              .counts[
-                              "APTO"
-                            ]
                           }
-                        </td>
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-amber-700">
-                          {
-                            row
-                              .summary
-                              .counts[
-                              "APTO CONDICIONADO"
-                            ]
-                          }
-                        </td>
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-red-700">
-                          {
-                            row
-                              .summary
-                              .counts[
-                              "NO APTO"
-                            ]
-                          }
-                        </td>
-
-                        <td className="px-3 py-3 text-center align-middle font-semibold text-orange-700">
-                          {
-                            row
-                              .summary
-                              .counts[
-                              "PENDIENTE"
-                            ]
-                          }{" "}
-                          +
-                          {
-                            row
-                              .summary
-                              .counts[
-                              "SIN INFORMACIÓN"
-                            ]
-                          }
-                        </td>
-
-                        <td className="px-3 py-3 align-middle">
-
-                          {pending ===
-                          0 ? (
-                            <Badge tone="success">
-                              Completa
-                            </Badge>
-                          ) : (
-                            <Badge tone="warning">
-                              {
-                                pending
-                              }{" "}
-                              pendientes
-                            </Badge>
-                          )}
-
-                        </td>
+                        )}
 
                       </tr>
                     );
@@ -1964,9 +2887,9 @@ export default function Inspections() {
                   <tr>
                     <td
                       colSpan={
-                        9
+                        visibleSummaryColumns.length
                       }
-                      className="px-6 py-12 text-center text-sm text-slate-400"
+                      className="px-6 py-10 text-center text-sm text-slate-400"
                     >
                       No hay centros que coincidan con los filtros seleccionados.
                     </td>
@@ -1979,7 +2902,7 @@ export default function Inspections() {
 
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
 
             <span>
               País:{" "}
@@ -2065,27 +2988,27 @@ export default function Inspections() {
 
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-emerald-500" />
-              APTO
+              Apto
             </div>
 
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-amber-500" />
-              APTO CONDICIONADO
+              Apto condicionado
             </div>
 
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-red-500" />
-              NO APTO
+              No apto
             </div>
 
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-orange-500" />
-              PENDIENTE
+              Pendiente
             </div>
 
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-slate-400" />
-              SIN INFORMACIÓN
+              Sin información
             </div>
 
             <div className="ml-auto text-slate-400">
@@ -2094,7 +3017,11 @@ export default function Inspections() {
 
           </div>
 
-          <div className="overflow-auto rounded-2xl border border-slate-200">
+          {/* =================================================
+           * ÚNICA ZONA CON DESPLAZAMIENTO HORIZONTAL
+           * ================================================= */}
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
 
             <table className="inspection-matrix min-w-max border-collapse text-xs">
 
@@ -2104,7 +3031,7 @@ export default function Inspections() {
 
                   <th
                     rowSpan={2}
-                    className="matrix-fixed-header sticky left-0 z-30 w-24 min-w-24 border-r border-white/20 bg-[#002A54] px-2 py-3 text-center text-[10px] font-bold uppercase tracking-wide"
+                    className="matrix-fixed-header sticky left-0 z-30 w-24 min-w-24 border-r border-white/20 bg-[#002A54] px-2 py-3 text-center text-[10px] font-bold"
                   >
                     Nº
                     <br />
@@ -2113,7 +3040,7 @@ export default function Inspections() {
 
                   <th
                     rowSpan={2}
-                    className="matrix-fixed-header sticky left-24 z-30 w-48 min-w-48 border-r border-white/20 bg-[#002A54] px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide"
+                    className="matrix-fixed-header sticky left-24 z-30 w-48 min-w-48 border-r border-white/20 bg-[#002A54] px-3 py-3 text-left text-[10px] font-bold"
                   >
                     Centro
                   </th>
@@ -2133,15 +3060,10 @@ export default function Inspections() {
 
                           <div className="matrix-vertical-text">
                             {
-                              item.code
-                            }{" "}
-                            ·{" "}
-                            {
-                              item.installation
+                              getMatrixShortTitle(
+                                item
+                              )
                             }
-                            {item.category
-                              ? ` · ${item.category}`
-                              : ""}
                           </div>
 
                         </div>
@@ -2181,7 +3103,7 @@ export default function Inspections() {
                       className="border-t border-slate-200"
                     >
 
-                      <td className="matrix-fixed-cell sticky left-0 z-20 w-24 min-w-24 border-r border-slate-200 bg-white px-2 py-3 text-center font-mono text-xs font-black text-slate-700">
+                      <td className="matrix-fixed-cell sticky left-0 z-20 w-24 min-w-24 border-r border-slate-200 bg-white px-2 py-2 text-center font-mono text-xs font-black text-slate-700">
 
                         <Link
                           href={`/centers/${encodeURIComponent(
@@ -2190,20 +3112,21 @@ export default function Inspections() {
                           className="hover:text-[#002A54] hover:underline"
                         >
                           {
-                            row.c
-                              .code
+                            formatCenterCode(
+                              row.c.code
+                            )
                           }
                         </Link>
 
                       </td>
 
-                      <td className="matrix-fixed-cell sticky left-24 z-20 w-48 min-w-48 border-r border-slate-200 bg-white px-3 py-3">
+                      <td className="matrix-fixed-cell sticky left-24 z-20 w-48 min-w-48 border-r border-slate-200 bg-white px-3 py-2">
 
                         <Link
                           href={`/centers/${encodeURIComponent(
                             row.c.id
                           )}`}
-                          className="font-bold text-slate-800 hover:text-[#002A54] hover:underline"
+                          className="font-bold uppercase text-slate-800 hover:text-[#002A54] hover:underline"
                         >
                           {
                             row.c
@@ -2232,7 +3155,7 @@ export default function Inspections() {
                                 key={
                                   item.id
                                 }
-                                className="w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-1 py-2 text-center align-middle"
+                                className="w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-1 py-1 text-center align-middle"
                                 title="Elemento no activo"
                               >
                                 <span className="text-lg font-light text-slate-300">
@@ -2261,7 +3184,8 @@ export default function Inspections() {
 
                           const hasNext =
                             Boolean(
-                              cell.nextReview
+                              cell
+                                .nextReview
                             );
 
                           return (
@@ -2273,7 +3197,7 @@ export default function Inspections() {
                               title={`${item.code} · ${item.installation}`}
                             >
 
-                              <div className="flex min-h-[70px] flex-col items-center justify-center gap-1">
+                              <div className="flex min-h-[64px] flex-col items-center justify-center gap-1">
 
                                 <span
                                   className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black ${statusVisual.badge}`}
@@ -2316,7 +3240,8 @@ export default function Inspections() {
                                     P:{" "}
                                     {hasNext
                                       ? formatMonthYear(
-                                          cell.nextReview
+                                          cell
+                                            .nextReview
                                         )
                                       : "—"}
                                   </div>
@@ -2418,6 +3343,7 @@ export default function Inspections() {
           font-weight: 700;
           letter-spacing: 0.02em;
           max-height: 190px;
+          max-width: 48px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -2434,6 +3360,15 @@ export default function Inspections() {
 
         .inspection-matrix thead {
           display: table-header-group;
+        }
+
+        .summary-report table {
+          table-layout: fixed;
+        }
+
+        .summary-report th,
+        .summary-report td {
+          box-sizing: border-box;
         }
 
         @media print {
