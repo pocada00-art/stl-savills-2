@@ -13,6 +13,8 @@ import {
   X,
   Upload,
   Image as ImageIcon,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
@@ -62,6 +64,9 @@ type CenterListItem = {
   manager?: string | null;
   stl?: string;
   status?: string;
+  archived?: boolean;
+  archiveReason?: string;
+  archivedAt?: string;
 };
 
 function formatCenterCode(value: string | number | undefined | null) {
@@ -190,6 +195,9 @@ export default function Centers() {
   const [saving, setSaving] =
     useState(false);
 
+  const [showArchived, setShowArchived] =
+    useState(false);
+
   /*
    * Cargamos el estado persistido.
    *
@@ -293,6 +301,12 @@ export default function Centers() {
         status:
           overrides.status ??
           c.status,
+        archived:
+          (overrides as any).archived === true,
+        archiveReason:
+          (overrides as any).archiveReason,
+        archivedAt:
+          (overrides as any).archivedAt,
       });
     });
 
@@ -352,6 +366,12 @@ export default function Centers() {
           status:
             center.status ||
             "Activo",
+          archived:
+            (center as any).archived === true,
+          archiveReason:
+            (center as any).archiveReason,
+          archivedAt:
+            (center as any).archivedAt,
         });
       }
     );
@@ -382,9 +402,13 @@ export default function Centers() {
             q.toLowerCase()
           );
 
+        const matchesArchived =
+          showArchived || !c.archived;
+
         return (
           matchesCountry &&
-          matchesSearch
+          matchesSearch &&
+          matchesArchived
         );
       });
 
@@ -426,6 +450,7 @@ export default function Centers() {
     effectiveCountry,
     sort,
     state.centers,
+    showArchived,
   ]);
 
   /* =======================================================
@@ -554,6 +579,71 @@ export default function Centers() {
           id: center.id,
           status: nextStatus,
         },
+      },
+    };
+
+    setState(nextState);
+    saveState(nextState);
+  }
+
+  function archiveCenter(center: CenterListItem) {
+    if (role !== "ADMIN") return;
+
+    const reason = window.prompt(
+      `ARCHIVAR CENTRO ${formatCenterCode(center.code)} - ${center.name}\n\nIndique el motivo de la eliminación/archivo:`
+    );
+
+    if (!reason || !reason.trim()) return;
+
+    const confirmed = window.confirm(
+      `ATENCIÓN: el centro se retirará del listado activo y quedará archivado con todo su histórico.\n\nMotivo: ${reason.trim()}\n\n¿Confirma la operación?`
+    );
+
+    if (!confirmed) return;
+
+    const currentOverride =
+      (state.centers?.[center.id] || {}) as CenterOverride;
+
+    const nextState: V1State = {
+      ...state,
+      centers: {
+        ...state.centers,
+        [center.id]: {
+          ...currentOverride,
+          id: center.id,
+          status: "Archivado",
+          ...( {
+            archived: true,
+            archiveReason: reason.trim(),
+            archivedAt: new Date().toISOString(),
+          } as any ),
+        },
+      },
+    };
+
+    setState(nextState);
+    saveState(nextState);
+  }
+
+  function restoreCenter(center: CenterListItem) {
+    if (role !== "ADMIN") return;
+
+    if (!window.confirm(`¿Desea restaurar el centro ${formatCenterCode(center.code)} - ${center.name}?`)) return;
+
+    const currentOverride =
+      (state.centers?.[center.id] || {}) as any;
+
+    const nextOverride = { ...currentOverride };
+    delete nextOverride.archived;
+    delete nextOverride.archiveReason;
+    delete nextOverride.archivedAt;
+    nextOverride.status = "Activo";
+
+    const nextState: V1State = {
+      ...state,
+      centers: {
+        ...state.centers,
+        [center.id]: nextOverride,
       },
     };
 
@@ -1008,6 +1098,16 @@ export default function Centers() {
               </div>
             )}
 
+          {role === "ADMIN" && (
+            <button
+              type="button"
+              onClick={() => setShowArchived(v => !v)}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${showArchived ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              {showArchived ? "Ocultar archivados" : "Mostrar archivados"}
+            </button>
+          )}
+
         </div>
 
       </Card>
@@ -1058,6 +1158,10 @@ export default function Centers() {
                 "status",
                 "Estado"
               )}
+
+              <th className="px-4 py-3 text-left">
+                Eliminar
+              </th>
             </tr>
           </thead>
 
@@ -1156,6 +1260,32 @@ export default function Centers() {
                   </button>
                 </td>
 
+                <td>
+                  {role === "ADMIN" && (
+                    c.archived ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); restoreCenter(c); }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                        title="Restaurar centro archivado"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Restaurar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); archiveCenter(c); }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100"
+                        title="Eliminar y archivar centro"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar
+                      </button>
+                    )
+                  )}
+                </td>
+
               </tr>
 
             ))}
@@ -1164,7 +1294,7 @@ export default function Centers() {
               <tr>
 
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-6 py-12 text-center text-sm text-slate-400"
                 >
                   No hay centros que

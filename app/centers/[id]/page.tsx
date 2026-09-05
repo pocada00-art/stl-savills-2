@@ -29,7 +29,6 @@ import {
   ClipboardCheck,
   BarChart3,
   CircleAlert,
-  SlidersHorizontal,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -100,8 +99,8 @@ type TableColumnKey =
 const TABLE_COLUMN_LABELS: Record<TableColumnKey, string> = {
   code: "Código",
   type: "Tipo",
-  installation: "Instalación",
   description: "Descripción",
+  installation: "Instalación",
   action: "Actuación",
   frequency: "Frecuencia",
   equipmentId: "ID equipo",
@@ -1037,11 +1036,11 @@ export default function CenterDetail() {
   ] =
     useState(false);
 
-  const [
-    addElementSearch,
-    setAddElementSearch,
-  ] =
-    useState("");
+  const [selectedDescription, setSelectedDescription] = useState("");
+
+  const [selectedInstallation, setSelectedInstallation] = useState("");
+
+  const [selectedAction, setSelectedAction] = useState("");
 
   const [
     openHistory,
@@ -1062,8 +1061,6 @@ export default function CenterDetail() {
   ] =
     useState(true);
 
-  const [showColumnOptions, setShowColumnOptions] =
-    useState(false);
 
   const [quantityDrafts, setQuantityDrafts] =
     useState<Record<string, string>>({});
@@ -1514,31 +1511,20 @@ export default function CenterDetail() {
     return addDisplayCodes(centerItems as any[], catalog as any[]);
   }, [centerItems, catalog]);
 
-  const selectableItems = useMemo(() => {
-    const unique = new Map<string, any>();
+  const descriptionOptions = useMemo(() => Array.from(new Set(catalogItems.map((item: any) => String(item.category ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })), [catalogItems]);
 
-    catalogItems.forEach((item: any) => {
-      const baseCode = String(item.baseCode ?? item.code ?? "").trim();
-      const key = `${item.actionCode ?? baseCode}|${item.installation}|${item.action}`;
-      if (!unique.has(key)) unique.set(key, item);
-    });
+  const installationOptions = useMemo(() => Array.from(new Set(catalogItems.filter((item: any) => !selectedDescription || item.category === selectedDescription).map((item: any) => String(item.installation ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })), [catalogItems, selectedDescription]);
 
-    return Array.from(unique.values()).filter(
-      (x: any) =>
-        `${x.baseCode} ${sentenceCase(x.installation)} ${sentenceCase(x.action)} ${x.category}`
-          .toLowerCase()
-          .includes(addElementSearch.toLowerCase())
-    );
-  }, [catalogItems, addElementSearch]);
+  const actionOptions = useMemo(() => Array.from(new Set(catalogItems.filter((item: any) => (!selectedDescription || item.category === selectedDescription) && (!selectedInstallation || item.installation === selectedInstallation)).map((item: any) => String(item.action ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })), [catalogItems, selectedDescription, selectedInstallation]);
 
-  const elementCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    centerItems.forEach((item: any) => {
-      const baseCode = String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim();
-      counts.set(baseCode, (counts.get(baseCode) || 0) + 1);
-    });
-    return counts;
-  }, [centerItems]);
+  const selectedTemplate = useMemo(() => catalogItems.find((item: any) => item.category === selectedDescription && item.installation === selectedInstallation && item.action === selectedAction) as any, [catalogItems, selectedDescription, selectedInstallation, selectedAction]);
+
+  const selectedActionCode = String(selectedTemplate?.actionCode ?? selectedTemplate?.baseCode ?? selectedTemplate?.code ?? "").trim();
+
+  const selectedCount = useMemo(() => {
+    if (!selectedTemplate) return 0;
+    return centerItems.filter((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === selectedActionCode && item.category === selectedDescription && item.installation === selectedInstallation && item.action === selectedAction).length;
+  }, [centerItems, selectedTemplate, selectedActionCode, selectedDescription, selectedInstallation, selectedAction]);
 
   /* -------------------------------------------------------
    * REVISIÓN
@@ -2036,6 +2022,25 @@ export default function CenterDetail() {
     }
 
     updateState(nextState);
+  }
+
+  function resetAllUnits() {
+    if (!admin || readOnly) return;
+    if (!window.confirm("ATENCIÓN: se pondrán a 0 todas las unidades configuradas en este centro. El histórico de revisiones no se eliminará. ¿Desea continuar?")) return;
+    const nextState: V1State = {
+      ...state,
+      activeItems: { ...state.activeItems, [centerId]: Object.fromEntries(catalogItems.map((item: any) => [item.id, false])) },
+      customItems: { ...(state.customItems || {}), [centerId]: [] },
+    };
+    updateState(nextState);
+    setSelectedDescription("");
+    setSelectedInstallation("");
+    setSelectedAction("");
+  }
+
+  function changeSelectedQuantity(value: number) {
+    if (!selectedTemplate || readOnly) return;
+    setElementQuantity(selectedTemplate, Math.max(0, Math.floor(value)));
   }
 
   function getItem(
@@ -2907,125 +2912,26 @@ export default function CenterDetail() {
           />
 
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setShowColumnOptions(v => !v)}
-              title="Configurar columnas"
-              aria-label="Configurar columnas"
-              className={`rounded-xl border p-2 transition ${
-                showColumnOptions
-                  ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]"
-                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={() => setShowAddElement(v => !v)}
-              title={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
-              aria-label={showAddElement ? "Ocultar añadir elementos" : "Añadir elementos"}
-              className={`rounded-xl border p-2 transition ${showAddElement ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]" : "border-slate-200 text-slate-500 hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-40`}
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            <SectionToggle
-              open={openInstallations}
-              onClick={() => setOpenInstallations(v => !v)}
-            />
+            <button type="button" onClick={reduceAllColumns} title="Reducir columnas visibles" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"><Minus className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setColumnVisibility(current => Object.fromEntries(Object.keys(current).map(key => [key, true])) as Record<TableColumnKey, boolean>)} title="Mostrar columnas ocultas" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"><Eye className="h-4 w-4" /></button>
+            {admin && <button type="button" onClick={resetAllUnits} title="Resetear todas las unidades a 0" className="rounded-xl border border-red-200 p-2 text-red-600 hover:bg-red-50"><X className="h-4 w-4" /></button>}
+            <button type="button" disabled={readOnly} onClick={() => setShowAddElement(v => !v)} title={showAddElement ? "Cerrar añadir elementos" : "Añadir elementos"} className={`rounded-xl border p-2 transition ${showAddElement ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]" : "border-slate-200 text-slate-500 hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-40`}><Plus className="h-4 w-4" /></button>
+            <SectionToggle open={openInstallations} onClick={() => setOpenInstallations(v => !v)} />
           </div>
 
         </div>
 
         {openInstallations && (
           <>
-
-            {showColumnOptions && (
-              <div className="mb-2 mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs font-bold text-slate-700">Configuración de columnas</div>
-                    <button
-                      type="button"
-                      onClick={reduceAllColumns}
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                      title="Reducir todas las columnas al mínimo"
-                    >
-                      <Minus className="h-3 w-3" />
-                      Reducir todas
-                    </button>
-                  </div>
-                  <div className="text-[10px] text-slate-400">Pulsa el título para ordenar. Arrastra el borde de cada encabezado para ajustar su ancho.</div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {(Object.keys(TABLE_COLUMN_LABELS) as TableColumnKey[]).map(column => (
-                    <div key={column} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleColumnVisibility(column)}
-                          className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700"
-                          title={columnVisibility[column] ? `Ocultar ${TABLE_COLUMN_LABELS[column] || "columna"}` : `Mostrar ${TABLE_COLUMN_LABELS[column] || "columna"}`}
-                        >
-                          {columnVisibility[column] ? <Eye className="h-3.5 w-3.5 shrink-0" /> : <EyeOff className="h-3.5 w-3.5 shrink-0" />}
-                          <span className="truncate">{TABLE_COLUMN_LABELS[column] || "Acciones"}</span>
-                        </button>
-                        <span className="shrink-0 text-[10px] font-mono text-slate-400">{columnWidths[column]} px</span>
-                      </div>
-                      {columnVisibility[column] && (
-                        <input
-                          className="mt-1 w-full"
-                          type="range"
-                          min={TABLE_COLUMN_MIN_WIDTHS[column]}
-                          max="320"
-                          step="5"
-                          value={columnWidths[column]}
-                          onChange={e => setColumnWidth(column, Number(e.target.value))}
-                          aria-label={`Ancho de ${TABLE_COLUMN_LABELS[column] || "acciones"}`}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {showAddElement && !readOnly && (
-              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-bold text-slate-800">Añadir elementos</div>
-                    <div className="text-[10px] text-slate-500">Selecciona una actuación y modifica la cantidad con −, + o escribiendo directamente el número.</div>
-                  </div>
-                  <button type="button" onClick={() => setShowAddElement(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700" title="Cerrar">
-                    <X className="h-4 w-4" />
-                  </button>
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3"><div><div className="text-sm font-bold text-slate-800">Añadir elementos</div><div className="text-[10px] text-slate-500">Descripción → Instalación → Actuación</div></div><button type="button" onClick={() => setShowAddElement(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white" title="Cerrar"><X className="h-4 w-4" /></button></div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Descripción<select value={selectedDescription} onChange={e => { setSelectedDescription(e.target.value); setSelectedInstallation(""); setSelectedAction(""); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs"><option value="">Seleccionar descripción...</option>{descriptionOptions.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Instalación<select value={selectedInstallation} disabled={!selectedDescription} onChange={e => { setSelectedInstallation(e.target.value); setSelectedAction(""); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs disabled:bg-slate-100"><option value="">Seleccionar instalación...</option>{installationOptions.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Actuación<select value={selectedAction} disabled={!selectedInstallation} onChange={e => setSelectedAction(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs disabled:bg-slate-100"><option value="">Seleccionar actuación...</option>{actionOptions.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
                 </div>
-                <div className="relative mb-2">
-                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-                  <input value={addElementSearch} onChange={e => setAddElementSearch(e.target.value)} placeholder="Buscar instalación o actuación..." className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-xs outline-none focus:border-[#002A54]" />
-                </div>
-                <div className="grid max-h-56 gap-1.5 overflow-y-auto md:grid-cols-2 xl:grid-cols-3">
-                  {selectableItems.map((x: any) => {
-                    const actionCode = String(x.actionCode ?? x.baseCode ?? x.code ?? "").trim();
-                    const count = elementCounts.get(actionCode) || 0;
-                    const last = [...centerItems].reverse().find((item: any) => String(item.actionCode ?? item.baseCode ?? item.code ?? "").trim() === actionCode);
-                    return (
-                      <div key={`${actionCode}-${x.installation}-${x.action}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold text-slate-800">{actionCode} · {x.installation}</div>
-                          <div className="truncate text-[10px] text-slate-400">{x.action || "Actuación"} · {count} elemento{count === 1 ? "" : "s"}</div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <button type="button" disabled={!last} onClick={() => last && removeElement(last.id)} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30" title="Eliminar un elemento"><Minus className="h-3 w-3" /></button>
-                          <input type="number" min="0" step="1" value={quantityDrafts[actionCode] ?? String(count)} onChange={e => setQuantityDrafts(current => ({ ...current, [actionCode]: e.target.value.replace(/\D/g, "") }))} onBlur={e => { const value = Math.max(0, Number.parseInt(e.target.value || "0", 10)); setElementQuantity(x, value); setQuantityDrafts(current => { const next = { ...current }; delete next[actionCode]; return next; }); }} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} className="h-6 w-12 rounded-md border border-slate-200 text-center text-xs font-bold text-slate-700 outline-none focus:border-[#002A54]" aria-label={`Cantidad de ${x.installation} ${x.action || ""}`} />
-                          <button type="button" onClick={() => addElement(x)} className="flex h-6 w-6 items-center justify-center rounded-md bg-[#002A54] text-white hover:bg-[#003a73]" title="Añadir un elemento"><Plus className="h-3 w-3" /></button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {selectedTemplate && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div><div className="text-xs font-bold text-slate-800">{selectedTemplate.category} · {selectedTemplate.installation} · {selectedTemplate.action}</div><div className="text-[10px] text-slate-500">Código {selectedActionCode || "—"} · {selectedCount} unidad{selectedCount === 1 ? "" : "es"}</div></div><div className="flex items-center gap-1.5"><button type="button" disabled={selectedCount <= 0} onClick={() => changeSelectedQuantity(selectedCount - 1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 hover:bg-red-50 disabled:opacity-30"><Minus className="h-4 w-4" /></button><input type="number" min="0" value={quantityDrafts[selectedActionCode] ?? String(selectedCount)} onChange={e => setQuantityDrafts(c => ({ ...c, [selectedActionCode]: e.target.value.replace(/\D/g, "") }))} onBlur={e => { changeSelectedQuantity(Number.parseInt(e.target.value || "0", 10)); setQuantityDrafts(c => { const n={...c}; delete n[selectedActionCode]; return n; }); }} className="h-8 w-16 rounded-lg border border-slate-200 text-center text-sm font-bold" /><button type="button" onClick={() => changeSelectedQuantity(selectedCount + 1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#002A54] text-white"><Plus className="h-4 w-4" /></button></div></div>}
               </div>
             )}
 
@@ -3193,16 +3099,6 @@ export default function CenterDetail() {
 
                             </td>
 
-                            <td data-column="installation" style={{
-  width: columnWidths["installation"],
-  minWidth: columnWidths["installation"],
-  display: columnVisibility["installation"] ? "table-cell" : "none",
-}}className="px-2 py-2 align-top">
-                              <div className="font-semibold leading-tight text-slate-800">
-                                {x.installation}
-                              </div>
-                            </td>
-
                             <td data-column="description" style={{
   width: columnWidths["description"],
   minWidth: columnWidths["description"],
@@ -3210,6 +3106,16 @@ export default function CenterDetail() {
 }}className="px-2 py-2 align-top text-slate-400">
                               <div className="truncate" title={x.category || ""}>
                                 {sentenceCase(x.category)}
+                              </div>
+                            </td>
+
+                            <td data-column="installation" style={{
+  width: columnWidths["installation"],
+  minWidth: columnWidths["installation"],
+  display: columnVisibility["installation"] ? "table-cell" : "none",
+}}className="px-2 py-2 align-top">
+                              <div className="font-semibold leading-tight text-slate-800">
+                                {x.installation}
                               </div>
                             </td>
 
@@ -3492,8 +3398,8 @@ export default function CenterDetail() {
                                   )
                                 }
                                 placeholder="Introducir comentario..."
-                                rows={2}
-                                className="w-40 resize-y rounded-lg border border-slate-200 px-1.5 py-1 text-xs outline-none focus:border-[#002A54] disabled:bg-slate-50"
+                                rows={1}
+                                className="h-7 w-40 resize-none overflow-hidden rounded-lg border border-slate-200 px-1.5 py-0.5 text-xs leading-5 outline-none focus:border-[#002A54] disabled:bg-slate-50"
                               />
 
                             </td>

@@ -1342,7 +1342,17 @@ return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none pr
                         "—"}
                     </td>
 
-                    <td className="px-1 py-0.5">
+                    <td className={`px-1 py-0.5 font-bold ${
+                      item.status === "APTO"
+                        ? "bg-emerald-500 text-white"
+                        : item.status === "APTO CONDICIONADO"
+                          ? "bg-amber-400 text-slate-900"
+                          : item.status === "NO APTO"
+                            ? "bg-red-500 text-white"
+                            : item.status === "PENDIENTE"
+                              ? "bg-orange-400 text-slate-900"
+                              : "bg-slate-100 text-slate-600"
+                    }`}>
                       {item.status ||
                         "SIN INFORMACIÓN"}
                     </td>
@@ -1585,10 +1595,8 @@ return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none pr
               Responsable administrador
             </div>
 
-            <div className="mt-2 border-t border-slate-300 pt-0.5 text-[8px]">
-              {administrator?.name ||
-                review?.confirmedBy ||
-                "Pendiente"}
+            <div className="mt-2 flex h-[48px] items-start rounded-md border border-slate-200 bg-white px-1.5 pt-1 text-[8px]">
+              <span>{administrator?.name || review?.confirmedBy || "Pendiente"}</span>
             </div>
 
           </div>
@@ -1599,10 +1607,8 @@ return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none pr
               Responsable gestión
             </div>
 
-            <div className="mt-2 border-t border-slate-300 pt-0.5 text-[8px]">
-              {management?.name ||
-                manager ||
-                "—"}
+            <div className="mt-2 flex h-[48px] items-start rounded-md border border-slate-200 bg-white px-1.5 pt-1 text-[8px]">
+              <span>{management?.name || manager || "—"}</span>
             </div>
 
           </div>
@@ -1613,10 +1619,8 @@ return ( <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 print:max-w-none pr
               Responsable técnico
             </div>
 
-            <div className="mt-2 border-t border-slate-300 pt-0.5 text-[8px]">
-              {technicalParticipant?.name ||
-                technical ||
-                "—"}
+            <div className="mt-2 flex h-[48px] items-start rounded-md border border-slate-200 bg-white px-1.5 pt-1 text-[8px]">
+              <span>{technicalParticipant?.name || technical || "—"}</span>
             </div>
 
           </div>
