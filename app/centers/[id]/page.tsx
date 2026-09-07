@@ -31,6 +31,22 @@ import {
   CircleAlert,
   Eye,
   EyeOff,
+  RotateCcw,
+  RadioTower,
+  DoorOpen,
+  Camera,
+  Bug,
+  Sun,
+  Fuel,
+  BatteryCharging,
+  Anchor,
+  Network,
+  Wrench,
+  ShieldAlert,
+  Gauge,
+  TriangleAlert,
+  ClipboardList,
+  Handshake,
 } from "lucide-react";
 
 import { demo } from "@/lib/data";
@@ -162,95 +178,269 @@ function getInstallationVisual(
   wrapper: string;
   icon: string;
 } {
-  const value =
-    `${installation} ${category}`.toLowerCase();
+  /*
+   * El icono se determina prioritariamente por la DESCRIPCIÓN
+   * (categoría), que es el nivel que identifica el tipo de
+   * instalación en el catálogo de ST SAVILLS.
+   *
+   * Si una instalación no coincide exactamente con una de las
+   * descripciones previstas, se aplican reglas secundarias sobre
+   * instalación y categoría para mantener siempre un icono útil.
+   */
+  const value = `${category} ${installation}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
+  const visual = (
+    Icon: IconComponent,
+    wrapper: string,
+    icon: string
+  ) => ({ Icon, wrapper, icon });
+
+  // 01 — APARATOS ELEVADORES
   if (
+    value.includes("aparatos elevadores") ||
     value.includes("ascensor") ||
     value.includes("montacarga") ||
     value.includes("elevador")
   ) {
-    return {
-      Icon: Building2,
-      wrapper:
-        "bg-blue-50 border-blue-100",
-      icon: "text-blue-600",
-    };
+    return visual(Building2, "bg-blue-50 border-blue-100", "text-blue-600");
   }
 
+  // 02 — ELECTRICIDAD
   if (
-    value.includes("alta tensión") ||
+    value.includes("electricidad") ||
     value.includes("alta tension") ||
-    value.includes("eléctr") ||
-    value.includes("electr")
+    value.includes("baja tension") ||
+    value.includes("instalacion electrica")
   ) {
-    return {
-      Icon: Zap,
-      wrapper:
-        "bg-amber-50 border-amber-100",
-      icon: "text-amber-600",
-    };
+    return visual(Zap, "bg-amber-50 border-amber-100", "text-amber-600");
   }
 
-  if (
-    value.includes("contra incend") ||
-    value.includes("incend")
-  ) {
-    return {
-      Icon: Flame,
-      wrapper:
-        "bg-red-50 border-red-100",
-      icon: "text-red-600",
-    };
+  // 03 — PARARRAYOS
+  if (value.includes("pararrayos") || value.includes("proteccion contra rayos")) {
+    return visual(RadioTower, "bg-indigo-50 border-indigo-100", "text-indigo-600");
   }
 
+  // 04 — PCI
   if (
-    value.includes("agua") ||
-    value.includes("fontan") ||
+    value.includes("pci") ||
+    value.includes("proteccion contra incendios") ||
+    value.includes("contra incend")
+  ) {
+    return visual(Flame, "bg-red-50 border-red-100", "text-red-600");
+  }
+
+  // 05 — LEGIONELLA Y POTABILIDAD
+  if (
+    value.includes("legionella") ||
+    value.includes("potabilidad") ||
+    value.includes("agua sanitaria")
+  ) {
+    return visual(Droplets, "bg-cyan-50 border-cyan-100", "text-cyan-600");
+  }
+
+  // 06 — FONTANERÍA
+  if (
+    value.includes("fontaneria") ||
+    value.includes("fontaneria") ||
     value.includes("abastecimiento") ||
-    value.includes("saneamiento")
+    value.includes("saneamiento") ||
+    value.includes("agua")
   ) {
-    return {
-      Icon: Droplets,
-      wrapper:
-        "bg-cyan-50 border-cyan-100",
-      icon: "text-cyan-600",
-    };
+    return visual(Droplets, "bg-sky-50 border-sky-100", "text-sky-600");
   }
 
+  // 07 — CLIMATIZACIÓN
   if (
-    value.includes("seguridad") ||
-    value.includes("alarma") ||
-    value.includes("intrusión") ||
-    value.includes("intrusion")
-  ) {
-    return {
-      Icon: ShieldCheck,
-      wrapper:
-        "bg-violet-50 border-violet-100",
-      icon: "text-violet-600",
-    };
-  }
-
-  if (
-    value.includes("climat") ||
+    value.includes("climatizacion") ||
     value.includes("aire acondicionado") ||
-    value.includes("ventil")
+    value.includes("ventilacion") ||
+    value.includes("hvac")
   ) {
-    return {
-      Icon: Settings,
-      wrapper:
-        "bg-emerald-50 border-emerald-100",
-      icon: "text-emerald-600",
-    };
+    return visual(Settings, "bg-emerald-50 border-emerald-100", "text-emerald-600");
   }
 
-  return {
-    Icon: Building2,
-    wrapper:
-      "bg-slate-50 border-slate-200",
-    icon: "text-slate-500",
-  };
+  // 08 — GAS
+  if (value.includes("gas")) {
+    return visual(Fuel, "bg-orange-50 border-orange-100", "text-orange-600");
+  }
+
+  // 09 — G. ELECTRÓGENO
+  if (
+    value.includes("electrogen") ||
+    value.includes("grupo electrogen") ||
+    value.includes("generador")
+  ) {
+    return visual(Wrench, "bg-slate-50 border-slate-200", "text-slate-600");
+  }
+
+  // 10 — SAIs
+  if (
+    value.includes("sai") ||
+    value.includes("sais") ||
+    value.includes("ups") ||
+    value.includes("alimentacion ininterrumpida")
+  ) {
+    return visual(BatteryCharging, "bg-yellow-50 border-yellow-100", "text-yellow-600");
+  }
+
+  // 11 — L. VIDA Y ANCLAJES
+  if (
+    value.includes("lineas de vida") ||
+    value.includes("linea de vida") ||
+    value.includes("anclajes") ||
+    value.includes("anclaje")
+  ) {
+    return visual(Anchor, "bg-violet-50 border-violet-100", "text-violet-600");
+  }
+
+  // 12 — BMS
+  if (value.includes("bms") || value.includes("gestion tecnica")) {
+    return visual(Network, "bg-teal-50 border-teal-100", "text-teal-600");
+  }
+
+  // 13 — PUERTAS AUT.
+  if (
+    value.includes("puertas aut") ||
+    value.includes("puertas automatic") ||
+    value.includes("puerta automat")
+  ) {
+    return visual(DoorOpen, "bg-fuchsia-50 border-fuchsia-100", "text-fuchsia-600");
+  }
+
+  // 14 — IT
+  if (
+    value.match(/(^|\s)it(\s|$)/) ||
+    value.includes("informatica") ||
+    value.includes("telecom") ||
+    value.includes("tecnologia")
+  ) {
+    return visual(Network, "bg-blue-50 border-blue-100", "text-blue-600");
+  }
+
+  // 15 — INST. PETROLÍFERAS
+  if (
+    value.includes("petrolif") ||
+    value.includes("combustible") ||
+    value.includes("deposito de combustible")
+  ) {
+    return visual(Fuel, "bg-amber-50 border-amber-100", "text-amber-700");
+  }
+
+  // 16 — CARG. ELÉCTRICOS
+  if (
+    value.includes("cargadores electric") ||
+    value.includes("cargador electric") ||
+    value.includes("punto de recarga")
+  ) {
+    return visual(Zap, "bg-lime-50 border-lime-100", "text-lime-700");
+  }
+
+  // 17 — MECÁNICA
+  if (value.includes("mecanica") || value.includes("mecanico")) {
+    return visual(Settings, "bg-slate-50 border-slate-200", "text-slate-600");
+  }
+
+  // 18 — Z. INFANTILES
+  if (
+    value.includes("zonas infantiles") ||
+    value.includes("zona infantil") ||
+    value.includes("juegos infantiles")
+  ) {
+    return visual(Building2, "bg-pink-50 border-pink-100", "text-pink-600");
+  }
+
+  // 19 — INST. FOTOVOLTAICA
+  if (
+    value.includes("fotovolta") ||
+    value.includes("solar")
+  ) {
+    return visual(Sun, "bg-yellow-50 border-yellow-100", "text-yellow-600");
+  }
+
+  // 20 — CCTV
+  if (
+    value.includes("cctv") ||
+    value.includes("videovigilancia") ||
+    value.includes("video vigilancia")
+  ) {
+    return visual(Camera, "bg-violet-50 border-violet-100", "text-violet-600");
+  }
+
+  // 21 — DDD
+  if (
+    value.includes("ddd") ||
+    value.includes("desinfeccion") ||
+    value.includes("desinsectacion") ||
+    value.includes("desratizacion")
+  ) {
+    return visual(Bug, "bg-rose-50 border-rose-100", "text-rose-600");
+  }
+
+  // 30 — CERT. EFICIENCIA ENERG.
+  if (
+    value.includes("eficiencia energetica") ||
+    value.includes("certificacion energetica") ||
+    value.includes("cert. eficiencia")
+  ) {
+    return visual(Gauge, "bg-green-50 border-green-100", "text-green-600");
+  }
+
+  // 40 — SIMULACIÓN
+  if (value.includes("simulacion") || value.includes("simulaciones")) {
+    return visual(ClipboardList, "bg-cyan-50 border-cyan-100", "text-cyan-600");
+  }
+
+  // 50 — EVAL. DE RIESGOS
+  if (
+    value.includes("evaluacion de riesgos") ||
+    value.includes("evaluacion riesgos") ||
+    value.includes("riesgos")
+  ) {
+    return visual(ShieldAlert, "bg-red-50 border-red-100", "text-red-600");
+  }
+
+  // 60 — CAE
+  if (
+    value.match(/(^|\s)cae(\s|$)/) ||
+    value.includes("coordinacion de actividades empresariales")
+  ) {
+    return visual(Handshake, "bg-blue-50 border-blue-100", "text-blue-600");
+  }
+
+  // 100 — PAU
+  if (
+    value.match(/(^|\s)pau(\s|$)/) ||
+    value.includes("plan de autoproteccion") ||
+    value.includes("autoproteccion")
+  ) {
+    return visual(TriangleAlert, "bg-orange-50 border-orange-100", "text-orange-600");
+  }
+
+  // Reglas secundarias para posibles denominaciones del catálogo.
+  if (value.includes("seguridad") || value.includes("alarma") || value.includes("intrusion")) {
+    return visual(ShieldCheck, "bg-violet-50 border-violet-100", "text-violet-600");
+  }
+
+  if (value.includes("electr") || value.includes("tension")) {
+    return visual(Zap, "bg-amber-50 border-amber-100", "text-amber-600");
+  }
+
+  if (value.includes("incend")) {
+    return visual(Flame, "bg-red-50 border-red-100", "text-red-600");
+  }
+
+  if (value.includes("agua") || value.includes("fontan")) {
+    return visual(Droplets, "bg-cyan-50 border-cyan-100", "text-cyan-600");
+  }
+
+  if (value.includes("climat") || value.includes("ventil")) {
+    return visual(Settings, "bg-emerald-50 border-emerald-100", "text-emerald-600");
+  }
+
+  return visual(Building2, "bg-slate-50 border-slate-200", "text-slate-500");
 }
 
 function getStatusClasses(
@@ -2914,7 +3104,6 @@ export default function CenterDetail() {
           <div className="flex items-center gap-1">
             <button type="button" onClick={reduceAllColumns} title="Reducir columnas visibles" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"><Minus className="h-4 w-4" /></button>
             <button type="button" onClick={() => setColumnVisibility(current => Object.fromEntries(Object.keys(current).map(key => [key, true])) as Record<TableColumnKey, boolean>)} title="Mostrar columnas ocultas" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"><Eye className="h-4 w-4" /></button>
-            {admin && <button type="button" onClick={resetAllUnits} title="Resetear todas las unidades a 0" className="rounded-xl border border-red-200 p-2 text-red-600 hover:bg-red-50"><X className="h-4 w-4" /></button>}
             <button type="button" disabled={readOnly} onClick={() => setShowAddElement(v => !v)} title={showAddElement ? "Cerrar añadir elementos" : "Añadir elementos"} className={`rounded-xl border p-2 transition ${showAddElement ? "border-[#FFCC00] bg-[#FFCC00] text-[#002A54]" : "border-slate-200 text-slate-500 hover:bg-slate-50"} disabled:cursor-not-allowed disabled:opacity-40`}><Plus className="h-4 w-4" /></button>
             <SectionToggle open={openInstallations} onClick={() => setOpenInstallations(v => !v)} />
           </div>
@@ -2932,6 +3121,27 @@ export default function CenterDetail() {
                   <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Actuación<select value={selectedAction} disabled={!selectedInstallation} onChange={e => setSelectedAction(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs disabled:bg-slate-100"><option value="">Seleccionar actuación...</option>{actionOptions.map(x => <option key={x} value={x}>{x}</option>)}</select></label>
                 </div>
                 {selectedTemplate && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div><div className="text-xs font-bold text-slate-800">{selectedTemplate.category} · {selectedTemplate.installation} · {selectedTemplate.action}</div><div className="text-[10px] text-slate-500">Código {selectedActionCode || "—"} · {selectedCount} unidad{selectedCount === 1 ? "" : "es"}</div></div><div className="flex items-center gap-1.5"><button type="button" disabled={selectedCount <= 0} onClick={() => changeSelectedQuantity(selectedCount - 1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 hover:bg-red-50 disabled:opacity-30"><Minus className="h-4 w-4" /></button><input type="number" min="0" value={quantityDrafts[selectedActionCode] ?? String(selectedCount)} onChange={e => setQuantityDrafts(c => ({ ...c, [selectedActionCode]: e.target.value.replace(/\D/g, "") }))} onBlur={e => { changeSelectedQuantity(Number.parseInt(e.target.value || "0", 10)); setQuantityDrafts(c => { const n={...c}; delete n[selectedActionCode]; return n; }); }} className="h-8 w-16 rounded-lg border border-slate-200 text-center text-sm font-bold" /><button type="button" onClick={() => changeSelectedQuantity(selectedCount + 1)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#002A54] text-white"><Plus className="h-4 w-4" /></button></div></div>}
+                {admin && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-2.5">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-red-600">
+                        <RotateCcw className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-red-800">Resetear todas las unidades</div>
+                        <div className="text-[10px] leading-4 text-red-700">Pone a 0 todas las unidades configuradas en este centro. El histórico de revisiones no se elimina.</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetAllUnits}
+                      className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100"
+                      title="Resetear todas las unidades a 0"
+                    >
+                      Resetear todo
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -3087,13 +3297,11 @@ export default function CenterDetail() {
 
                               <div
                                 className={`mx-auto flex h-7 w-7 items-center justify-center rounded-xl border ${visual.wrapper}`}
-                                title={
-                                  x.category ||
-                                  x.installation
-                                }
+                                title={`${x.category || "Tipo"}${x.installation ? ` · ${x.installation}` : ""}`}
+                                aria-label={`${x.category || "Tipo"}${x.installation ? ` · ${x.installation}` : ""}`}
                               >
                                 <Icon
-                                  className={`h-3.5 w-3.5 ${visual.icon}`}
+                                  className={`h-4 w-4 ${visual.icon}`}
                                 />
                               </div>
 
