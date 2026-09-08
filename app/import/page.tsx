@@ -195,9 +195,7 @@ function detectCenter(rows: any[][]) {
   };
 }
 
-function parseWorkbook(
-  wb: XLSX.WorkBook
-): ParsedImport {
+function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   const sheetName = wb.SheetNames.includes("FICHA")
     ? "FICHA"
     : wb.SheetNames[0];
@@ -216,7 +214,9 @@ function parseWorkbook(
   const detected = detectCenter(rows);
   if (!detected.center) {
     throw new Error(
-      `No se ha podido identificar el centro "${detected.name || "desconocido"}" en la base de centros.`
+      `No se ha podido identificar el centro "${
+        detected.name || "desconocido"
+      }" en la base de centros.`
     );
   }
 
@@ -300,9 +300,13 @@ function parseWorkbook(
     if (isMultiple) {
       multiple += 1;
       warnings.push(
-        `Fila ${excelRow} (${catalogItem.action}): hay ${selected.length} estados marcados (${selected.join(
+        `Fila ${excelRow} (${catalogItem.action}): hay ${
+          selected.length
+        } estados marcados (${selected.join(
           ", "
-        )}). Se importará "${worstStatus(selected)}" por aplicación de la regla de peor estado.`
+        )}). Se importará "${worstStatus(
+          selected
+        )}" por aplicación de la regla de peor estado.`
       );
     }
 
@@ -345,6 +349,7 @@ function parseWorkbook(
     centerId: String((detected.center as any).id),
     country,
     year: detected.year,
+    reviewText: detected.reviewText,
     period,
     reviewDate,
     rows: parsedRows,
@@ -356,7 +361,8 @@ function parseWorkbook(
 }
 
 function statusClasses(status: V1Status) {
-  if (status === "APTO") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "APTO")
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "APTO CONDICIONADO")
     return "border-amber-200 bg-amber-50 text-amber-700";
   return "border-red-200 bg-red-50 text-red-700";
@@ -571,11 +577,15 @@ export default function ImportPage() {
             <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded-xl bg-slate-50 p-3">
                 <div className="text-xs text-slate-500">Importados</div>
-                <div className="mt-1 text-xl font-black">{parsed.rows.length}</div>
+                <div className="mt-1 text-xl font-black">
+                  {parsed.rows.length}
+                </div>
               </div>
               <div className="rounded-xl bg-slate-50 p-3">
                 <div className="text-xs text-slate-500">No existentes</div>
-                <div className="mt-1 text-xl font-black">{parsed.excluded}</div>
+                <div className="mt-1 text-xl font-black">
+                  {parsed.excluded}
+                </div>
               </div>
               <div className="rounded-xl bg-emerald-50 p-3">
                 <div className="text-xs text-emerald-700">APTO</div>
@@ -637,11 +647,17 @@ export default function ImportPage() {
                       className="border-b border-slate-100"
                     >
                       <td className="px-3 py-2">{row.excelRow}</td>
-                      <td className="px-3 py-2 font-mono">{row.actionCode}</td>
+                      <td className="px-3 py-2 font-mono">
+                        {row.actionCode}
+                      </td>
                       <td className="px-3 py-2">{row.installation}</td>
                       <td className="px-3 py-2">{row.action}</td>
-                      <td className="px-3 py-2">{row.equipmentId || "—"}</td>
-                      <td className="px-3 py-2">{row.company || "—"}</td>
+                      <td className="px-3 py-2">
+                        {row.equipmentId || "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.company || "—"}
+                      </td>
                       <td className="px-3 py-2">
                         <span
                           className={`rounded-full border px-2 py-1 font-bold ${statusClasses(
