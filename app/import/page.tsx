@@ -38,6 +38,7 @@ type ImportRow = {
   status: V1Status;
   selected: string[];
   multiple: boolean;
+  comment: string;
 };
 
 type ParsedImport = {
@@ -55,6 +56,44 @@ type ParsedImport = {
   unmatched: number;
   warnings: string[];
 };
+
+/*
+ * ============================================================
+ * COLUMNAS FIJAS DEL EXCEL CORPORATIVO
+ * ============================================================
+ *
+ * Excel      Índice JS
+ *
+ * D          3     INSTALACIÓN
+ * E          4     ACTUACIÓN
+ * G          6     ID
+ * H          7     EMPRESA
+ * N          13    Nº
+ * O          14    ESTADO
+ * R          17    COMENTARIO
+ *
+ * Es fundamental NO modificar estos índices salvo que cambie
+ * la plantilla corporativa.
+ */
+
+const EXCEL_COLUMNS = {
+  INSTALLATION: 3,
+  ACTION: 4,
+  EQUIPMENT_ID: 6,
+  COMPANY: 7,
+  ORDINAL: 13,
+  STATUS: 14,
+  COMMENT: 17,
+} as const;
+
+/*
+ * La tabla comienza en la fila 12 del Excel.
+ *
+ * Importante:
+ * No se establece una última fila fija. El importador recorre
+ * todas las filas existentes de la hoja.
+ */
+const FIRST_DATA_ROW = 12;
 
 function text(value: unknown): string {
   return String(value ?? "").trim();
@@ -76,6 +115,7 @@ function excelDateToISO(value: unknown): string {
 
   if (typeof value === "number" && Number.isFinite(value)) {
     const date = XLSX.SSF.parse_date_code(value);
+
     if (date?.y && date?.m && date?.d) {
       return `${date.y}-${String(date.m).padStart(2, "0")}-${String(
         date.d
@@ -84,43 +124,88 @@ function excelDateToISO(value: unknown): string {
   }
 
   const raw = text(value);
+
   if (!raw) return "";
 
   const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+
   if (iso) {
-    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(
+      2,
+      "0"
+    )}`;
   }
 
   const es = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+
   if (es) {
-    return `${es[3]}-${es[2].padStart(2, "0")}-${es[1].padStart(2, "0")}`;
+    return `${es[3]}-${es[2].padStart(2, "0")}-${es[1].padStart(
+      2,
+      "0"
+    )}`;
   }
 
   return "";
 }
 
+/**
+ * Convierte exclusivamente el valor de la columna O (ESTADO)
+ * al estado utilizado por la aplicación.
+ *
+ * NO se consultan las columnas M ni N.
+ */
 function statusFromExcel(value: unknown): V1Status | null {
   const status = normalize(value);
 
-  if (!status) return null;
+  if (status === "favorable") {
+    return "APTO";
+  }
 
-  if (status === "favorable") return "APTO";
-  if (status === "desfavorable") return "NO APTO";
-  if (status === "condicionado") return "APTO CONDICIONADO";
-  if (status === "pte" || status === "pte.") return "PENDIENTE";
+  if (status === "desfavorable") {
+    return "NO APTO";
+  }
+
+  if (status === "condicionado") {
+    return "APTO CONDICIONADO";
+  }
+
+  if (status === "pte." || status === "pte") {
+    return "PENDIENTE";
+  }
 
   return null;
 }
 
+/**
+ * Convierte el Nº de Excel en un número válido.
+ */
+function excelOrdinal(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+
+  const raw = text(value);
+
+  if (!raw) return 0;
+
+  const match = raw.match(/\d+/);
+
+  if (!match) return 0;
+
+  return Number(match[0]);
+}
+
 function detectHeaderDate(rows: any[][]): string {
-  for (const row of rows.slice(0, 10)) {
+  for (const row of rows.slice(0, 11)) {
     for (let c = 0; c < row.length - 1; c += 1) {
       if (normalize(row[c]) === "fecha") {
         const date = excelDateToISO(row[c + 1]);
+
         if (date) return date;
       }
     }
   }
+
   return "";
 }
 
@@ -128,34 +213,31 @@ function detectCenter(rows: any[][]) {
   let name = "";
   let code = "";
 
-  for (const row of rows.slice(0, 10)) {
+  for (const row of rows.slice(0, 11)) {
     for (let c = 0; c < row.length - 1; c += 1) {
       const label = normalize(row[c]);
-      if (label === "centro") name = text(row[c + 1]);
+
+      if (label === "centro") {
+        name = text(row[c + 1]);
+      }
     }
   }
 
-  /*
-   * El año y el periodo deben salir SIEMPRE del documento importado.
-   * En la FICHA corporativa habitual:
-   *   - "Tipo" -> "Revision S1" / "Revision S2"
-   *   - junto a esa información aparece el año (p.ej. 2025)
-   *
-   * No se utiliza ningún año por defecto de la aplicación para una
-   * revisión histórica. Si el documento no contiene un año válido,
-   * se detiene la importación para evitar archivarla en una revisión
-   * incorrecta.
-   */
   let reviewText = "";
   let year = 0;
 
-  for (const row of rows.slice(0, 10)) {
+  for (const row of rows.slice(0, 11)) {
     for (let c = 0; c < row.length; c += 1) {
       const label = normalize(row[c]);
 
       if (label === "tipo") {
-        for (let j = c + 1; j < Math.min(row.length, c + 4); j += 1) {
+        for (
+          let j = c + 1;
+          j < Math.min(row.length, c + 4);
+          j += 1
+        ) {
           const value = text(row[j]);
+
           if (normalize(value).includes("revision")) {
             reviewText = value;
             break;
@@ -164,7 +246,9 @@ function detectCenter(rows: any[][]) {
       }
 
       const raw = text(row[c]);
+
       const match = raw.match(/(?:^|\D)(20\d{2})(?:$|\D)/);
+
       if (match && !year) {
         year = Number(match[1]);
       }
@@ -206,6 +290,7 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   }
 
   const ws = wb.Sheets[sheetName];
+
   const rows = XLSX.utils.sheet_to_json(ws, {
     header: 1,
     defval: null,
@@ -223,6 +308,7 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   }
 
   const normalizedReviewText = normalize(detected.reviewText);
+
   let period: Period;
 
   if (normalizedReviewText.includes("s1")) {
@@ -246,120 +332,208 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   const catalogItems = buildElementCodes(catalog as any[]);
 
   /*
-   * La FICHA corporativa contiene una línea por actuación.
-   * En el STL utilizado para la importación, las filas 11-94
-   * corresponden al catálogo de 84 actuaciones.
+   * ============================================================
+   * MAPA DEL CATÁLOGO POR Nº REAL
+   * ============================================================
    *
-   * Se utiliza el ordinal de la fila para relacionarla con
-   * la actuación correspondiente del catálogo.
+   * No utilizamos:
+   *
+   *     catalogItems[ordinal - 1]
+   *
+   * porque eso presupone que la posición del array coincide
+   * siempre con el Nº del Excel.
+   *
+   * Buscamos el Nº real del elemento dentro del catálogo.
    */
-  const firstDataRow = 11;
-  const lastDataRow = Math.min(94, rows.length);
+
+  const catalogByOrdinal = new Map<number, any>();
+
+  for (let index = 0; index < catalogItems.length; index += 1) {
+    const item = catalogItems[index] as any;
+
+    const possibleValues = [
+      item?.ordinal,
+      item?.number,
+      item?.numero,
+      item?.n,
+      item?.nr,
+      item?.no,
+    ];
+
+    let ordinal = 0;
+
+    for (const value of possibleValues) {
+      const candidate = excelOrdinal(value);
+
+      if (candidate > 0) {
+        ordinal = candidate;
+        break;
+      }
+    }
+
+    /*
+     * Si el catálogo no tiene un campo Nº, utilizamos la posición
+     * como último recurso, pero solamente para construir el mapa.
+     */
+    if (!ordinal) {
+      ordinal = index + 1;
+    }
+
+    if (ordinal > 0 && !catalogByOrdinal.has(ordinal)) {
+      catalogByOrdinal.set(ordinal, item);
+    }
+  }
 
   const reviewDate = detectHeaderDate(rows);
+
   const parsedRows: ImportRow[] = [];
   const warnings: string[] = [];
 
   let excluded = 0;
-  let multiple = 0;
   let unmatched = 0;
 
+  /*
+   * Recorremos TODAS las filas existentes desde la fila 12.
+   *
+   * No utilizamos una última fila fija.
+   */
   for (
-    let excelRow = firstDataRow;
-    excelRow <= lastDataRow;
+    let excelRow = FIRST_DATA_ROW;
+    excelRow <= rows.length;
     excelRow += 1
   ) {
     const row = rows[excelRow - 1] || [];
-    const ordinal = Number(row[0]);
 
-    if (!Number.isInteger(ordinal) || ordinal <= 0) continue;
+    /*
+     * ----------------------------------------------------------
+     * EL Nº DEL ELEMENTO ESTÁ EN LA COLUMNA N
+     * ----------------------------------------------------------
+     */
+    const ordinal = excelOrdinal(
+      row[EXCEL_COLUMNS.ORDINAL]
+    );
 
-    const catalogItem =
-      catalogItems[ordinal - 1] as any | undefined;
-
-    if (!catalogItem) {
-      unmatched += 1;
-      warnings.push(
-        `Fila ${excelRow}: no existe una actuación equivalente en el catálogo para el ordinal ${ordinal}.`
-      );
+    /*
+     * Si no existe Nº, no es una fila de elemento válida.
+     */
+    if (!ordinal) {
       continue;
     }
 
     /*
-     * IMPORTACIÓN DEL ESTADO:
-     *
-     * La columna O del Excel es el origen único del estado.
-     *
-     * Excel O:
-     *   FAVORABLE       -> APTO
-     *   DESFAVORABLE    -> NO APTO
-     *   CONDICIONADO    -> APTO CONDICIONADO
-     *   PTE.            -> PENDIENTE
-     *
-     * Las columnas M y N NO se revisan.
+     * ----------------------------------------------------------
+     * EL ESTADO SE LEE EXCLUSIVAMENTE DE LA COLUMNA O
+     * ----------------------------------------------------------
      */
-    const excelStatus = text(row[14]);
-    const status = statusFromExcel(excelStatus);
+    const rawStatus = text(row[EXCEL_COLUMNS.STATUS]);
+
+    const status = statusFromExcel(
+      row[EXCEL_COLUMNS.STATUS]
+    );
 
     /*
-     * Si la columna O no contiene un estado reconocido,
-     * el elemento no se incorpora a esta revisión.
+     * Los estados "-" o vacíos no se importan.
+     *
+     * Pero tampoco provocamos un error: simplemente dejamos
+     * constancia de que la fila no tenía un estado importable.
      */
     if (!status) {
-      if (excelStatus) {
+      excluded += 1;
+
+      if (rawStatus) {
         warnings.push(
-          `Fila ${excelRow} (${catalogItem.action}): estado no reconocido en la columna O: "${excelStatus}". El elemento no se ha importado.`
+          `Fila ${excelRow}, elemento ${ordinal}: el valor de ESTADO "${rawStatus}" no es un estado importable.`
         );
       }
 
-      excluded += 1;
       continue;
     }
 
+    /*
+     * ----------------------------------------------------------
+     * BUSCAMOS LA ACTUACIÓN POR SU Nº
+     * ----------------------------------------------------------
+     */
+    const catalogItem = catalogByOrdinal.get(ordinal);
+
+    if (!catalogItem) {
+      unmatched += 1;
+
+      warnings.push(
+        `Fila ${excelRow}, elemento ${ordinal}: tiene el estado "${rawStatus}", pero no existe una actuación con ese Nº en el catálogo. El elemento no se ha descartado silenciosamente.`
+      );
+
+      continue;
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * DATOS DE LA MISMA FILA
+     * ----------------------------------------------------------
+     *
+     * Estos valores NO se obtienen del catálogo.
+     *
+     * Se leen directamente de la misma fila del Excel.
+     */
+    const installation = text(
+      row[EXCEL_COLUMNS.INSTALLATION]
+    );
+
+    const action = text(row[EXCEL_COLUMNS.ACTION]);
+
+    const equipmentId = text(
+      row[EXCEL_COLUMNS.EQUIPMENT_ID]
+    );
+
+    const company = text(row[EXCEL_COLUMNS.COMPANY]);
+
+    const comment = text(row[EXCEL_COLUMNS.COMMENT]);
+
+    /*
+     * La fecha general de la revisión se mantiene como fecha
+     * principal. Como respaldo, se intenta utilizar la fecha
+     * correspondiente a la fila.
+     *
+     * La fecha de la fila se mantiene en la posición que ya
+     * utilizaba el importador anterior.
+     */
+    const inspectionDate =
+      reviewDate || excelDateToISO(row[9]);
+
+    /*
+     * Cada fila tiene ahora UN ÚNICO estado, procedente de O.
+     */
     parsedRows.push({
       excelRow,
       ordinal,
       catalogItemId: String(catalogItem.id),
       category: text(catalogItem.category),
-      installation: text(catalogItem.installation),
-      action: text(catalogItem.action),
+      installation,
+      action,
       actionCode: text(
         catalogItem.actionCode ??
           catalogItem.baseCode ??
           catalogItem.code
       ),
-
-      /*
-       * Columnas Excel:
-       * G = índice 6 -> ID Equipo
-       * H = índice 7 -> Empresa
-       */
-      equipmentId: text(row[6]),
-      company: text(row[7]),
-
-      inspectionDate:
-        reviewDate || excelDateToISO(row[9]),
-
+      equipmentId,
+      company,
+      inspectionDate,
       status,
-
-      /*
-       * El estado ya viene determinado directamente por O.
-       * No existen múltiples marcas que resolver.
-       */
       selected: [status],
       multiple: false,
+      comment,
     });
   }
 
   if (!reviewDate) {
     warnings.push(
-      "No se ha podido detectar la fecha general de revisión de la cabecera. Se utilizará la fecha 'Ult. Rev.' de cada fila cuando exista."
+      "No se ha podido detectar la fecha general de revisión de la cabecera. Se utilizará la fecha de la fila cuando exista."
     );
   }
 
   if (catalogItems.length !== 84) {
     warnings.push(
-      `El catálogo español utilizado contiene ${catalogItems.length} actuaciones; el fichero corporativo contiene hasta 84 filas. Se ha importado únicamente lo que ha podido emparejarse.`
+      `El catálogo utilizado contiene ${catalogItems.length} actuaciones.`
     );
   }
 
@@ -374,28 +548,37 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
     reviewDate,
     rows: parsedRows,
     excluded,
-    multiple,
+    multiple: 0,
     unmatched,
     warnings,
   };
 }
 
 function statusClasses(status: V1Status) {
-  if (status === "APTO")
+  if (status === "APTO") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
 
-  if (status === "APTO CONDICIONADO")
+  if (status === "APTO CONDICIONADO") {
     return "border-amber-200 bg-amber-50 text-amber-700";
+  }
 
-  if (status === "PENDIENTE")
+  if (status === "NO APTO") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (status === "PENDIENTE") {
     return "border-slate-200 bg-slate-50 text-slate-700";
+  }
 
-  return "border-red-200 bg-red-50 text-red-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<ParsedImport | null>(null);
+  const [parsed, setParsed] = useState<ParsedImport | null>(
+    null
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -404,30 +587,33 @@ export default function ImportPage() {
     if (!parsed) return null;
 
     const counts = {
-      APTO: parsed.rows.filter(r => r.status === "APTO").length,
+      APTO: parsed.rows.filter(
+        (r) => r.status === "APTO"
+      ).length,
 
       "APTO CONDICIONADO": parsed.rows.filter(
-        r => r.status === "APTO CONDICIONADO"
+        (r) => r.status === "APTO CONDICIONADO"
       ).length,
 
       "NO APTO": parsed.rows.filter(
-        r => r.status === "NO APTO"
+        (r) => r.status === "NO APTO"
       ).length,
 
       PENDIENTE: parsed.rows.filter(
-        r => r.status === "PENDIENTE"
+        (r) => r.status === "PENDIENTE"
       ).length,
     };
 
     /*
      * Puntuación:
-     * APTO = 3 puntos
-     * APTO CONDICIONADO = 2 puntos
-     * NO APTO = 1 punto
-     * PENDIENTE = 0 puntos
      *
-     * El denominador utiliza TODOS los elementos importados,
-     * incluidos los que están PENDIENTE.
+     * APTO                 = 3 puntos
+     * APTO CONDICIONADO    = 2 puntos
+     * NO APTO              = 1 punto
+     * PENDIENTE            = 0 puntos
+     *
+     * Todos los elementos importados participan en el
+     * denominador.
      */
     const points =
       counts.APTO * 3 +
@@ -435,9 +621,17 @@ export default function ImportPage() {
       counts["NO APTO"];
 
     const max = parsed.rows.length * 3;
-    const score = max ? Math.round((points / max) * 100) : 0;
 
-    return { counts, points, max, score };
+    const score = max
+      ? Math.round((points / max) * 100)
+      : 0;
+
+    return {
+      counts,
+      points,
+      max,
+      score,
+    };
   }, [parsed]);
 
   async function handleFile(nextFile: File) {
@@ -455,7 +649,9 @@ export default function ImportPage() {
         cellDates: true,
       });
 
-      setParsed(parseWorkbook(wb));
+      const result = parseWorkbook(wb);
+
+      setParsed(result);
     } catch (e) {
       setError(
         e instanceof Error
@@ -481,60 +677,70 @@ export default function ImportPage() {
       parsed.period
     );
 
-    /*
-     * La importación es histórica:
-     * nunca modifica activeItems, customItems ni ninguna otra
-     * revisión. Solo crea/reemplaza la revisión exacta del
-     * centro + año + periodo del archivo.
-     */
     const existing = state.reviews[key];
 
     const items: Record<string, ItemReview> = {};
 
     for (const row of parsed.rows) {
       const current =
-        existing?.items?.[row.catalogItemId] ?? blankItem();
+        existing?.items?.[row.catalogItemId] ??
+        blankItem();
 
       items[row.catalogItemId] = {
         ...current,
+
         status: row.status,
+
         date: row.inspectionDate,
+
         equipmentId: row.equipmentId,
+
         company: row.company,
+
         apto: row.status === "APTO",
-        condicionado: row.status === "APTO CONDICIONADO",
+
+        condicionado:
+          row.status === "APTO CONDICIONADO",
+
         noApto: row.status === "NO APTO",
+
         confirmed: false,
+
         confirmedAt: undefined,
+
         confirmedBy: undefined,
       };
     }
 
     const review: ReviewState = {
       ...(existing || {}),
+
       year: parsed.year,
+
       period: parsed.period,
 
-      /*
-       * Universo histórico de esta revisión.
-       * Se incorporan todos los elementos cuyo estado de la
-       * columna O haya sido reconocido, incluido PENDIENTE.
-       */
       itemIds: parsed.rows.map(
-        row => row.catalogItemId
+        (row) => row.catalogItemId
       ),
 
       confirmed: false,
+
       confirmedAt: undefined,
+
       confirmedBy: undefined,
+
       items,
-      participants: existing?.participants || [],
+
+      participants:
+        existing?.participants || [],
     };
 
     const nextState: V1State = {
       ...state,
+
       reviews: {
         ...state.reviews,
+
         [key]: review,
       },
     };
@@ -548,255 +754,275 @@ export default function ImportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-[#002A54]">
-          Importación STL / Excel
-        </h1>
-
-        <p className="mt-1 text-sm text-slate-500">
-          Importación de revisiones históricas desde la FICHA corporativa STL.
-        </p>
-      </div>
-
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center hover:border-slate-400">
-          <UploadCloud className="h-10 w-10 text-[#002A54]" />
-
-          <div className="mt-3 font-bold">
-            Selecciona un archivo Excel
+        <div className="flex items-start gap-4">
+          <div className="rounded-xl bg-slate-100 p-3">
+            <FileSpreadsheet className="h-6 w-6 text-slate-700" />
           </div>
 
-          <div className="mt-1 text-sm text-slate-500">
-            XLSX / XLS · se analiza localmente en el navegador
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">
+              Importación STL / Excel
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-600">
+              Importa una revisión histórica desde la plantilla
+              corporativa Excel.
+            </p>
           </div>
+        </div>
+
+        <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="font-medium">
+            Estructura utilizada por el importador
+          </p>
+
+          <p className="mt-1">
+            El importador utiliza las columnas fijas de la
+            plantilla: D = Instalación, E = Actuación, G =
+            ID, H = Empresa, N = Nº, O = Estado y R =
+            Comentario.
+          </p>
+
+          <p className="mt-2">
+            El estado se obtiene exclusivamente de la columna
+            O. Las filas con FAVORABLE, DESFAVORABLE,
+            CONDICIONADO o PTE. se importan.
+          </p>
+        </div>
+
+        <label
+          htmlFor="excel-upload"
+          className="mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-400 hover:bg-slate-100"
+        >
+          <UploadCloud className="h-10 w-10 text-slate-500" />
+
+          <span className="mt-3 text-sm font-semibold text-slate-800">
+            Seleccionar archivo Excel
+          </span>
+
+          <span className="mt-1 text-xs text-slate-500">
+            Selecciona el archivo STL corporativo .xlsx
+          </span>
 
           <input
+            id="excel-upload"
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
-            onChange={e => {
-              const selected = e.target.files?.[0];
+            onChange={(event) => {
+              const selectedFile =
+                event.target.files?.[0];
 
-              if (selected) {
-                void handleFile(selected);
+              if (selectedFile) {
+                void handleFile(selectedFile);
               }
-
-              e.currentTarget.value = "";
             }}
           />
         </label>
 
         {file && (
-          <div className="mt-4 flex items-center gap-3 rounded-xl bg-slate-50 p-4">
-            <FileSpreadsheet className="h-5 w-5 text-[#002A54]" />
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <FileSpreadsheet className="h-5 w-5 text-slate-600" />
 
-            <div className="font-semibold">
-              {file.name}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-slate-900">
+                {file.name}
+              </p>
+
+              <p className="text-xs text-slate-500">
+                {(file.size / 1024).toFixed(1)} KB
+              </p>
             </div>
+          </div>
+        )}
 
-            {busy ? (
-              <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
-                Analizando...
-              </span>
-            ) : parsed ? (
-              <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-                Analizado
-              </span>
-            ) : null}
+        {busy && (
+          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            Analizando el archivo Excel...
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <XCircle className="mt-0.5 h-5 w-5 shrink-0" />
+
+            <div>
+              <p className="font-semibold">
+                No se ha podido realizar la importación
+              </p>
+
+              <p className="mt-1">{error}</p>
+            </div>
           </div>
         )}
       </div>
-
-      {error && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
 
       {parsed && summary && (
         <>
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-black text-slate-800">
-                  Vista previa de importación
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Vista previa de la importación
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  {parsed.centerName} · centro {parsed.centerCode} ·{" "}
-                  {parsed.period} {parsed.year}
+                <p className="mt-1 text-sm text-slate-600">
+                  {parsed.centerName} · {parsed.period}{" "}
+                  {parsed.year}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-[#002A54]/10 bg-[#002A54]/5 px-4 py-2 text-right">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Cumplimiento calculado
+              <div className="rounded-xl bg-slate-900 px-4 py-3 text-right text-white">
+                <div className="text-xs uppercase tracking-wide text-slate-300">
+                  Resultado
                 </div>
 
-                <div className="text-2xl font-black text-[#002A54]">
+                <div className="text-2xl font-bold">
                   {summary.score}%
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
-              <div className="rounded-xl bg-slate-50 p-3">
-                <div className="text-xs text-slate-500">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-medium text-slate-500">
                   Importados
                 </div>
 
-                <div className="mt-1 text-xl font-black">
+                <div className="mt-1 text-2xl font-bold text-slate-900">
                   {parsed.rows.length}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-50 p-3">
-                <div className="text-xs text-slate-500">
-                  Sin estado
-                </div>
-
-                <div className="mt-1 text-xl font-black">
-                  {parsed.excluded}
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-emerald-50 p-3">
-                <div className="text-xs text-emerald-700">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-xs font-medium text-emerald-700">
                   APTO
                 </div>
 
-                <div className="mt-1 text-xl font-black text-emerald-700">
+                <div className="mt-1 text-2xl font-bold text-emerald-800">
                   {summary.counts.APTO}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-amber-50 p-3">
-                <div className="text-xs text-amber-700">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="text-xs font-medium text-amber-700">
                   CONDICIONADO
                 </div>
 
-                <div className="mt-1 text-xl font-black text-amber-700">
+                <div className="mt-1 text-2xl font-bold text-amber-800">
                   {summary.counts["APTO CONDICIONADO"]}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-red-50 p-3">
-                <div className="text-xs text-red-700">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="text-xs font-medium text-red-700">
                   NO APTO
                 </div>
 
-                <div className="mt-1 text-xl font-black text-red-700">
+                <div className="mt-1 text-2xl font-bold text-red-800">
                   {summary.counts["NO APTO"]}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-50 p-3">
-                <div className="text-xs text-slate-600">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-medium text-slate-600">
                   PENDIENTE
                 </div>
 
-                <div className="mt-1 text-xl font-black text-slate-700">
+                <div className="mt-1 text-2xl font-bold text-slate-800">
                   {summary.counts.PENDIENTE}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-orange-50 p-3">
-                <div className="text-xs text-orange-700">
-                  Múltiples marcas
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                <div className="text-xs font-medium text-orange-700">
+                  No emparejados
                 </div>
 
-                <div className="mt-1 text-xl font-black text-orange-700">
-                  {parsed.multiple}
+                <div className="mt-1 text-2xl font-bold text-orange-800">
+                  {parsed.unmatched}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <strong>Regla de puntuación:</strong>{" "}
+              APTO = 3, APTO CONDICIONADO = 2, NO APTO = 1 y
+              PENDIENTE = 0. Todos los elementos importados
+              participan en el cálculo.
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 p-5">
-              <h2 className="font-black text-slate-800">
-                Elementos que se importarán
+            <div className="border-b border-slate-200 p-6">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Elementos detectados
               </h2>
 
-              <p className="mt-1 text-xs text-slate-500">
-                El estado se obtiene exclusivamente de la columna O del Excel.
-                Las columnas M y N no se utilizan.
+              <p className="mt-1 text-sm text-slate-600">
+                Cada valor mostrado procede de la misma fila del
+                Excel.
               </p>
             </div>
 
-            <div className="max-h-[560px] overflow-auto">
-              <table className="min-w-full text-xs">
-                <thead className="sticky top-0 bg-[#002A54] text-left text-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-3 py-2">
-                      Fila
-                    </th>
-
-                    <th className="px-3 py-2">
-                      Código
-                    </th>
-
-                    <th className="px-3 py-2">
-                      Instalación
-                    </th>
-
-                    <th className="px-3 py-2">
-                      Actuación
-                    </th>
-
-                    <th className="px-3 py-2">
-                      ID equipo
-                    </th>
-
-                    <th className="px-3 py-2">
-                      Empresa
-                    </th>
-
-                    <th className="px-3 py-2">
-                      Estado
-                    </th>
+                    <th className="px-4 py-3">Fila</th>
+                    <th className="px-4 py-3">Nº</th>
+                    <th className="px-4 py-3">Instalación</th>
+                    <th className="px-4 py-3">Actuación</th>
+                    <th className="px-4 py-3">ID equipo</th>
+                    <th className="px-4 py-3">Empresa</th>
+                    <th className="px-4 py-3">Estado</th>
+                    <th className="px-4 py-3">Comentario</th>
                   </tr>
                 </thead>
 
-                <tbody>
-                  {parsed.rows.map(row => (
+                <tbody className="divide-y divide-slate-100">
+                  {parsed.rows.map((row) => (
                     <tr
-                      key={`${row.excelRow}-${row.catalogItemId}`}
-                      className="border-b border-slate-100"
+                      key={`${row.excelRow}-${row.ordinal}-${row.catalogItemId}`}
+                      className="hover:bg-slate-50"
                     >
-                      <td className="px-3 py-2">
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">
                         {row.excelRow}
                       </td>
 
-                      <td className="px-3 py-2 font-mono">
-                        {row.actionCode}
+                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
+                        {row.ordinal}
                       </td>
 
-                      <td className="px-3 py-2">
-                        {row.installation}
+                      <td className="min-w-[220px] px-4 py-3 text-slate-800">
+                        {row.installation || "—"}
                       </td>
 
-                      <td className="px-3 py-2">
-                        {row.action}
+                      <td className="min-w-[220px] px-4 py-3 text-slate-800">
+                        {row.action || "—"}
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-700">
                         {row.equipmentId || "—"}
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="min-w-[150px] px-4 py-3 text-slate-700">
                         {row.company || "—"}
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`rounded-full border px-2 py-1 font-bold ${statusClasses(
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
                             row.status
                           )}`}
                         >
                           {row.status}
                         </span>
+                      </td>
+
+                      <td className="min-w-[250px] px-4 py-3 text-slate-600">
+                        {row.comment || "—"}
                       </td>
                     </tr>
                   ))}
@@ -805,57 +1031,96 @@ export default function ImportPage() {
             </div>
           </div>
 
-          {parsed.warnings.length > 0 && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <div className="flex items-center gap-2 font-black text-amber-800">
-                <AlertTriangle className="h-4 w-4" />
-                Avisos de importación
-              </div>
+          {(parsed.excluded > 0 ||
+            parsed.unmatched > 0 ||
+            parsed.warnings.length > 0) && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
 
-              <ul className="mt-3 space-y-1 text-xs text-amber-800">
-                {parsed.warnings.map((warning, index) => (
-                  <li key={`${index}-${warning}`}>
-                    • {warning}
-                  </li>
-                ))}
-              </ul>
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-amber-900">
+                    Observaciones de la importación
+                  </h2>
+
+                  <p className="mt-1 text-sm text-amber-800">
+                    Las filas sin un estado válido en la columna
+                    O no se incorporan. Los elementos con estado
+                    válido pero sin correspondencia en el catálogo
+                    aparecen aquí.
+                  </p>
+
+                  <div className="mt-4 space-y-2 text-sm text-amber-900">
+                    {parsed.excluded > 0 && (
+                      <p>
+                        <strong>
+                          Filas sin estado importable:
+                        </strong>{" "}
+                        {parsed.excluded}
+                      </p>
+                    )}
+
+                    {parsed.unmatched > 0 && (
+                      <p>
+                        <strong>
+                          Elementos con Nº no encontrado:
+                        </strong>{" "}
+                        {parsed.unmatched}
+                      </p>
+                    )}
+
+                    {parsed.warnings.map((warning, index) => (
+                      <p
+                        key={`${warning}-${index}`}
+                        className="rounded-lg bg-white/60 p-2"
+                      >
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="flex items-start gap-2 text-xs text-slate-600">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-slate-900">
+                Confirmar importación
+              </p>
 
-              <div>
-                <div className="font-bold">
-                  La importación solo afecta a {parsed.centerName} ·{" "}
-                  {parsed.period} {parsed.year}.
-                </div>
-
-                <div>
-                  No modifica S2 ni ninguna revisión anterior y no cambia el
-                  inventario actual del centro.
-                </div>
-              </div>
+              <p className="mt-1 text-sm text-slate-600">
+                Se guardarán {parsed.rows.length} elementos en
+                la revisión histórica {parsed.period}{" "}
+                {parsed.year}.
+              </p>
             </div>
 
             <button
               type="button"
               onClick={confirmImport}
-              disabled={busy || parsed.rows.length === 0}
-              className="rounded-xl bg-[#002A54] px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={parsed.rows.length === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              <CheckCircle2 className="h-5 w-5" />
               Confirmar importación
             </button>
           </div>
-
-          {message && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
-              <CheckCircle2 className="h-4 w-4" />
-              {message}
-            </div>
-          )}
         </>
+      )}
+
+      {message && (
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+
+          <div>
+            <p className="font-semibold">
+              Importación completada
+            </p>
+
+            <p className="mt-1">{message}</p>
+          </div>
+        </div>
       )}
     </div>
   );
