@@ -69,12 +69,6 @@ function normalize(value: unknown): string {
     .trim();
 }
 
-function asBoolean(value: unknown): boolean {
-  if (value === true || value === 1) return true;
-  const v = normalize(value);
-  return v === "true" || v === "si" || v === "sí" || v === "x" || v === "✓";
-}
-
 function excelDateToISO(value: unknown): string {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10);
@@ -105,10 +99,17 @@ function excelDateToISO(value: unknown): string {
   return "";
 }
 
-function worstStatus(selected: string[]): V1Status {
-  if (selected.includes("NO APTO")) return "NO APTO";
-  if (selected.includes("APTO CONDICIONADO")) return "APTO CONDICIONADO";
-  return "APTO";
+function statusFromExcel(value: unknown): V1Status | null {
+  const status = normalize(value);
+
+  if (!status) return null;
+
+  if (status === "favorable") return "APTO";
+  if (status === "desfavorable") return "NO APTO";
+  if (status === "condicionado") return "APTO CONDICIONADO";
+  if (status === "pte" || status === "pte.") return "PENDIENTE";
+
+  return null;
 }
 
 function detectHeaderDate(rows: any[][]): string {
@@ -212,6 +213,7 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   }) as any[][];
 
   const detected = detectCenter(rows);
+
   if (!detected.center) {
     throw new Error(
       `No se ha podido identificar el centro "${
@@ -248,8 +250,8 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
    * En el STL utilizado para la importación, las filas 11-94
    * corresponden al catálogo de 84 actuaciones.
    *
-   * Se utiliza primero el ordinal de la fila, que evita
-   * ambigüedades cuando instalación/actuación se repiten.
+   * Se utiliza el ordinal de la fila para relacionarla con
+   * la actuación correspondiente del catálogo.
    */
   const firstDataRow = 11;
   const lastDataRow = Math.min(94, rows.length);
@@ -262,7 +264,11 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   let multiple = 0;
   let unmatched = 0;
 
-  for (let excelRow = firstDataRow; excelRow <= lastDataRow; excelRow += 1) {
+  for (
+    let excelRow = firstDataRow;
+    excelRow <= lastDataRow;
+    excelRow += 1
+  ) {
     const row = rows[excelRow - 1] || [];
     const ordinal = Number(row[0]);
 
@@ -279,35 +285,35 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
       continue;
     }
 
-    const selected: string[] = [];
-    if (asBoolean(row[12])) selected.push("APTO");
-    if (asBoolean(row[13])) selected.push("APTO CONDICIONADO");
-    if (asBoolean(row[14])) selected.push("NO APTO");
+    /*
+     * IMPORTACIÓN DEL ESTADO:
+     *
+     * La columna O del Excel es el origen único del estado.
+     *
+     * Excel O:
+     *   FAVORABLE       -> APTO
+     *   DESFAVORABLE    -> NO APTO
+     *   CONDICIONADO    -> APTO CONDICIONADO
+     *   PTE.            -> PENDIENTE
+     *
+     * Las columnas M y N NO se revisan.
+     */
+    const excelStatus = text(row[14]);
+    const status = statusFromExcel(excelStatus);
 
     /*
-     * REGLA IMPORTACIÓN:
-     * - Sin M/N/O: el elemento no existe en el centro y NO se
-     *   incorpora a esta revisión.
-     * - Una marca: se utiliza esa marca.
-     * - Varias marcas: se utiliza la más desfavorable.
+     * Si la columna O no contiene un estado reconocido,
+     * el elemento no se incorpora a esta revisión.
      */
-    if (selected.length === 0) {
+    if (!status) {
+      if (excelStatus) {
+        warnings.push(
+          `Fila ${excelRow} (${catalogItem.action}): estado no reconocido en la columna O: "${excelStatus}". El elemento no se ha importado.`
+        );
+      }
+
       excluded += 1;
       continue;
-    }
-
-    const isMultiple = selected.length > 1;
-    if (isMultiple) {
-      multiple += 1;
-      warnings.push(
-        `Fila ${excelRow} (${catalogItem.action}): hay ${
-          selected.length
-        } estados marcados (${selected.join(
-          ", "
-        )}). Se importará "${worstStatus(
-          selected
-        )}" por aplicación de la regla de peor estado.`
-      );
     }
 
     parsedRows.push({
@@ -322,12 +328,26 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
           catalogItem.baseCode ??
           catalogItem.code
       ),
-      equipmentId: text(row[7]),
-      company: text(row[8]),
-      inspectionDate: reviewDate || excelDateToISO(row[9]),
-      status: worstStatus(selected),
-      selected,
-      multiple: isMultiple,
+
+      /*
+       * Columnas Excel:
+       * G = índice 6 -> ID Equipo
+       * H = índice 7 -> Empresa
+       */
+      equipmentId: text(row[6]),
+      company: text(row[7]),
+
+      inspectionDate:
+        reviewDate || excelDateToISO(row[9]),
+
+      status,
+
+      /*
+       * El estado ya viene determinado directamente por O.
+       * No existen múltiples marcas que resolver.
+       */
+      selected: [status],
+      multiple: false,
     });
   }
 
@@ -363,8 +383,13 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
 function statusClasses(status: V1Status) {
   if (status === "APTO")
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
   if (status === "APTO CONDICIONADO")
     return "border-amber-200 bg-amber-50 text-amber-700";
+
+  if (status === "PENDIENTE")
+    return "border-slate-200 bg-slate-50 text-slate-700";
+
   return "border-red-200 bg-red-50 text-red-700";
 }
 
@@ -380,12 +405,30 @@ export default function ImportPage() {
 
     const counts = {
       APTO: parsed.rows.filter(r => r.status === "APTO").length,
+
       "APTO CONDICIONADO": parsed.rows.filter(
         r => r.status === "APTO CONDICIONADO"
       ).length,
-      "NO APTO": parsed.rows.filter(r => r.status === "NO APTO").length,
+
+      "NO APTO": parsed.rows.filter(
+        r => r.status === "NO APTO"
+      ).length,
+
+      PENDIENTE: parsed.rows.filter(
+        r => r.status === "PENDIENTE"
+      ).length,
     };
 
+    /*
+     * Puntuación:
+     * APTO = 3 puntos
+     * APTO CONDICIONADO = 2 puntos
+     * NO APTO = 1 punto
+     * PENDIENTE = 0 puntos
+     *
+     * El denominador utiliza TODOS los elementos importados,
+     * incluidos los que están PENDIENTE.
+     */
     const points =
       counts.APTO * 3 +
       counts["APTO CONDICIONADO"] * 2 +
@@ -406,6 +449,7 @@ export default function ImportPage() {
 
     try {
       const buffer = await nextFile.arrayBuffer();
+
       const wb = XLSX.read(buffer, {
         type: "array",
         cellDates: true,
@@ -430,6 +474,7 @@ export default function ImportPage() {
     setMessage("");
 
     const state = loadState();
+
     const key = reviewKey(
       parsed.centerId,
       parsed.year,
@@ -469,11 +514,16 @@ export default function ImportPage() {
       ...(existing || {}),
       year: parsed.year,
       period: parsed.period,
+
       /*
        * Universo histórico de esta revisión.
-       * Las filas sin M/N/O quedan deliberadamente fuera.
+       * Se incorporan todos los elementos cuyo estado de la
+       * columna O haya sido reconocido, incluido PENDIENTE.
        */
-      itemIds: parsed.rows.map(row => row.catalogItemId),
+      itemIds: parsed.rows.map(
+        row => row.catalogItemId
+      ),
+
       confirmed: false,
       confirmedAt: undefined,
       confirmedBy: undefined,
@@ -490,6 +540,7 @@ export default function ImportPage() {
     };
 
     saveState(nextState);
+
     setMessage(
       `Importación realizada correctamente: ${parsed.centerName} · ${parsed.period} ${parsed.year}. Se han incorporado ${parsed.rows.length} elementos a esta revisión histórica.`
     );
@@ -501,6 +552,7 @@ export default function ImportPage() {
         <h1 className="text-2xl font-black text-[#002A54]">
           Importación STL / Excel
         </h1>
+
         <p className="mt-1 text-sm text-slate-500">
           Importación de revisiones históricas desde la FICHA corporativa STL.
         </p>
@@ -509,19 +561,26 @@ export default function ImportPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center hover:border-slate-400">
           <UploadCloud className="h-10 w-10 text-[#002A54]" />
+
           <div className="mt-3 font-bold">
             Selecciona un archivo Excel
           </div>
+
           <div className="mt-1 text-sm text-slate-500">
             XLSX / XLS · se analiza localmente en el navegador
           </div>
+
           <input
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
             onChange={e => {
               const selected = e.target.files?.[0];
-              if (selected) void handleFile(selected);
+
+              if (selected) {
+                void handleFile(selected);
+              }
+
               e.currentTarget.value = "";
             }}
           />
@@ -530,7 +589,11 @@ export default function ImportPage() {
         {file && (
           <div className="mt-4 flex items-center gap-3 rounded-xl bg-slate-50 p-4">
             <FileSpreadsheet className="h-5 w-5 text-[#002A54]" />
-            <div className="font-semibold">{file.name}</div>
+
+            <div className="font-semibold">
+              {file.name}
+            </div>
+
             {busy ? (
               <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
                 Analizando...
@@ -559,56 +622,90 @@ export default function ImportPage() {
                 <h2 className="text-lg font-black text-slate-800">
                   Vista previa de importación
                 </h2>
+
                 <p className="mt-1 text-sm text-slate-500">
                   {parsed.centerName} · centro {parsed.centerCode} ·{" "}
                   {parsed.period} {parsed.year}
                 </p>
               </div>
+
               <div className="rounded-xl border border-[#002A54]/10 bg-[#002A54]/5 px-4 py-2 text-right">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Cumplimiento calculado
                 </div>
+
                 <div className="text-2xl font-black text-[#002A54]">
                   {summary.score}%
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
               <div className="rounded-xl bg-slate-50 p-3">
-                <div className="text-xs text-slate-500">Importados</div>
+                <div className="text-xs text-slate-500">
+                  Importados
+                </div>
+
                 <div className="mt-1 text-xl font-black">
                   {parsed.rows.length}
                 </div>
               </div>
+
               <div className="rounded-xl bg-slate-50 p-3">
-                <div className="text-xs text-slate-500">No existentes</div>
+                <div className="text-xs text-slate-500">
+                  Sin estado
+                </div>
+
                 <div className="mt-1 text-xl font-black">
                   {parsed.excluded}
                 </div>
               </div>
+
               <div className="rounded-xl bg-emerald-50 p-3">
-                <div className="text-xs text-emerald-700">APTO</div>
+                <div className="text-xs text-emerald-700">
+                  APTO
+                </div>
+
                 <div className="mt-1 text-xl font-black text-emerald-700">
                   {summary.counts.APTO}
                 </div>
               </div>
+
               <div className="rounded-xl bg-amber-50 p-3">
-                <div className="text-xs text-amber-700">CONDICIONADO</div>
+                <div className="text-xs text-amber-700">
+                  CONDICIONADO
+                </div>
+
                 <div className="mt-1 text-xl font-black text-amber-700">
                   {summary.counts["APTO CONDICIONADO"]}
                 </div>
               </div>
+
               <div className="rounded-xl bg-red-50 p-3">
-                <div className="text-xs text-red-700">NO APTO</div>
+                <div className="text-xs text-red-700">
+                  NO APTO
+                </div>
+
                 <div className="mt-1 text-xl font-black text-red-700">
                   {summary.counts["NO APTO"]}
                 </div>
               </div>
+
+              <div className="rounded-xl bg-slate-50 p-3">
+                <div className="text-xs text-slate-600">
+                  PENDIENTE
+                </div>
+
+                <div className="mt-1 text-xl font-black text-slate-700">
+                  {summary.counts.PENDIENTE}
+                </div>
+              </div>
+
               <div className="rounded-xl bg-orange-50 p-3">
                 <div className="text-xs text-orange-700">
                   Múltiples marcas
                 </div>
+
                 <div className="mt-1 text-xl font-black text-orange-700">
                   {parsed.multiple}
                 </div>
@@ -621,9 +718,10 @@ export default function ImportPage() {
               <h2 className="font-black text-slate-800">
                 Elementos que se importarán
               </h2>
+
               <p className="mt-1 text-xs text-slate-500">
-                Las filas sin APTO / CONDICIONADO / NO APTO no se incorporan a
-                esta revisión porque se consideran elementos inexistentes.
+                El estado se obtiene exclusivamente de la columna O del Excel.
+                Las columnas M y N no se utilizan.
               </p>
             </div>
 
@@ -631,33 +729,66 @@ export default function ImportPage() {
               <table className="min-w-full text-xs">
                 <thead className="sticky top-0 bg-[#002A54] text-left text-white">
                   <tr>
-                    <th className="px-3 py-2">Fila</th>
-                    <th className="px-3 py-2">Código</th>
-                    <th className="px-3 py-2">Instalación</th>
-                    <th className="px-3 py-2">Actuación</th>
-                    <th className="px-3 py-2">ID equipo</th>
-                    <th className="px-3 py-2">Empresa</th>
-                    <th className="px-3 py-2">Estado</th>
+                    <th className="px-3 py-2">
+                      Fila
+                    </th>
+
+                    <th className="px-3 py-2">
+                      Código
+                    </th>
+
+                    <th className="px-3 py-2">
+                      Instalación
+                    </th>
+
+                    <th className="px-3 py-2">
+                      Actuación
+                    </th>
+
+                    <th className="px-3 py-2">
+                      ID equipo
+                    </th>
+
+                    <th className="px-3 py-2">
+                      Empresa
+                    </th>
+
+                    <th className="px-3 py-2">
+                      Estado
+                    </th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {parsed.rows.map(row => (
                     <tr
                       key={`${row.excelRow}-${row.catalogItemId}`}
                       className="border-b border-slate-100"
                     >
-                      <td className="px-3 py-2">{row.excelRow}</td>
+                      <td className="px-3 py-2">
+                        {row.excelRow}
+                      </td>
+
                       <td className="px-3 py-2 font-mono">
                         {row.actionCode}
                       </td>
-                      <td className="px-3 py-2">{row.installation}</td>
-                      <td className="px-3 py-2">{row.action}</td>
+
+                      <td className="px-3 py-2">
+                        {row.installation}
+                      </td>
+
+                      <td className="px-3 py-2">
+                        {row.action}
+                      </td>
+
                       <td className="px-3 py-2">
                         {row.equipmentId || "—"}
                       </td>
+
                       <td className="px-3 py-2">
                         {row.company || "—"}
                       </td>
+
                       <td className="px-3 py-2">
                         <span
                           className={`rounded-full border px-2 py-1 font-bold ${statusClasses(
@@ -666,12 +797,6 @@ export default function ImportPage() {
                         >
                           {row.status}
                         </span>
-                        {row.multiple && (
-                          <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-orange-700">
-                            <AlertTriangle className="h-3 w-3" />
-                            Múltiples marcas → peor estado
-                          </div>
-                        )}
                       </td>
                     </tr>
                   ))}
@@ -686,9 +811,12 @@ export default function ImportPage() {
                 <AlertTriangle className="h-4 w-4" />
                 Avisos de importación
               </div>
+
               <ul className="mt-3 space-y-1 text-xs text-amber-800">
                 {parsed.warnings.map((warning, index) => (
-                  <li key={`${index}-${warning}`}>• {warning}</li>
+                  <li key={`${index}-${warning}`}>
+                    • {warning}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -697,11 +825,13 @@ export default function ImportPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex items-start gap-2 text-xs text-slate-600">
               <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+
               <div>
                 <div className="font-bold">
                   La importación solo afecta a {parsed.centerName} ·{" "}
                   {parsed.period} {parsed.year}.
                 </div>
+
                 <div>
                   No modifica S2 ni ninguna revisión anterior y no cambia el
                   inventario actual del centro.
