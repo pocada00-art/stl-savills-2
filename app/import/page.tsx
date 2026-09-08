@@ -26,6 +26,7 @@ import { buildElementCodes } from "@/lib/element-codes";
 
 type ImportRow = {
   excelRow: number;
+  code: string;
   ordinal: number;
   catalogItemId: string;
   category: string;
@@ -70,6 +71,7 @@ type ParsedImport = {
  *
  * TABLA DE ELEMENTOS
  *
+ * C = Código del elemento
  * D = Instalación
  * E = Actuación
  * G = ID
@@ -84,22 +86,36 @@ type ParsedImport = {
  * REGLA DE IDENTIFICACIÓN:
  *
  *   1. O (ESTADO) determina si la fila se procesa.
- *   2. D (INSTALACIÓN) es la primera referencia contra
+ *   2. D (INSTALACION) es la primera referencia contra
  *      el catálogo.
- *   3. E (ACTUACIÓN) es la segunda referencia contra
+ *   3. E (ACTUACION) es la segunda referencia contra
  *      el catálogo.
- *   4. G (ID) solamente se importa como dato.
+ *   4. C es el código que se importa y se muestra.
+ *   5. G es el ID que se importa como dato.
  *
- * Por tanto:
+ * Cuando existen varias filas con el mismo:
  *
- *   Excel D -> catálogo INSTALACION
- *   Excel E -> catálogo ACTUACION
+ *   C + D + E
  *
- * G NO se utiliza para localizar el elemento.
- * N NO se utiliza para nada.
+ * se consideran unidades diferentes del mismo elemento.
+ *
+ * Ejemplo:
+ *
+ *   1.1 + Ascens. + Montac. OCA
+ *   1.1 + Ascens. + Montac. OCA
+ *   1.1 + Ascens. + Montac. OCA
+ *
+ * se convierten en:
+ *
+ *   1.1.1
+ *   1.1.2
+ *   1.1.3
+ *
+ * manteniendo todos los datos correspondientes a cada fila.
  */
 
 const EXCEL_COLUMNS = {
+  CODE: 2, // C
   INSTALLATION: 3, // D
   ACTION: 4, // E
   EQUIPMENT_ID: 6, // G
@@ -151,11 +167,8 @@ function normalize(value: unknown): string {
 }
 
 /**
- * Obtiene el valor de una propiedad del catálogo probando
- * diferentes nombres posibles.
- *
- * Esto permite que la función funcione tanto si el catálogo
- * utiliza instalación/actuación como installation/action.
+ * Obtiene un valor textual de un elemento del catálogo
+ * probando diferentes nombres de propiedad.
  */
 function catalogText(
   item: any,
@@ -173,8 +186,8 @@ function catalogText(
 }
 
 /**
- * Convierte exclusivamente el valor de la columna O
- * (ESTADO) al estado utilizado por la aplicación.
+ * Convierte el valor de la columna O (ESTADO)
+ * al estado utilizado por la aplicación.
  *
  * La columna N NO participa.
  */
@@ -222,7 +235,7 @@ function statusFromExcel(
 }
 
 /**
- * Lee la cabecera utilizando las celdas FIJAS de la plantilla:
+ * Lee la cabecera utilizando las celdas FIJAS:
  *
  * E2 = Nombre del centro
  * E7 = Revisión
@@ -283,10 +296,8 @@ function detectCenter(rows: any[][]) {
   const center = demo.centers.find(
     (c: any) =>
       normalize(c.name) === normalize(centerName) ||
-      normalize(c.shortCode) ===
-        normalize(centerName) ||
-      normalize(c.code) ===
-        normalize(centerName)
+      normalize(c.shortCode) === normalize(centerName) ||
+      normalize(c.code) === normalize(centerName)
   );
 
   if (!center) {
@@ -305,30 +316,25 @@ function detectCenter(rows: any[][]) {
 }
 
 /**
- * Busca un elemento del catálogo utilizando las DOS referencias
- * establecidas para la importación:
+ * Busca todos los elementos del catálogo que coinciden con:
  *
  *   Excel D -> catálogo INSTALACION
  *   Excel E -> catálogo ACTUACION
  *
- * El ID de Excel (G) NO se utiliza aquí.
- * La columna N NO se utiliza aquí.
+ * IMPORTANTE:
  *
- * Devuelve:
+ * No se utiliza G (ID).
+ * No se utiliza N.
+ * No se utiliza C para localizar el catálogo.
  *
- *   item       -> elemento encontrado si existe una única
- *                coincidencia.
- *
- *   matches    -> número de coincidencias exactas D + E.
- *
- *   installationMatches -> número de elementos que coinciden
- *                           únicamente por instalación.
+ * El resultado conserva el orden del catálogo para poder
+ * asignar las unidades duplicadas una a una.
  */
-function findCatalogItem(
+function findCatalogItems(
   catalogItems: any[],
   installation: string,
   action: string
-) {
+): any[] {
   const normalizedInstallation =
     normalize(installation);
 
@@ -339,20 +345,11 @@ function findCatalogItem(
     !normalizedInstallation ||
     !normalizedAction
   ) {
-    return {
-      item: null,
-      matches: 0,
-      installationMatches: 0,
-    };
+    return [];
   }
 
-  /*
-   * PRIMERA REFERENCIA:
-   *
-   * Excel D contra INSTALACION del catálogo.
-   */
-  const installationMatches =
-    catalogItems.filter((item) => {
+  return catalogItems.filter(
+    (item) => {
       const catalogInstallation =
         catalogText(item, [
           "installation",
@@ -361,19 +358,6 @@ function findCatalogItem(
           "install",
         ]);
 
-      return (
-        normalize(catalogInstallation) ===
-        normalizedInstallation
-      );
-    });
-
-  /*
-   * SEGUNDA REFERENCIA:
-   *
-   * Excel E contra ACTUACION del catálogo.
-   */
-  const exactMatches =
-    installationMatches.filter((item) => {
       const catalogAction =
         catalogText(item, [
           "action",
@@ -383,26 +367,21 @@ function findCatalogItem(
         ]);
 
       return (
-        normalize(catalogAction) ===
-        normalizedAction
+        normalize(
+          catalogInstallation
+        ) === normalizedInstallation &&
+        normalize(
+          catalogAction
+        ) === normalizedAction
       );
-    });
-
-  return {
-    item:
-      exactMatches.length === 1
-        ? exactMatches[0]
-        : null,
-
-    matches: exactMatches.length,
-
-    installationMatches:
-      installationMatches.length,
-  };
+    }
+  );
 }
 
 /**
- * Obtiene los datos del catálogo para mostrar/importar.
+ * Devuelve el ordinal interno del catálogo si existe.
+ *
+ * Nunca procede de la columna N del Excel.
  */
 function getCatalogOrdinal(
   catalogItem: any
@@ -453,14 +432,67 @@ function getCatalogCategory(
   ]);
 }
 
+/**
+ * Crea la clave utilizada para detectar unidades repetidas.
+ *
+ * La comparación se hace con:
+ *
+ *   C + D + E
+ *
+ * y no con G ni N.
+ */
+function duplicateGroupKey(
+  code: string,
+  installation: string,
+  action: string
+): string {
+  return [
+    normalize(code),
+    normalize(installation),
+    normalize(action),
+  ].join("|");
+}
+
+/**
+ * Genera el código de unidad.
+ *
+ * Si solamente existe una unidad:
+ *
+ *   1.1
+ *
+ * Si existen varias:
+ *
+ *   1.1.1
+ *   1.1.2
+ *   1.1.3
+ *
+ * Se añade el sufijo únicamente cuando hay más de una
+ * fila con el mismo C + D + E.
+ */
+function buildUnitCode(
+  baseCode: string,
+  totalUnits: number,
+  unitIndex: number
+): string {
+  const cleanCode =
+    text(baseCode);
+
+  if (
+    totalUnits <= 1
+  ) {
+    return cleanCode;
+  }
+
+  return `${cleanCode}.${unitIndex}`;
+}
+
 function parseWorkbook(
   wb: XLSX.WorkBook
 ): ParsedImport {
-  const sheetName = wb.SheetNames.includes(
-    "FICHA"
-  )
-    ? "FICHA"
-    : wb.SheetNames[0];
+  const sheetName =
+    wb.SheetNames.includes("FICHA")
+      ? "FICHA"
+      : wb.SheetNames[0];
 
   if (!sheetName) {
     throw new Error(
@@ -470,16 +502,18 @@ function parseWorkbook(
 
   const ws = wb.Sheets[sheetName];
 
-  const rows = XLSX.utils.sheet_to_json(
-    ws,
-    {
-      header: 1,
-      defval: null,
-      raw: true,
-    }
-  ) as any[][];
+  const rows =
+    XLSX.utils.sheet_to_json(
+      ws,
+      {
+        header: 1,
+        defval: null,
+        raw: true,
+      }
+    ) as any[][];
 
-  const detected = detectCenter(rows);
+  const detected =
+    detectCenter(rows);
 
   const normalizedReviewText =
     normalize(
@@ -488,16 +522,6 @@ function parseWorkbook(
 
   let period: Period;
 
-  /*
-   * Admite las formas habituales de la plantilla:
-   *
-   * S1
-   * S2
-   * Semestre 1
-   * Semestre 2
-   * 1 semestre
-   * 2 semestre
-   */
   if (
     /\bs1\b/.test(
       normalizedReviewText
@@ -544,8 +568,11 @@ function parseWorkbook(
       catalog as any[]
     ) as any[];
 
-  const parsedRows: ImportRow[] = [];
-  const warnings: string[] = [];
+  const parsedRows: ImportRow[] =
+    [];
+
+  const warnings: string[] =
+    [];
 
   let excluded = 0;
   let unmatched = 0;
@@ -553,56 +580,65 @@ function parseWorkbook(
 
   /*
    * ==========================================================
-   * PROCESAMIENTO DE A12:T200
-   * ==========================================================
+   * PRIMER PASO:
    *
-   * La columna O es la puerta de entrada.
+   * Leemos las filas válidas y las agrupamos por:
    *
-   * O vacía:
-   *     -> ignorar completamente la fila.
+   * C + D + E
    *
-   * O con estado:
-   *     -> D + E identifican el elemento.
+   * antes de asignarlas al catálogo.
    *
-   * G solamente se importa como ID.
-   * H se importa como Empresa.
-   * R se importa como Comentario.
-   *
-   * N NO SE CONSULTA.
+   * Esto permite detectar correctamente las unidades repetidas.
    */
+  type ValidExcelRow = {
+    excelRow: number;
+    code: string;
+    installation: string;
+    action: string;
+    equipmentId: string;
+    company: string;
+    rawStatus: string;
+    status: V1Status;
+    comment: string;
+  };
+
+  const validRows: ValidExcelRow[] =
+    [];
+
   for (
-    let excelRow = FIRST_DATA_ROW;
-    excelRow <= LAST_DATA_ROW;
+    let excelRow =
+      FIRST_DATA_ROW;
+    excelRow <=
+    LAST_DATA_ROW;
     excelRow += 1
   ) {
     const row =
-      rows[excelRow - 1] || [];
+      rows[excelRow - 1] ||
+      [];
 
     /*
-     * ========================================================
-     * 1. ESTADO: COLUMNA O
-     * ========================================================
-     */
-    const rawStatus = text(
-      row[EXCEL_COLUMNS.STATUS]
-    );
-
-    /*
-     * O vacía = fila sin información de revisión.
+     * O = ESTADO.
      *
-     * Se ignora silenciosamente.
+     * Si está vacío, la fila se ignora completamente.
      */
+    const rawStatus =
+      text(
+        row[
+          EXCEL_COLUMNS.STATUS
+        ]
+      );
+
     if (!rawStatus) {
       continue;
     }
 
     /*
-     * ========================================================
-     * 2. COMPROBAR ESTADO
-     * ========================================================
+     * Estado no reconocido.
      */
     const status =
-      statusFromExcel(rawStatus);
+      statusFromExcel(
+        rawStatus
+      );
 
     if (!status) {
       excluded += 1;
@@ -615,31 +651,50 @@ function parseWorkbook(
     }
 
     /*
-     * ========================================================
-     * 3. LEER D Y E
-     * ========================================================
-     *
-     * D = INSTALACION
-     * E = ACTUACION
-     *
-     * Estas son las referencias para localizar el elemento
-     * correcto en el catálogo.
+     * C = código.
      */
-    const installation = text(
-      row[
-        EXCEL_COLUMNS.INSTALLATION
-      ]
-    );
+    const code =
+      text(
+        row[
+          EXCEL_COLUMNS.CODE
+        ]
+      );
 
-    const action = text(
-      row[EXCEL_COLUMNS.ACTION]
-    );
+    /*
+     * D = instalación.
+     */
+    const installation =
+      text(
+        row[
+          EXCEL_COLUMNS.INSTALLATION
+        ]
+      );
+
+    /*
+     * E = actuación.
+     */
+    const action =
+      text(
+        row[
+          EXCEL_COLUMNS.ACTION
+        ]
+      );
+
+    if (!code) {
+      unmatched += 1;
+
+      warnings.push(
+        `Fila ${excelRow}: tiene un estado válido "${rawStatus}", pero la columna C (código) está vacía. La fila no se ha importado.`
+      );
+
+      continue;
+    }
 
     if (!installation) {
       unmatched += 1;
 
       warnings.push(
-        `Fila ${excelRow}: tiene un estado válido "${rawStatus}" en O, pero la columna D (INSTALACION) está vacía. No se ha podido identificar el elemento del catálogo.`
+        `Fila ${excelRow}: tiene un estado válido "${rawStatus}", pero la columna D (INSTALACION) está vacía. No se ha podido identificar el elemento del catálogo.`
       );
 
       continue;
@@ -649,174 +704,301 @@ function parseWorkbook(
       unmatched += 1;
 
       warnings.push(
-        `Fila ${excelRow}: la INSTALACION de D es "${installation}", pero la columna E (ACTUACION) está vacía. No se ha podido completar la identificación del elemento del catálogo.`
+        `Fila ${excelRow}: el código "${code}" y la INSTALACION "${installation}" son válidos, pero la columna E (ACTUACION) está vacía. No se ha podido identificar el elemento del catálogo.`
       );
 
       continue;
     }
 
     /*
-     * ========================================================
-     * 4. BUSCAR EN CATÁLOGO POR D + E
-     * ========================================================
+     * G = ID.
      *
-     * MUY IMPORTANTE:
-     *
-     * G NO se utiliza.
-     * N NO se utiliza.
+     * Se importa como dato.
+     * NO se utiliza para localizar el catálogo.
      */
-    const match =
-      findCatalogItem(
-        catalogItems,
-        installation,
-        action
+    const equipmentId =
+      text(
+        row[
+          EXCEL_COLUMNS.EQUIPMENT_ID
+        ]
       );
 
     /*
-     * No existe coincidencia exacta D + E.
+     * H = Empresa.
      */
-    if (!match.item) {
-      if (
-        match.matches > 1
-      ) {
-        multiple += 1;
-
-        warnings.push(
-          `Fila ${excelRow}: la combinación INSTALACION "${installation}" + ACTUACION "${action}" coincide con ${match.matches} elementos del catálogo. La fila no se ha importado para evitar asociarla al elemento incorrecto.`
-        );
-      } else if (
-        match.installationMatches >
-        0
-      ) {
-        unmatched += 1;
-
-        warnings.push(
-          `Fila ${excelRow}: la INSTALACION "${installation}" existe en el catálogo, pero la ACTUACION "${action}" de la columna E no coincide con ninguna actuación de esa instalación. La fila no se ha importado.`
-        );
-      } else {
-        unmatched += 1;
-
-        warnings.push(
-          `Fila ${excelRow}: no existe en el catálogo una INSTALACION "${installation}" con ACTUACION "${action}". La fila no se ha importado.`
-        );
-      }
-
-      continue;
-    }
-
-    const catalogItem =
-      match.item;
+    const company =
+      text(
+        row[
+          EXCEL_COLUMNS.COMPANY
+        ]
+      );
 
     /*
-     * ========================================================
-     * 5. LEER LOS DATOS DE LA MISMA FILA
-     * ========================================================
-     *
-     * D = Instalacion
-     * E = Actuacion
-     * G = ID
-     * H = Empresa
-     * O = Estado
-     * R = Comentario
-     *
-     * N NO SE LEE.
+     * R = Comentario.
      */
-    const equipmentId = text(
-      row[
-        EXCEL_COLUMNS.EQUIPMENT_ID
-      ]
-    );
+    const comment =
+      text(
+        row[
+          EXCEL_COLUMNS.COMMENT
+        ]
+      );
 
-    const company = text(
-      row[
-        EXCEL_COLUMNS.COMPANY
-      ]
-    );
-
-    const comment = text(
-      row[
-        EXCEL_COLUMNS.COMMENT
-      ]
-    );
-
-    /*
-     * La revisión se identifica por:
-     *
-     * centro + año + periodo.
-     *
-     * No se utiliza ninguna fecha de columnas no definidas
-     * en la estructura corporativa.
-     */
-    const inspectionDate = "";
-
-    /*
-     * ========================================================
-     * 6. CREAR FILA IMPORTADA
-     * ========================================================
-     */
-    parsedRows.push({
+    validRows.push({
       excelRow,
-
-      /*
-       * Este ordinal procede del catálogo.
-       *
-       * NO procede de la columna N del Excel.
-       */
-      ordinal:
-        getCatalogOrdinal(
-          catalogItem
-        ),
-
-      catalogItemId:
-        String(
-          catalogItem.id
-        ),
-
-      category:
-        getCatalogCategory(
-          catalogItem
-        ),
-
-      /*
-       * Conservamos los valores de D y E del Excel.
-       */
+      code,
       installation,
-
       action,
-
-      actionCode:
-        getCatalogActionCode(
-          catalogItem
-        ),
-
-      /*
-       * G se importa como dato.
-       *
-       * NO se ha utilizado para encontrar catalogItem.
-       */
       equipmentId,
-
       company,
-
-      inspectionDate,
-
+      rawStatus,
       status,
-
-      selected: [status],
-
-      multiple: false,
-
       comment,
     });
   }
 
-  if (
-    catalogItems.length !== 84
-  ) {
-    warnings.push(
-      `El catálogo utilizado contiene ${catalogItems.length} actuaciones.`
-    );
+  /*
+   * ==========================================================
+   * SEGUNDO PASO:
+   *
+   * Agrupar las filas por C + D + E.
+   *
+   * Ejemplo:
+   *
+   * 1.1 | Ascens. | Montac. OCA
+   * 1.1 | Ascens. | Montac. OCA
+   * 1.1 | Ascens. | Montac. OCA
+   *
+   * -> mismo grupo con 3 unidades.
+   */
+  const groups =
+    new Map<
+      string,
+      ValidExcelRow[]
+    >();
+
+  for (const row of validRows) {
+    const key =
+      duplicateGroupKey(
+        row.code,
+        row.installation,
+        row.action
+      );
+
+    const group =
+      groups.get(key);
+
+    if (group) {
+      group.push(row);
+    } else {
+      groups.set(key, [row]);
+    }
   }
+
+  /*
+   * ==========================================================
+   * TERCER PASO:
+   *
+   * Procesar cada grupo y asociar sus unidades al catálogo.
+   *
+   * La búsqueda se hace por D + E.
+   *
+   * Si hay varias filas Excel y varias entradas de catálogo
+   * con la misma D + E, se asignan en orden:
+   *
+   * Excel unidad 1 -> catálogo coincidencia 1
+   * Excel unidad 2 -> catálogo coincidencia 2
+   * Excel unidad 3 -> catálogo coincidencia 3
+   */
+  for (const group of groups.values()) {
+    const firstRow =
+      group[0];
+
+    if (!firstRow) {
+      continue;
+    }
+
+    const catalogMatches =
+      findCatalogItems(
+        catalogItems,
+        firstRow.installation,
+        firstRow.action
+      );
+
+    /*
+     * No existe ningún elemento del catálogo con D + E.
+     */
+    if (
+      catalogMatches.length === 0
+    ) {
+      unmatched +=
+        group.length;
+
+      warnings.push(
+        `Código "${firstRow.code}": no existe en el catálogo una INSTALACION "${firstRow.installation}" con ACTUACION "${firstRow.action}". Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
+      );
+
+      continue;
+    }
+
+    /*
+     * Hay más unidades en Excel que elementos equivalentes
+     * en el catálogo.
+     *
+     * En este caso no debemos asociar una unidad al elemento
+     * equivocado. Las unidades que no tengan correspondencia
+     * quedan fuera.
+     */
+    if (
+      group.length >
+      catalogMatches.length
+    ) {
+      unmatched +=
+        group.length -
+        catalogMatches.length;
+
+      warnings.push(
+        `Código "${firstRow.code}": se han encontrado ${group.length} unidades en el Excel para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente existen ${catalogMatches.length} elementos equivalentes en el catálogo. Se importarán las ${Math.min(group.length, catalogMatches.length)} primeras y se omitirán ${group.length - catalogMatches.length}.`
+      );
+    }
+
+    /*
+     * Si hay más elementos de catálogo que filas Excel,
+     * solamente se importan las unidades que existen en Excel.
+     */
+    const unitsToImport =
+      Math.min(
+        group.length,
+        catalogMatches.length
+      );
+
+    for (
+      let unitIndex = 0;
+      unitIndex <
+      unitsToImport;
+      unitIndex += 1
+    ) {
+      const excelData =
+        group[unitIndex];
+
+      const catalogItem =
+        catalogMatches[
+          unitIndex
+        ];
+
+      if (
+        !excelData ||
+        !catalogItem
+      ) {
+        continue;
+      }
+
+      /*
+       * Código final:
+       *
+       * Una sola unidad:
+       *   1.1
+       *
+       * Varias:
+       *   1.1.1
+       *   1.1.2
+       *   1.1.3
+       */
+      const finalCode =
+        buildUnitCode(
+          excelData.code,
+          group.length,
+          unitIndex + 1
+        );
+
+      parsedRows.push({
+        excelRow:
+          excelData.excelRow,
+
+        code:
+          finalCode,
+
+        ordinal:
+          getCatalogOrdinal(
+            catalogItem
+          ),
+
+        catalogItemId:
+          String(
+            catalogItem.id
+          ),
+
+        category:
+          getCatalogCategory(
+            catalogItem
+          ),
+
+        /*
+         * D = Instalacion.
+         */
+        installation:
+          excelData.installation,
+
+        /*
+         * E = Actuacion.
+         */
+        action:
+          excelData.action,
+
+        actionCode:
+          getCatalogActionCode(
+            catalogItem
+          ),
+
+        /*
+         * G = ID.
+         *
+         * Solamente se importa como dato.
+         */
+        equipmentId:
+          excelData.equipmentId,
+
+        /*
+         * H = Empresa.
+         */
+        company:
+          excelData.company,
+
+        /*
+         * No se toma ninguna fecha de otras columnas.
+         */
+        inspectionDate:
+          "",
+
+        /*
+         * O = Estado.
+         */
+        status:
+          excelData.status,
+
+        selected: [
+          excelData.status,
+        ],
+
+        multiple:
+          group.length > 1,
+
+        /*
+         * R = Comentario.
+         */
+        comment:
+          excelData.comment,
+      });
+    }
+  }
+
+  /*
+   * Ordenar las filas importadas según el orden del Excel.
+   */
+  parsedRows.sort(
+    (a, b) =>
+      a.excelRow -
+      b.excelRow
+  );
 
   return {
     centerName: text(
@@ -836,16 +1018,19 @@ function parseWorkbook(
 
     country,
 
-    year: detected.year,
+    year:
+      detected.year,
 
     reviewText:
       detected.reviewText,
 
     period,
 
-    reviewDate: "",
+    reviewDate:
+      "",
 
-    rows: parsedRows,
+    rows:
+      parsedRows,
 
     excluded,
 
@@ -860,7 +1045,9 @@ function parseWorkbook(
 function statusClasses(
   status: V1Status
 ) {
-  if (status === "APTO") {
+  if (
+    status === "APTO"
+  ) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
@@ -872,13 +1059,15 @@ function statusClasses(
   }
 
   if (
-    status === "NO APTO"
+    status ===
+    "NO APTO"
   ) {
     return "border-red-200 bg-red-50 text-red-700";
   }
 
   if (
-    status === "PENDIENTE"
+    status ===
+    "PENDIENTE"
   ) {
     return "border-slate-200 bg-slate-50 text-slate-700";
   }
@@ -910,10 +1099,12 @@ export default function ImportPage() {
     }
 
     const counts = {
-      APTO: parsed.rows.filter(
-        (r) =>
-          r.status === "APTO"
-      ).length,
+      APTO:
+        parsed.rows.filter(
+          (r) =>
+            r.status ===
+            "APTO"
+        ).length,
 
       "APTO CONDICIONADO":
         parsed.rows.filter(
@@ -943,7 +1134,9 @@ export default function ImportPage() {
         "APTO CONDICIONADO"
       ] *
         2 +
-      counts["NO APTO"];
+      counts[
+        "NO APTO"
+      ];
 
     const max =
       parsed.rows.length * 3;
@@ -975,13 +1168,14 @@ export default function ImportPage() {
       const buffer =
         await nextFile.arrayBuffer();
 
-      const wb = XLSX.read(
-        buffer,
-        {
-          type: "array",
-          cellDates: true,
-        }
-      );
+      const wb =
+        XLSX.read(
+          buffer,
+          {
+            type: "array",
+            cellDates: true,
+          }
+        );
 
       const result =
         parseWorkbook(wb);
@@ -1012,11 +1206,12 @@ export default function ImportPage() {
     const state =
       loadState();
 
-    const key = reviewKey(
-      parsed.centerId,
-      parsed.year,
-      parsed.period
-    );
+    const key =
+      reviewKey(
+        parsed.centerId,
+        parsed.year,
+        parsed.period
+      );
 
     const existing =
       state.reviews[key];
@@ -1154,8 +1349,8 @@ export default function ImportPage() {
           </p>
 
           <p className="mt-2">
-            Tabla: D = Instalación, E = Actuación, G = ID,
-            H = Empresa, O = Estado y R = Comentario.
+            Tabla: C = Código, D = Instalación, E = Actuación,
+            G = ID, H = Empresa, O = Estado y R = Comentario.
           </p>
 
           <p className="mt-2 font-semibold">
@@ -1165,13 +1360,18 @@ export default function ImportPage() {
 
           <p className="mt-2 font-semibold">
             La identificación del elemento se realiza comparando
-            D (INSTALACION) con INSTALACION del catálogo y E
-            (ACTUACION) con ACTUACION del catálogo.
+            D (INSTALACION) y E (ACTUACION) con el catálogo.
           </p>
 
           <p className="mt-2 font-semibold">
-            La columna G (ID) solamente se importa como dato y la
-            columna N no se utiliza.
+            Si existen varias unidades con el mismo código C,
+            INSTALACION D y ACTUACION E, se generan códigos
+            1.1.1, 1.1.2, 1.1.3, etc., manteniendo los datos
+            de cada fila.
+          </p>
+
+          <p className="mt-2 font-semibold">
+            G (ID) se importa como dato. La columna N no se utiliza.
           </p>
         </div>
 
@@ -1249,342 +1449,365 @@ export default function ImportPage() {
         )}
       </div>
 
-      {parsed && summary && (
-        <>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Vista previa de la importación
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-600">
-                  {parsed.centerName} ·{" "}
-                  {parsed.period}{" "}
-                  {parsed.year}
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-slate-900 px-4 py-3 text-right text-white">
-                <div className="text-xs uppercase tracking-wide text-slate-300">
-                  Resultado
-                </div>
-
-                <div className="text-2xl font-bold">
-                  {summary.score}%
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-medium text-slate-500">
-                  Importados
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-slate-900">
-                  {parsed.rows.length}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="text-xs font-medium text-emerald-700">
-                  APTO
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-emerald-800">
-                  {summary.counts.APTO}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div className="text-xs font-medium text-amber-700">
-                  CONDICIONADO
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-amber-800">
-                  {
-                    summary.counts[
-                      "APTO CONDICIONADO"
-                    ]
-                  }
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                <div className="text-xs font-medium text-red-700">
-                  NO APTO
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-red-800">
-                  {
-                    summary.counts[
-                      "NO APTO"
-                    ]
-                  }
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-medium text-slate-600">
-                  PENDIENTE
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-slate-800">
-                  {
-                    summary.counts[
-                      "PENDIENTE"
-                    ]
-                  }
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
-                <div className="text-xs font-medium text-orange-700">
-                  No emparejados
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-orange-800">
-                  {parsed.unmatched}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-                <div className="text-xs font-medium text-purple-700">
-                  Coincidencias múltiples
-                </div>
-
-                <div className="mt-1 text-2xl font-bold text-purple-800">
-                  {parsed.multiple}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <strong>
-                Regla de importación:
-              </strong>{" "}
-              únicamente se procesan filas cuyo estado de la
-              columna O sea reconocido. Las filas con O vacía
-              se ignoran completamente. Para identificar el
-              elemento del catálogo se compara primero la
-              INSTALACION de D y después la ACTUACION de E.
-              El ID de G no se utiliza para identificar el
-              elemento y la columna N se ignora.
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 p-6">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Elementos detectados
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-600">
-                Cada valor mostrado procede de la misma fila del Excel.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">
-                      Fila
-                    </th>
-
-                    <th className="px-4 py-3">
-                      ID
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Instalación
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Actuación
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Empresa
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Estado
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Comentario
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {parsed.rows.map(
-                    (row) => (
-                      <tr
-                        key={`${row.excelRow}-${row.catalogItemId}`}
-                        className="hover:bg-slate-50"
-                      >
-                        <td className="whitespace-nowrap px-4 py-3 text-slate-500">
-                          {row.excelRow}
-                        </td>
-
-                        <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
-                          {row.equipmentId ||
-                            "—"}
-                        </td>
-
-                        <td className="min-w-[220px] px-4 py-3 text-slate-800">
-                          {row.installation ||
-                            "—"}
-                        </td>
-
-                        <td className="min-w-[220px] px-4 py-3 text-slate-800">
-                          {row.action ||
-                            "—"}
-                        </td>
-
-                        <td className="min-w-[150px] px-4 py-3 text-slate-700">
-                          {row.company ||
-                            "—"}
-                        </td>
-
-                        <td className="whitespace-nowrap px-4 py-3">
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
-                              row.status
-                            )}`}
-                          >
-                            {row.status}
-                          </span>
-                        </td>
-
-                        <td className="min-w-[250px] px-4 py-3 text-slate-600">
-                          {row.comment ||
-                            "—"}
-                        </td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {(parsed.excluded >
-            0 ||
-            parsed.unmatched >
-              0 ||
-            parsed.multiple >
-              0 ||
-            parsed.warnings
-              .length >
-              0) && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-
-                <div className="min-w-0">
-                  <h2 className="font-semibold text-amber-900">
-                    Observaciones de la importación
+      {parsed &&
+        summary && (
+          <>
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Vista previa de la importación
                   </h2>
 
-                  <p className="mt-1 text-sm text-amber-800">
-                    Las filas con O vacía se ignoran
-                    silenciosamente. Las filas con estado no
-                    reconocido o sin correspondencia mediante
-                    D + E aparecen aquí.
+                  <p className="mt-1 text-sm text-slate-600">
+                    {parsed.centerName} ·{" "}
+                    {parsed.period}{" "}
+                    {parsed.year}
                   </p>
+                </div>
 
-                  <div className="mt-4 space-y-2 text-sm text-amber-900">
-                    {parsed.excluded >
-                      0 && (
-                      <p>
-                        <strong>
-                          Filas con estado no reconocido:
-                        </strong>{" "}
-                        {
-                          parsed.excluded
-                        }
-                      </p>
-                    )}
+                <div className="rounded-xl bg-slate-900 px-4 py-3 text-right text-white">
+                  <div className="text-xs uppercase tracking-wide text-slate-300">
+                    Resultado
+                  </div>
 
-                    {parsed.unmatched >
-                      0 && (
-                      <p>
-                        <strong>
-                          Elementos sin correspondencia mediante D + E:
-                        </strong>{" "}
-                        {
-                          parsed.unmatched
-                        }
-                      </p>
-                    )}
-
-                    {parsed.multiple >
-                      0 && (
-                      <p>
-                        <strong>
-                          Coincidencias múltiples mediante D + E:
-                        </strong>{" "}
-                        {
-                          parsed.multiple
-                        }
-                      </p>
-                    )}
-
-                    {parsed.warnings.map(
-                      (
-                        warning,
-                        index
-                      ) => (
-                        <p
-                          key={`${warning}-${index}`}
-                          className="rounded-lg bg-white/60 p-2"
-                        >
-                          {warning}
-                        </p>
-                      )
-                    )}
+                  <div className="text-2xl font-bold">
+                    {summary.score}%
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-slate-900">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs font-medium text-slate-500">
+                    Importados
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-slate-900">
+                    {parsed.rows.length}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="text-xs font-medium text-emerald-700">
+                    APTO
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-emerald-800">
+                    {
+                      summary.counts
+                        .APTO
+                    }
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="text-xs font-medium text-amber-700">
+                    CONDICIONADO
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-amber-800">
+                    {
+                      summary.counts[
+                        "APTO CONDICIONADO"
+                      ]
+                    }
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <div className="text-xs font-medium text-red-700">
+                    NO APTO
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-red-800">
+                    {
+                      summary.counts[
+                        "NO APTO"
+                      ]
+                    }
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs font-medium text-slate-600">
+                    PENDIENTE
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-slate-800">
+                    {
+                      summary.counts[
+                        "PENDIENTE"
+                      ]
+                    }
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                  <div className="text-xs font-medium text-orange-700">
+                    No emparejados
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-orange-800">
+                    {
+                      parsed.unmatched
+                    }
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                  <div className="text-xs font-medium text-purple-700">
+                    Coincidencias múltiples
+                  </div>
+
+                  <div className="mt-1 text-2xl font-bold text-purple-800">
+                    {
+                      parsed.multiple
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <strong>
+                  Regla de importación:
+                </strong>{" "}
+                únicamente se procesan filas cuyo estado de la
+                columna O sea reconocido. Las filas con O vacía
+                se ignoran completamente. El elemento del catálogo
+                se identifica mediante INSTALACION D + ACTUACION E.
+                El código C se conserva como referencia y, cuando
+                existen varias unidades iguales, se amplía con
+                .1, .2, .3, etc. G solamente aporta el ID de esa
+                fila y N se ignora.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 p-6">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Elementos detectados
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-600">
+                  Cada línea mantiene los datos correspondientes a
+                  su propia fila del Excel.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">
+                        Código
+                      </th>
+
+                      <th className="px-4 py-3">
+                        ID
+                      </th>
+
+                      <th className="px-4 py-3">
+                        Instalación
+                      </th>
+
+                      <th className="px-4 py-3">
+                        Actuación
+                      </th>
+
+                      <th className="px-4 py-3">
+                        Empresa
+                      </th>
+
+                      <th className="px-4 py-3">
+                        Estado
+                      </th>
+
+                      <th className="px-4 py-3">
+                        Comentario
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {parsed.rows.map(
+                      (row) => (
+                        <tr
+                          key={`${row.catalogItemId}-${row.excelRow}`}
+                          className="hover:bg-slate-50"
+                        >
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
+                            {row.code ||
+                              "—"}
+                          </td>
+
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                            {row.equipmentId ||
+                              "—"}
+                          </td>
+
+                          <td className="min-w-[220px] px-4 py-3 text-slate-800">
+                            {row.installation ||
+                              "—"}
+                          </td>
+
+                          <td className="min-w-[220px] px-4 py-3 text-slate-800">
+                            {row.action ||
+                              "—"}
+                          </td>
+
+                          <td className="min-w-[150px] px-4 py-3 text-slate-700">
+                            {row.company ||
+                              "—"}
+                          </td>
+
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
+                                row.status
+                              )}`}
+                            >
+                              {
+                                row.status
+                              }
+                            </span>
+                          </td>
+
+                          <td className="min-w-[250px] px-4 py-3 text-slate-600">
+                            {row.comment ||
+                              "—"}
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {(parsed.excluded >
+              0 ||
+              parsed.unmatched >
+                0 ||
+              parsed.multiple >
+                0 ||
+              parsed.warnings
+                .length >
+                0) && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-amber-900">
+                      Observaciones de la importación
+                    </h2>
+
+                    <p className="mt-1 text-sm text-amber-800">
+                      Las filas con O vacía se ignoran
+                      silenciosamente. Las filas con estado no
+                      reconocido o sin correspondencia mediante
+                      D + E aparecen aquí.
+                    </p>
+
+                    <div className="mt-4 space-y-2 text-sm text-amber-900">
+                      {parsed.excluded >
+                        0 && (
+                        <p>
+                          <strong>
+                            Filas con estado no reconocido:
+                          </strong>{" "}
+                          {
+                            parsed.excluded
+                          }
+                        </p>
+                      )}
+
+                      {parsed.unmatched >
+                        0 && (
+                        <p>
+                          <strong>
+                            Elementos sin correspondencia mediante D + E:
+                          </strong>{" "}
+                          {
+                            parsed.unmatched
+                          }
+                        </p>
+                      )}
+
+                      {parsed.multiple >
+                        0 && (
+                        <p>
+                          <strong>
+                            Grupos con varias unidades:
+                          </strong>{" "}
+                          {
+                            parsed.multiple
+                          }
+                        </p>
+                      )}
+
+                      {parsed.warnings.map(
+                        (
+                          warning,
+                          index
+                        ) => (
+                          <p
+                            key={`${warning}-${index}`}
+                            className="rounded-lg bg-white/60 p-2"
+                          >
+                            {
+                              warning
+                            }
+                          </p>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-slate-900">
+                  Confirmar importación
+                </p>
+
+                <p className="mt-1 text-sm text-slate-600">
+                  Se guardarán{" "}
+                  {
+                    parsed.rows
+                      .length
+                  }{" "}
+                  elementos en la revisión histórica{" "}
+                  {
+                    parsed.period
+                  }{" "}
+                  {
+                    parsed.year
+                  }.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  confirmImport
+                }
+                disabled={
+                  parsed.rows
+                    .length ===
+                  0
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-5 w-5" />
                 Confirmar importación
-              </p>
-
-              <p className="mt-1 text-sm text-slate-600">
-                Se guardarán{" "}
-                {parsed.rows.length}{" "}
-                elementos en la revisión histórica{" "}
-                {parsed.period}{" "}
-                {parsed.year}.
-              </p>
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={
-                confirmImport
-              }
-              disabled={
-                parsed.rows.length ===
-                0
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <CheckCircle2 className="h-5 w-5" />
-              Confirmar importación
-            </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
       {message && (
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
