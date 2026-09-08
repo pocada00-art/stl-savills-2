@@ -59,41 +59,66 @@ type ParsedImport = {
 
 /*
  * ============================================================
- * COLUMNAS FIJAS DEL EXCEL CORPORATIVO
+ * CONFIGURACIÓN FIJA DEL EXCEL CORPORATIVO
  * ============================================================
  *
- * Excel      Índice JS
+ * CABECERA
  *
- * D          3     INSTALACIÓN
- * E          4     ACTUACIÓN
- * G          6     ID
- * H          7     EMPRESA
- * N          13    Nº
- * O          14    ESTADO
- * R          17    COMENTARIO
+ * E2 = Nombre del centro
+ * E7 = Revisión
+ * G7 = Año de revisión
  *
- * Es fundamental NO modificar estos índices salvo que cambie
- * la plantilla corporativa.
+ * TABLA DE ELEMENTOS
+ *
+ * D = Instalación
+ * E = Actuación
+ * G = ID
+ * H = Empresa
+ * O = ESTADO
+ * R = Comentario
+ *
+ * IMPORTANTE:
+ *
+ * La columna N NO se utiliza en ningún punto del importador.
+ *
+ * La decisión de importar una fila depende EXCLUSIVAMENTE
+ * del estado existente en la columna O.
  */
 
 const EXCEL_COLUMNS = {
-  INSTALLATION: 3,
-  ACTION: 4,
-  EQUIPMENT_ID: 6,
-  COMPANY: 7,
-  ORDINAL: 13,
-  STATUS: 14,
-  COMMENT: 17,
+  INSTALLATION: 3, // D
+  ACTION: 4, // E
+  EQUIPMENT_ID: 6, // G
+  COMPANY: 7, // H
+  STATUS: 14, // O
+  COMMENT: 17, // R
 } as const;
 
-/*
- * La tabla comienza en la fila 12 del Excel.
- *
- * Importante:
- * No se establece una última fila fija. El importador recorre
- * todas las filas existentes de la hoja.
- */
 const FIRST_DATA_ROW = 12;
+const LAST_DATA_ROW = 200;
+
+/*
+ * Celdas exactas de la cabecera.
+ *
+ * Índices JavaScript:
+ *
+ * E = 4
+ * G = 6
+ */
+const HEADER_CELLS = {
+  CENTER_NAME: {
+    row: 2,
+    column: 4,
+  },
+  REVIEW: {
+    row: 7,
+    column: 4,
+  },
+  YEAR: {
+    row: 7,
+    column: 6,
+  },
+} as const;
 
 function text(value: unknown): string {
   return String(value ?? "").trim();
@@ -106,6 +131,17 @@ function normalize(value: unknown): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Normaliza un ID para poder compararlo de forma segura
+ * entre Excel y catálogo.
+ *
+ * Se conserva el valor completo y solamente se eliminan
+ * espacios exteriores.
+ */
+function normalizeId(value: unknown): string {
+  return text(value).toLowerCase();
 }
 
 function excelDateToISO(value: unknown): string {
@@ -149,27 +185,49 @@ function excelDateToISO(value: unknown): string {
 }
 
 /**
- * Convierte exclusivamente el valor de la columna O (ESTADO)
- * al estado utilizado por la aplicación.
+ * Convierte exclusivamente el valor de la columna O
+ * (ESTADO) al estado utilizado por la aplicación.
  *
- * NO se consultan las columnas M ni N.
+ * La columna N NO participa.
  */
 function statusFromExcel(value: unknown): V1Status | null {
   const status = normalize(value);
 
-  if (status === "favorable") {
+  if (!status) {
+    return null;
+  }
+
+  /*
+   * Estados que pueden venir directamente de la plantilla.
+   */
+  if (
+    status === "favorable" ||
+    status === "apto"
+  ) {
     return "APTO";
   }
 
-  if (status === "desfavorable") {
+  if (
+    status === "desfavorable" ||
+    status === "no apto" ||
+    status === "noapto"
+  ) {
     return "NO APTO";
   }
 
-  if (status === "condicionado") {
+  if (
+    status === "condicionado" ||
+    status === "apto condicionado" ||
+    status === "apto condicionado."
+  ) {
     return "APTO CONDICIONADO";
   }
 
-  if (status === "pte." || status === "pte") {
+  if (
+    status === "pte." ||
+    status === "pte" ||
+    status === "pendiente"
+  ) {
     return "PENDIENTE";
   }
 
@@ -177,31 +235,20 @@ function statusFromExcel(value: unknown): V1Status | null {
 }
 
 /**
- * Convierte el Nº de Excel en un número válido.
+ * Obtiene una fecha general de revisión si existe alguna
+ * celda identificada como Fecha en la cabecera.
+ *
+ * La fecha no participa en la identificación del elemento.
  */
-function excelOrdinal(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value);
-  }
-
-  const raw = text(value);
-
-  if (!raw) return 0;
-
-  const match = raw.match(/\d+/);
-
-  if (!match) return 0;
-
-  return Number(match[0]);
-}
-
 function detectHeaderDate(rows: any[][]): string {
-  for (const row of rows.slice(0, 11)) {
+  for (const row of rows.slice(0, FIRST_DATA_ROW - 1)) {
     for (let c = 0; c < row.length - 1; c += 1) {
       if (normalize(row[c]) === "fecha") {
         const date = excelDateToISO(row[c + 1]);
 
-        if (date) return date;
+        if (date) {
+          return date;
+        }
       }
     }
   }
@@ -209,75 +256,117 @@ function detectHeaderDate(rows: any[][]): string {
   return "";
 }
 
+/**
+ * Lee la cabecera utilizando las celdas FIJAS de la plantilla:
+ *
+ * E2 = Centro
+ * E7 = Revisión
+ * G7 = Año
+ */
 function detectCenter(rows: any[][]) {
-  let name = "";
-  let code = "";
+  const centerName = text(
+    rows[HEADER_CELLS.CENTER_NAME.row - 1]?.[
+      HEADER_CELLS.CENTER_NAME.column
+    ]
+  );
 
-  for (const row of rows.slice(0, 11)) {
-    for (let c = 0; c < row.length - 1; c += 1) {
-      const label = normalize(row[c]);
+  const reviewText = text(
+    rows[HEADER_CELLS.REVIEW.row - 1]?.[
+      HEADER_CELLS.REVIEW.column
+    ]
+  );
 
-      if (label === "centro") {
-        name = text(row[c + 1]);
-      }
+  const rawYear =
+    rows[HEADER_CELLS.YEAR.row - 1]?.[
+      HEADER_CELLS.YEAR.column
+    ];
+
+  let year = 0;
+
+  if (
+    typeof rawYear === "number" &&
+    Number.isFinite(rawYear)
+  ) {
+    year = Math.trunc(rawYear);
+  } else {
+    const yearText = text(rawYear);
+    const match = yearText.match(/20\d{2}/);
+
+    if (match) {
+      year = Number(match[0]);
     }
   }
 
-  let reviewText = "";
-  let year = 0;
+  if (!centerName) {
+    throw new Error(
+      "No se ha encontrado el nombre del centro en la celda E2 del documento Excel."
+    );
+  }
 
-  for (const row of rows.slice(0, 11)) {
-    for (let c = 0; c < row.length; c += 1) {
-      const label = normalize(row[c]);
-
-      if (label === "tipo") {
-        for (
-          let j = c + 1;
-          j < Math.min(row.length, c + 4);
-          j += 1
-        ) {
-          const value = text(row[j]);
-
-          if (normalize(value).includes("revision")) {
-            reviewText = value;
-            break;
-          }
-        }
-      }
-
-      const raw = text(row[c]);
-
-      const match = raw.match(/(?:^|\D)(20\d{2})(?:$|\D)/);
-
-      if (match && !year) {
-        year = Number(match[1]);
-      }
-    }
+  if (!reviewText) {
+    throw new Error(
+      "No se ha encontrado la revisión en la celda E7 del documento Excel."
+    );
   }
 
   if (!year) {
     throw new Error(
-      "No se ha podido identificar el año de la revisión en el documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
+      "No se ha podido identificar el año de la revisión en la celda G7 del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
     );
   }
 
   const center = demo.centers.find(
     (c: any) =>
-      normalize(c.name) === normalize(name) ||
-      normalize(c.shortCode) === normalize(name)
+      normalize(c.name) === normalize(centerName) ||
+      normalize(c.shortCode) === normalize(centerName) ||
+      normalize(c.code) === normalize(centerName)
   );
 
-  if (center) {
-    code = text((center as any).code);
+  if (!center) {
+    throw new Error(
+      `No se ha podido identificar el centro "${centerName}" en la base de centros.`
+    );
   }
 
   return {
-    name,
-    code,
+    name: centerName,
+    code: text((center as any).code),
     center: center as any,
     year,
     reviewText,
   };
+}
+
+/**
+ * Construye un mapa del catálogo utilizando EXCLUSIVAMENTE
+ * el ID real del elemento.
+ *
+ * NO se utiliza el Nº de Excel.
+ * NO se utiliza la columna N.
+ */
+function buildCatalogById(catalogItems: any[]) {
+  const catalogById = new Map<string, any>();
+
+  for (const item of catalogItems) {
+    const possibleIds = [
+      item?.id,
+      item?.ID,
+      item?.elementId,
+      item?.elementID,
+      item?.itemId,
+    ];
+
+    for (const value of possibleIds) {
+      const id = normalizeId(value);
+
+      if (id) {
+        catalogById.set(id, item);
+        break;
+      }
+    }
+  }
+
+  return catalogById;
 }
 
 function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
@@ -299,25 +388,27 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
 
   const detected = detectCenter(rows);
 
-  if (!detected.center) {
-    throw new Error(
-      `No se ha podido identificar el centro "${
-        detected.name || "desconocido"
-      }" en la base de centros.`
-    );
-  }
-
-  const normalizedReviewText = normalize(detected.reviewText);
+  const normalizedReviewText = normalize(
+    detected.reviewText
+  );
 
   let period: Period;
 
-  if (normalizedReviewText.includes("s1")) {
+  if (
+    normalizedReviewText.includes("s1") ||
+    normalizedReviewText.includes("semestre 1") ||
+    normalizedReviewText.includes("1 semestre")
+  ) {
     period = "S1";
-  } else if (normalizedReviewText.includes("s2")) {
+  } else if (
+    normalizedReviewText.includes("s2") ||
+    normalizedReviewText.includes("semestre 2") ||
+    normalizedReviewText.includes("2 semestre")
+  ) {
     period = "S2";
   } else {
     throw new Error(
-      "No se ha podido identificar si la revisión del documento es S1 o S2. La importación se ha detenido para evitar archivarla en un periodo incorrecto."
+      `No se ha podido identificar si la revisión "${detected.reviewText}" corresponde a S1 o S2. La importación se ha detenido para evitar archivarla en un periodo incorrecto.`
     );
   }
 
@@ -327,62 +418,34 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
       : "España";
 
   const catalog =
-    country === "España" ? demo.esCatalog : demo.ptCatalog;
+    country === "España"
+      ? demo.esCatalog
+      : demo.ptCatalog;
 
-  const catalogItems = buildElementCodes(catalog as any[]);
+  const catalogItems = buildElementCodes(
+    catalog as any[]
+  );
 
   /*
-   * ============================================================
-   * MAPA DEL CATÁLOGO POR Nº REAL
-   * ============================================================
+   * ==========================================================
+   * MAPA DEL CATÁLOGO POR ID
+   * ==========================================================
    *
-   * No utilizamos:
+   * El ID de la columna G es ahora la referencia principal.
    *
-   *     catalogItems[ordinal - 1]
+   * Ejemplo:
    *
-   * porque eso presupone que la posición del array coincide
-   * siempre con el Nº del Excel.
+   * Excel G = "123"
    *
-   * Buscamos el Nº real del elemento dentro del catálogo.
+   * se busca contra:
+   *
+   * catalogItem.id === "123"
+   *
+   * La columna N no interviene.
    */
-
-  const catalogByOrdinal = new Map<number, any>();
-
-  for (let index = 0; index < catalogItems.length; index += 1) {
-    const item = catalogItems[index] as any;
-
-    const possibleValues = [
-      item?.ordinal,
-      item?.number,
-      item?.numero,
-      item?.n,
-      item?.nr,
-      item?.no,
-    ];
-
-    let ordinal = 0;
-
-    for (const value of possibleValues) {
-      const candidate = excelOrdinal(value);
-
-      if (candidate > 0) {
-        ordinal = candidate;
-        break;
-      }
-    }
-
-    /*
-     * Si el catálogo no tiene un campo Nº, utilizamos la posición
-     * como último recurso, pero solamente para construir el mapa.
-     */
-    if (!ordinal) {
-      ordinal = index + 1;
-    }
-
-    if (ordinal > 0 && !catalogByOrdinal.has(ordinal)) {
-      catalogByOrdinal.set(ordinal, item);
-    }
-  }
+  const catalogById = buildCatalogById(
+    catalogItems as any[]
+  );
 
   const reviewDate = detectHeaderDate(rows);
 
@@ -393,141 +456,197 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   let unmatched = 0;
 
   /*
-   * Recorremos TODAS las filas existentes desde la fila 12.
+   * ==========================================================
+   * PROCESAMIENTO DE LA TABLA
+   * ==========================================================
    *
-   * No utilizamos una última fila fija.
+   * ÚNICAMENTE A12:T200
+   *
+   * Para cada fila:
+   *
+   * 1. Leer O (ESTADO)
+   * 2. Si O está vacío -> ignorar fila completa
+   * 3. Si O tiene estado válido -> leer D/E/G/H/R
    */
   for (
     let excelRow = FIRST_DATA_ROW;
-    excelRow <= rows.length;
+    excelRow <= LAST_DATA_ROW;
     excelRow += 1
   ) {
     const row = rows[excelRow - 1] || [];
 
     /*
-     * ----------------------------------------------------------
-     * EL Nº DEL ELEMENTO ESTÁ EN LA COLUMNA N
-     * ----------------------------------------------------------
+     * --------------------------------------------------------
+     * PASO 1: ESTADO DE LA COLUMNA O
+     * --------------------------------------------------------
+     *
+     * ESTA ES LA CONDICIÓN QUE DECIDE SI LA FILA SE IMPORTA.
      */
-    const ordinal = excelOrdinal(
-      row[EXCEL_COLUMNS.ORDINAL]
-    );
-
-    /*
-     * Si no existe Nº, no es una fila de elemento válida.
-     */
-    if (!ordinal) {
-      continue;
-    }
-
-    /*
-     * ----------------------------------------------------------
-     * EL ESTADO SE LEE EXCLUSIVAMENTE DE LA COLUMNA O
-     * ----------------------------------------------------------
-     */
-    const rawStatus = text(row[EXCEL_COLUMNS.STATUS]);
-
-    const status = statusFromExcel(
+    const rawStatus = text(
       row[EXCEL_COLUMNS.STATUS]
     );
 
     /*
-     * Los estados "-" o vacíos no se importan.
+     * Si O está completamente vacía, NO se importa nada
+     * de esta fila.
      *
-     * Pero tampoco provocamos un error: simplemente dejamos
-     * constancia de que la fila no tenía un estado importable.
+     * Tampoco se genera warning porque es una fila sin
+     * elemento que importar.
      */
-    if (!status) {
-      excluded += 1;
-
-      if (rawStatus) {
-        warnings.push(
-          `Fila ${excelRow}, elemento ${ordinal}: el valor de ESTADO "${rawStatus}" no es un estado importable.`
-        );
-      }
-
+    if (!rawStatus) {
       continue;
     }
 
     /*
-     * ----------------------------------------------------------
-     * BUSCAMOS LA ACTUACIÓN POR SU Nº
-     * ----------------------------------------------------------
+     * --------------------------------------------------------
+     * PASO 2: COMPROBAR QUE O CONTIENE UN ESTADO CONOCIDO
+     * --------------------------------------------------------
      */
-    const catalogItem = catalogByOrdinal.get(ordinal);
+    const status = statusFromExcel(rawStatus);
 
-    if (!catalogItem) {
-      unmatched += 1;
+    if (!status) {
+      excluded += 1;
 
       warnings.push(
-        `Fila ${excelRow}, elemento ${ordinal}: tiene el estado "${rawStatus}", pero no existe una actuación con ese Nº en el catálogo. El elemento no se ha descartado silenciosamente.`
+        `Fila ${excelRow}: el valor de ESTADO de la columna O "${rawStatus}" no es un estado reconocido. La fila no se ha importado.`
       );
 
       continue;
     }
 
     /*
-     * ----------------------------------------------------------
-     * DATOS DE LA MISMA FILA
-     * ----------------------------------------------------------
+     * --------------------------------------------------------
+     * PASO 3: LEER EL ID DE LA COLUMNA G
+     * --------------------------------------------------------
      *
-     * Estos valores NO se obtienen del catálogo.
+     * G es el identificador del elemento.
      *
-     * Se leen directamente de la misma fila del Excel.
+     * La columna N NO SE CONSULTA.
+     */
+    const equipmentId = text(
+      row[EXCEL_COLUMNS.EQUIPMENT_ID]
+    );
+
+    if (!equipmentId) {
+      unmatched += 1;
+
+      warnings.push(
+        `Fila ${excelRow}: tiene un estado válido "${rawStatus}" en O, pero la columna G (ID) está vacía. La fila no se ha podido asociar a un elemento del catálogo.`
+      );
+
+      continue;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * PASO 4: BUSCAR EL ELEMENTO POR ID
+     * --------------------------------------------------------
+     */
+    const catalogItem = catalogById.get(
+      normalizeId(equipmentId)
+    );
+
+    if (!catalogItem) {
+      unmatched += 1;
+
+      warnings.push(
+        `Fila ${excelRow}: tiene el ID "${equipmentId}" y el estado "${rawStatus}", pero no existe un elemento con ese ID en el catálogo. La fila no se ha importado.`
+      );
+
+      continue;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * PASO 5: LEER LOS DATOS DE LA MISMA FILA
+     * --------------------------------------------------------
+     *
+     * D = Instalación
+     * E = Actuación
+     * G = ID
+     * H = Empresa
+     * O = Estado
+     * R = Comentario
      */
     const installation = text(
       row[EXCEL_COLUMNS.INSTALLATION]
     );
 
-    const action = text(row[EXCEL_COLUMNS.ACTION]);
-
-    const equipmentId = text(
-      row[EXCEL_COLUMNS.EQUIPMENT_ID]
+    const action = text(
+      row[EXCEL_COLUMNS.ACTION]
     );
 
-    const company = text(row[EXCEL_COLUMNS.COMPANY]);
+    const company = text(
+      row[EXCEL_COLUMNS.COMPANY]
+    );
 
-    const comment = text(row[EXCEL_COLUMNS.COMMENT]);
+    const comment = text(
+      row[EXCEL_COLUMNS.COMMENT]
+    );
 
     /*
-     * La fecha general de la revisión se mantiene como fecha
-     * principal. Como respaldo, se intenta utilizar la fecha
-     * correspondiente a la fila.
+     * La fecha general se mantiene como fecha principal.
      *
-     * La fecha de la fila se mantiene en la posición que ya
-     * utilizaba el importador anterior.
+     * Si no existe, se intenta localizar una fecha en la
+     * misma fila como respaldo.
      */
     const inspectionDate =
       reviewDate || excelDateToISO(row[9]);
 
     /*
-     * Cada fila tiene ahora UN ÚNICO estado, procedente de O.
+     * --------------------------------------------------------
+     * PASO 6: CREAR LA FILA IMPORTADA
+     * --------------------------------------------------------
      */
     parsedRows.push({
       excelRow,
-      ordinal,
+
+      /*
+       * Se mantiene ordinal por compatibilidad con la interfaz
+       * existente, pero YA NO procede de la columna N.
+       *
+       * Se utiliza el ordinal del propio catálogo si existe.
+       */
+      ordinal: Number(
+        catalogItem?.ordinal ??
+          catalogItem?.number ??
+          catalogItem?.numero ??
+          0
+      ),
+
       catalogItemId: String(catalogItem.id),
+
       category: text(catalogItem.category),
+
       installation,
+
       action,
+
       actionCode: text(
         catalogItem.actionCode ??
           catalogItem.baseCode ??
           catalogItem.code
       ),
+
       equipmentId,
+
       company,
+
       inspectionDate,
+
       status,
+
       selected: [status],
+
       multiple: false,
+
       comment,
     });
   }
 
   if (!reviewDate) {
     warnings.push(
-      "No se ha podido detectar la fecha general de revisión de la cabecera. Se utilizará la fecha de la fila cuando exista."
+      "No se ha podido detectar una fecha general de revisión en la cabecera. Se utilizará la fecha de la fila cuando exista."
     );
   }
 
@@ -538,18 +657,36 @@ function parseWorkbook(wb: XLSX.WorkBook): ParsedImport {
   }
 
   return {
-    centerName: text((detected.center as any).name),
-    centerCode: text((detected.center as any).code),
-    centerId: String((detected.center as any).id),
+    centerName: text(
+      (detected.center as any).name
+    ),
+
+    centerCode: text(
+      (detected.center as any).code
+    ),
+
+    centerId: String(
+      (detected.center as any).id
+    ),
+
     country,
+
     year: detected.year,
+
     reviewText: detected.reviewText,
+
     period,
+
     reviewDate,
+
     rows: parsedRows,
+
     excluded,
+
     multiple: 0,
+
     unmatched,
+
     warnings,
   };
 }
@@ -575,13 +712,21 @@ function statusClasses(status: V1Status) {
 }
 
 export default function ImportPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<ParsedImport | null>(
+  const [file, setFile] = useState<File | null>(
     null
   );
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+
+  const [parsed, setParsed] =
+    useState<ParsedImport | null>(null);
+
+  const [message, setMessage] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  const [busy, setBusy] =
+    useState(false);
 
   const summary = useMemo(() => {
     if (!parsed) return null;
@@ -592,7 +737,9 @@ export default function ImportPage() {
       ).length,
 
       "APTO CONDICIONADO": parsed.rows.filter(
-        (r) => r.status === "APTO CONDICIONADO"
+        (r) =>
+          r.status ===
+          "APTO CONDICIONADO"
       ).length,
 
       "NO APTO": parsed.rows.filter(
@@ -604,26 +751,18 @@ export default function ImportPage() {
       ).length,
     };
 
-    /*
-     * Puntuación:
-     *
-     * APTO                 = 3 puntos
-     * APTO CONDICIONADO    = 2 puntos
-     * NO APTO              = 1 punto
-     * PENDIENTE            = 0 puntos
-     *
-     * Todos los elementos importados participan en el
-     * denominador.
-     */
     const points =
       counts.APTO * 3 +
       counts["APTO CONDICIONADO"] * 2 +
       counts["NO APTO"];
 
-    const max = parsed.rows.length * 3;
+    const max =
+      parsed.rows.length * 3;
 
     const score = max
-      ? Math.round((points / max) * 100)
+      ? Math.round(
+          (points / max) * 100
+        )
       : 0;
 
     return {
@@ -634,7 +773,9 @@ export default function ImportPage() {
     };
   }, [parsed]);
 
-  async function handleFile(nextFile: File) {
+  async function handleFile(
+    nextFile: File
+  ) {
     setFile(nextFile);
     setParsed(null);
     setMessage("");
@@ -642,14 +783,16 @@ export default function ImportPage() {
     setBusy(true);
 
     try {
-      const buffer = await nextFile.arrayBuffer();
+      const buffer =
+        await nextFile.arrayBuffer();
 
       const wb = XLSX.read(buffer, {
         type: "array",
         cellDates: true,
       });
 
-      const result = parseWorkbook(wb);
+      const result =
+        parseWorkbook(wb);
 
       setParsed(result);
     } catch (e) {
@@ -677,14 +820,19 @@ export default function ImportPage() {
       parsed.period
     );
 
-    const existing = state.reviews[key];
+    const existing =
+      state.reviews[key];
 
-    const items: Record<string, ItemReview> = {};
+    const items: Record<
+      string,
+      ItemReview
+    > = {};
 
     for (const row of parsed.rows) {
       const current =
-        existing?.items?.[row.catalogItemId] ??
-        blankItem();
+        existing?.items?.[
+          row.catalogItemId
+        ] ?? blankItem();
 
       items[row.catalogItemId] = {
         ...current,
@@ -693,22 +841,29 @@ export default function ImportPage() {
 
         date: row.inspectionDate,
 
-        equipmentId: row.equipmentId,
+        equipmentId:
+          row.equipmentId,
 
-        company: row.company,
+        company:
+          row.company,
 
-        apto: row.status === "APTO",
+        apto:
+          row.status === "APTO",
 
         condicionado:
-          row.status === "APTO CONDICIONADO",
+          row.status ===
+          "APTO CONDICIONADO",
 
-        noApto: row.status === "NO APTO",
+        noApto:
+          row.status === "NO APTO",
 
         confirmed: false,
 
-        confirmedAt: undefined,
+        confirmedAt:
+          undefined,
 
-        confirmedBy: undefined,
+        confirmedBy:
+          undefined,
       };
     }
 
@@ -720,19 +875,23 @@ export default function ImportPage() {
       period: parsed.period,
 
       itemIds: parsed.rows.map(
-        (row) => row.catalogItemId
+        (row) =>
+          row.catalogItemId
       ),
 
       confirmed: false,
 
-      confirmedAt: undefined,
+      confirmedAt:
+        undefined,
 
-      confirmedBy: undefined,
+      confirmedBy:
+        undefined,
 
       items,
 
       participants:
-        existing?.participants || [],
+        existing?.participants ||
+        [],
     };
 
     const nextState: V1State = {
@@ -778,16 +937,19 @@ export default function ImportPage() {
           </p>
 
           <p className="mt-1">
-            El importador utiliza las columnas fijas de la
-            plantilla: D = Instalación, E = Actuación, G =
-            ID, H = Empresa, N = Nº, O = Estado y R =
-            Comentario.
+            Cabecera: E2 = Nombre del centro, E7 = Revisión y
+            G7 = Año de revisión.
           </p>
 
           <p className="mt-2">
-            El estado se obtiene exclusivamente de la columna
-            O. Las filas con FAVORABLE, DESFAVORABLE,
-            CONDICIONADO o PTE. se importan.
+            Tabla: D = Instalación, E = Actuación, G = ID,
+            H = Empresa, O = Estado y R = Comentario.
+          </p>
+
+          <p className="mt-2 font-semibold">
+            La columna O (ESTADO) determina si una fila se
+            importa. Si O está vacía, la fila se ignora
+            completamente. La columna N no se utiliza.
           </p>
         </div>
 
@@ -815,7 +977,9 @@ export default function ImportPage() {
                 event.target.files?.[0];
 
               if (selectedFile) {
-                void handleFile(selectedFile);
+                void handleFile(
+                  selectedFile
+                );
               }
             }}
           />
@@ -831,7 +995,10 @@ export default function ImportPage() {
               </p>
 
               <p className="text-xs text-slate-500">
-                {(file.size / 1024).toFixed(1)} KB
+                {(file.size / 1024).toFixed(
+                  1
+                )}{" "}
+                KB
               </p>
             </div>
           </div>
@@ -852,7 +1019,9 @@ export default function ImportPage() {
                 No se ha podido realizar la importación
               </p>
 
-              <p className="mt-1">{error}</p>
+              <p className="mt-1">
+                {error}
+              </p>
             </div>
           </div>
         )}
@@ -868,7 +1037,8 @@ export default function ImportPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-600">
-                  {parsed.centerName} · {parsed.period}{" "}
+                  {parsed.centerName} ·{" "}
+                  {parsed.period}{" "}
                   {parsed.year}
                 </p>
               </div>
@@ -911,7 +1081,11 @@ export default function ImportPage() {
                 </div>
 
                 <div className="mt-1 text-2xl font-bold text-amber-800">
-                  {summary.counts["APTO CONDICIONADO"]}
+                  {
+                    summary.counts[
+                      "APTO CONDICIONADO"
+                    ]
+                  }
                 </div>
               </div>
 
@@ -921,7 +1095,11 @@ export default function ImportPage() {
                 </div>
 
                 <div className="mt-1 text-2xl font-bold text-red-800">
-                  {summary.counts["NO APTO"]}
+                  {
+                    summary.counts[
+                      "NO APTO"
+                    ]
+                  }
                 </div>
               </div>
 
@@ -931,7 +1109,11 @@ export default function ImportPage() {
                 </div>
 
                 <div className="mt-1 text-2xl font-bold text-slate-800">
-                  {summary.counts.PENDIENTE}
+                  {
+                    summary.counts[
+                      "PENDIENTE"
+                    ]
+                  }
                 </div>
               </div>
 
@@ -947,10 +1129,13 @@ export default function ImportPage() {
             </div>
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <strong>Regla de puntuación:</strong>{" "}
-              APTO = 3, APTO CONDICIONADO = 2, NO APTO = 1 y
-              PENDIENTE = 0. Todos los elementos importados
-              participan en el cálculo.
+              <strong>
+                Regla de importación:
+              </strong>{" "}
+              únicamente se importan filas cuyo estado en la
+              columna O sea reconocido. Las filas con O vacía
+              se ignoran completamente. La identificación del
+              elemento se realiza mediante el ID de la columna G.
             </div>
           </div>
 
@@ -970,62 +1155,84 @@ export default function ImportPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-4 py-3">Fila</th>
-                    <th className="px-4 py-3">Nº</th>
-                    <th className="px-4 py-3">Instalación</th>
-                    <th className="px-4 py-3">Actuación</th>
-                    <th className="px-4 py-3">ID equipo</th>
-                    <th className="px-4 py-3">Empresa</th>
-                    <th className="px-4 py-3">Estado</th>
-                    <th className="px-4 py-3">Comentario</th>
+                    <th className="px-4 py-3">
+                      Fila
+                    </th>
+
+                    <th className="px-4 py-3">
+                      ID
+                    </th>
+
+                    <th className="px-4 py-3">
+                      Instalación
+                    </th>
+
+                    <th className="px-4 py-3">
+                      Actuación
+                    </th>
+
+                    <th className="px-4 py-3">
+                      Empresa
+                    </th>
+
+                    <th className="px-4 py-3">
+                      Estado
+                    </th>
+
+                    <th className="px-4 py-3">
+                      Comentario
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {parsed.rows.map((row) => (
-                    <tr
-                      key={`${row.excelRow}-${row.ordinal}-${row.catalogItemId}`}
-                      className="hover:bg-slate-50"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">
-                        {row.excelRow}
-                      </td>
+                  {parsed.rows.map(
+                    (row) => (
+                      <tr
+                        key={`${row.excelRow}-${row.catalogItemId}`}
+                        className="hover:bg-slate-50"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-500">
+                          {row.excelRow}
+                        </td>
 
-                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
-                        {row.ordinal}
-                      </td>
+                        <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
+                          {row.equipmentId ||
+                            "—"}
+                        </td>
 
-                      <td className="min-w-[220px] px-4 py-3 text-slate-800">
-                        {row.installation || "—"}
-                      </td>
+                        <td className="min-w-[220px] px-4 py-3 text-slate-800">
+                          {row.installation ||
+                            "—"}
+                        </td>
 
-                      <td className="min-w-[220px] px-4 py-3 text-slate-800">
-                        {row.action || "—"}
-                      </td>
+                        <td className="min-w-[220px] px-4 py-3 text-slate-800">
+                          {row.action ||
+                            "—"}
+                        </td>
 
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-700">
-                        {row.equipmentId || "—"}
-                      </td>
+                        <td className="min-w-[150px] px-4 py-3 text-slate-700">
+                          {row.company ||
+                            "—"}
+                        </td>
 
-                      <td className="min-w-[150px] px-4 py-3 text-slate-700">
-                        {row.company || "—"}
-                      </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
+                              row.status
+                            )}`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
 
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
-                            row.status
-                          )}`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-
-                      <td className="min-w-[250px] px-4 py-3 text-slate-600">
-                        {row.comment || "—"}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="min-w-[250px] px-4 py-3 text-slate-600">
+                          {row.comment ||
+                            "—"}
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1033,7 +1240,8 @@ export default function ImportPage() {
 
           {(parsed.excluded > 0 ||
             parsed.unmatched > 0 ||
-            parsed.warnings.length > 0) && (
+            parsed.warnings.length >
+              0) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
@@ -1044,39 +1252,50 @@ export default function ImportPage() {
                   </h2>
 
                   <p className="mt-1 text-sm text-amber-800">
-                    Las filas sin un estado válido en la columna
-                    O no se incorporan. Los elementos con estado
-                    válido pero sin correspondencia en el catálogo
-                    aparecen aquí.
+                    Las filas con O vacía se ignoran
+                    silenciosamente. Las filas con un estado no
+                    reconocido o sin correspondencia mediante el
+                    ID de G aparecen aquí.
                   </p>
 
                   <div className="mt-4 space-y-2 text-sm text-amber-900">
-                    {parsed.excluded > 0 && (
+                    {parsed.excluded >
+                      0 && (
                       <p>
                         <strong>
-                          Filas sin estado importable:
+                          Filas con estado no reconocido:
                         </strong>{" "}
-                        {parsed.excluded}
+                        {
+                          parsed.excluded
+                        }
                       </p>
                     )}
 
-                    {parsed.unmatched > 0 && (
+                    {parsed.unmatched >
+                      0 && (
                       <p>
                         <strong>
-                          Elementos con Nº no encontrado:
+                          Elementos sin correspondencia por ID:
                         </strong>{" "}
-                        {parsed.unmatched}
+                        {
+                          parsed.unmatched
+                        }
                       </p>
                     )}
 
-                    {parsed.warnings.map((warning, index) => (
-                      <p
-                        key={`${warning}-${index}`}
-                        className="rounded-lg bg-white/60 p-2"
-                      >
-                        {warning}
-                      </p>
-                    ))}
+                    {parsed.warnings.map(
+                      (
+                        warning,
+                        index
+                      ) => (
+                        <p
+                          key={`${warning}-${index}`}
+                          className="rounded-lg bg-white/60 p-2"
+                        >
+                          {warning}
+                        </p>
+                      )
+                    )}
                   </div>
                 </div>
               </div>
@@ -1090,16 +1309,23 @@ export default function ImportPage() {
               </p>
 
               <p className="mt-1 text-sm text-slate-600">
-                Se guardarán {parsed.rows.length} elementos en
-                la revisión histórica {parsed.period}{" "}
+                Se guardarán{" "}
+                {parsed.rows.length}{" "}
+                elementos en la revisión histórica{" "}
+                {parsed.period}{" "}
                 {parsed.year}.
               </p>
             </div>
 
             <button
               type="button"
-              onClick={confirmImport}
-              disabled={parsed.rows.length === 0}
+              onClick={
+                confirmImport
+              }
+              disabled={
+                parsed.rows.length ===
+                0
+              }
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CheckCircle2 className="h-5 w-5" />
@@ -1118,7 +1344,9 @@ export default function ImportPage() {
               Importación completada
             </p>
 
-            <p className="mt-1">{message}</p>
+            <p className="mt-1">
+              {message}
+            </p>
           </div>
         </div>
       )}
