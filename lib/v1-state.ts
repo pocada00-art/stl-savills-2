@@ -45,6 +45,23 @@ export type ReviewState = {
   year: number;
   period: Period;
 
+  /**
+   * Universo de elementos que formaba parte de esta revisión.
+   *
+   * Es opcional para mantener compatibilidad con revisiones
+   * creadas antes de introducir la importación histórica.
+   *
+   * Cuando existe, SOLO estos elementos se utilizan para:
+   * - mostrar la revisión;
+   * - calcular el cumplimiento;
+   * - validar la revisión.
+   *
+   * Esto permite importar, por ejemplo, un S1 2026 con menos
+   * elementos que el inventario actual sin modificar S2 ni
+   * revisiones anteriores.
+   */
+  itemIds?: string[];
+
   confirmed: boolean;
   confirmedAt?: string;
   confirmedBy?: string;
@@ -876,8 +893,22 @@ export function reviewSummary(
     | undefined,
   activeIds: string[]
 ) {
+  /*
+   * Las revisiones importadas pueden conservar un universo
+   * histórico propio. Cuando existe, tiene prioridad sobre
+   * el inventario activo actual.
+   *
+   * Para revisiones antiguas sin itemIds se mantiene el
+   * comportamiento anterior.
+   */
+  const effectiveIds =
+    Array.isArray(review?.itemIds) &&
+    review.itemIds.length > 0
+      ? review.itemIds
+      : activeIds;
+
   const items =
-    activeIds.map(
+    effectiveIds.map(
       id =>
         review?.items?.[id] ??
         blankItem()
@@ -940,7 +971,7 @@ export function reviewSummary(
     );
 
   const max =
-    activeIds.length *
+    effectiveIds.length *
     3;
 
   return {
