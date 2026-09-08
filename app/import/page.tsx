@@ -90,20 +90,27 @@ type ParsedImport = {
  *      el catálogo.
  *   3. E (ACTUACION) es la segunda referencia contra
  *      el catálogo.
- *   4. C es el código que se importa y se muestra.
+ *   4. C es el código base que se importa.
  *   5. G es el ID que se importa como dato.
  *
- * Cuando existen varias filas con el mismo:
+ * REGLA PARA ELEMENTOS REPETIDOS:
  *
- *   C + D + E
+ * Cuando existen varias filas VÁLIDAS con el mismo:
+ *
+ *   D + E
  *
  * se consideran unidades diferentes del mismo elemento.
  *
+ * El código base NO se obtiene de cada fila.
+ *
+ * Se toma SIEMPRE el código C de la PRIMERA FILA VÁLIDA
+ * del grupo.
+ *
  * Ejemplo:
  *
- *   1.1 + Ascens. + Montac. OCA
- *   1.1 + Ascens. + Montac. OCA
- *   1.1 + Ascens. + Montac. OCA
+ *   Fila 12: C=1.1 | D=Ascens. y montac. | E=OCA..
+ *   Fila 13: C=1.1 | D=Ascens. y montac. | E=OCA..
+ *   Fila 14: C=1.1 | D=Ascens. y montac. | E=OCA..
  *
  * se convierten en:
  *
@@ -111,7 +118,17 @@ type ParsedImport = {
  *   1.1.2
  *   1.1.3
  *
- * manteniendo todos los datos correspondientes a cada fila.
+ * aunque las filas posteriores tengan C vacío,
+ * otro valor o estén combinadas en Excel.
+ *
+ * Cada línea conserva los datos de SU PROPIA FILA:
+ *
+ *   G -> ID
+ *   H -> Empresa
+ *   O -> Estado
+ *   R -> Comentario
+ *
+ * Las filas con O vacía se ignoran completamente.
  */
 
 const EXCEL_COLUMNS = {
@@ -323,12 +340,12 @@ function detectCenter(rows: any[][]) {
  *
  * IMPORTANTE:
  *
+ * No se utiliza C para localizar el catálogo.
  * No se utiliza G (ID).
  * No se utiliza N.
- * No se utiliza C para localizar el catálogo.
  *
  * El resultado conserva el orden del catálogo para poder
- * asignar las unidades duplicadas una a una.
+ * asignar las unidades repetidas una a una.
  */
 function findCatalogItems(
   catalogItems: any[],
@@ -433,41 +450,60 @@ function getCatalogCategory(
 }
 
 /**
- * Crea la clave utilizada para detectar unidades repetidas.
+ * Obtiene el ID real del elemento del catálogo.
+ */
+function getCatalogItemId(
+  catalogItem: any
+): string {
+  return text(
+    catalogItem?.id ??
+      catalogItem?.elementId ??
+      catalogItem?.itemId
+  );
+}
+
+/**
+ * Crea la clave para detectar elementos repetidos.
  *
- * La comparación se hace con:
+ * IMPORTANTE:
  *
- *   C + D + E
+ * El código C NO forma parte de esta clave.
  *
- * y no con G ni N.
+ * Dos filas se consideran unidades repetidas cuando
+ * coinciden en:
+ *
+ *   D = INSTALACION
+ *   E = ACTUACION
+ *
+ * Esto permite manejar correctamente el caso en el que
+ * Excel presenta un código combinado o solamente muestra
+ * el código C en la primera fila del grupo.
  */
 function duplicateGroupKey(
-  code: string,
   installation: string,
   action: string
 ): string {
   return [
-    normalize(code),
     normalize(installation),
     normalize(action),
   ].join("|");
 }
 
 /**
- * Genera el código de unidad.
+ * Genera el código final de una unidad.
  *
- * Si solamente existe una unidad:
+ * Una sola unidad:
  *
  *   1.1
  *
- * Si existen varias:
+ * Varias unidades:
  *
  *   1.1.1
  *   1.1.2
  *   1.1.3
  *
- * Se añade el sufijo únicamente cuando hay más de una
- * fila con el mismo C + D + E.
+ * El código base procede SIEMPRE de la primera fila válida
+ * del grupo D + E.
  */
 function buildUnitCode(
   baseCode: string,
@@ -475,12 +511,16 @@ function buildUnitCode(
   unitIndex: number
 ): string {
   const cleanCode =
-    text(baseCode);
+    text(baseCode).replace(/\.+$/, "");
 
   if (
     totalUnits <= 1
   ) {
     return cleanCode;
+  }
+
+  if (!cleanCode) {
+    return "";
   }
 
   return `${cleanCode}.${unitIndex}`;
@@ -582,13 +622,10 @@ function parseWorkbook(
    * ==========================================================
    * PRIMER PASO:
    *
-   * Leemos las filas válidas y las agrupamos por:
+   * Leer únicamente las filas cuyo O (ESTADO) tenga contenido
+   * y cuyo estado sea reconocido.
    *
-   * C + D + E
-   *
-   * antes de asignarlas al catálogo.
-   *
-   * Esto permite detectar correctamente las unidades repetidas.
+   * Las filas con O vacía se ignoran completamente.
    */
   type ValidExcelRow = {
     excelRow: number;
@@ -652,6 +689,13 @@ function parseWorkbook(
 
     /*
      * C = código.
+     *
+     * IMPORTANTE:
+     *
+     * Este código solamente se utiliza para obtener el
+     * código base de la PRIMERA FILA VÁLIDA de cada grupo D + E.
+     *
+     * No se utiliza para decidir si dos filas son repetidas.
      */
     const code =
       text(
@@ -680,16 +724,6 @@ function parseWorkbook(
         ]
       );
 
-    if (!code) {
-      unmatched += 1;
-
-      warnings.push(
-        `Fila ${excelRow}: tiene un estado válido "${rawStatus}", pero la columna C (código) está vacía. La fila no se ha importado.`
-      );
-
-      continue;
-    }
-
     if (!installation) {
       unmatched += 1;
 
@@ -704,7 +738,7 @@ function parseWorkbook(
       unmatched += 1;
 
       warnings.push(
-        `Fila ${excelRow}: el código "${code}" y la INSTALACION "${installation}" son válidos, pero la columna E (ACTUACION) está vacía. No se ha podido identificar el elemento del catálogo.`
+        `Fila ${excelRow}: la INSTALACION "${installation}" es válida, pero la columna E (ACTUACION) está vacía. No se ha podido identificar el elemento del catálogo.`
       );
 
       continue;
@@ -760,15 +794,34 @@ function parseWorkbook(
    * ==========================================================
    * SEGUNDO PASO:
    *
-   * Agrupar las filas por C + D + E.
+   * Agrupar las filas VÁLIDAS exclusivamente por:
+   *
+   *   D + E
+   *
+   * NO por C + D + E.
+   *
+   * Esto es fundamental porque en Excel el código de C puede
+   * estar combinado y aparecer únicamente en la primera fila
+   * de varias unidades.
    *
    * Ejemplo:
    *
-   * 1.1 | Ascens. | Montac. OCA
-   * 1.1 | Ascens. | Montac. OCA
-   * 1.1 | Ascens. | Montac. OCA
+   * Fila 12:
+   *   C=1.1
+   *   D=Ascens. y montac.
+   *   E=OCA..
    *
-   * -> mismo grupo con 3 unidades.
+   * Fila 13:
+   *   C=
+   *   D=Ascens. y montac.
+   *   E=OCA..
+   *
+   * Fila 14:
+   *   C=
+   *   D=Ascens. y montac.
+   *   E=OCA..
+   *
+   * Todas forman UN ÚNICO GRUPO.
    */
   const groups =
     new Map<
@@ -779,7 +832,6 @@ function parseWorkbook(
   for (const row of validRows) {
     const key =
       duplicateGroupKey(
-        row.code,
         row.installation,
         row.action
       );
@@ -798,16 +850,20 @@ function parseWorkbook(
    * ==========================================================
    * TERCER PASO:
    *
-   * Procesar cada grupo y asociar sus unidades al catálogo.
+   * Reservar los elementos de catálogo en orden.
    *
-   * La búsqueda se hace por D + E.
+   * Esto evita reutilizar el mismo elemento del catálogo
+   * cuando existen varias filas Excel correspondientes a
+   * diferentes elementos catalogados con el mismo D + E.
+   */
+  const catalogUsage =
+    new Map<string, number>();
+
+  /*
+   * ==========================================================
+   * CUARTO PASO:
    *
-   * Si hay varias filas Excel y varias entradas de catálogo
-   * con la misma D + E, se asignan en orden:
-   *
-   * Excel unidad 1 -> catálogo coincidencia 1
-   * Excel unidad 2 -> catálogo coincidencia 2
-   * Excel unidad 3 -> catálogo coincidencia 3
+   * Procesar cada grupo D + E.
    */
   for (const group of groups.values()) {
     const firstRow =
@@ -817,6 +873,35 @@ function parseWorkbook(
       continue;
     }
 
+    /*
+     * ========================================================
+     * EL CÓDIGO BASE SE TOMA SIEMPRE DE LA PRIMERA FILA
+     * VÁLIDA DEL GRUPO.
+     *
+     * Las filas siguientes pueden tener C vacío porque
+     * el Excel tiene la celda combinada.
+     */
+    const baseCode =
+      text(firstRow.code);
+
+    if (!baseCode) {
+      warnings.push(
+        `Filas ${group[0]?.excelRow ?? ""}${group.length > 1 ? `-${group[group.length - 1]?.excelRow ?? ""}` : ""}: el grupo INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}" tiene estado válido, pero la primera fila no contiene código en C. Se importarán las unidades si existe correspondencia en el catálogo, pero no se podrá generar un código numérico.`
+      );
+    }
+
+    /*
+     * Si hay varias filas D + E, son unidades múltiples.
+     *
+     * Aquí contamos GRUPOS, no filas.
+     */
+    if (group.length > 1) {
+      multiple += 1;
+    }
+
+    /*
+     * Buscar el catálogo utilizando exclusivamente D + E.
+     */
     const catalogMatches =
       findCatalogItems(
         catalogItems,
@@ -834,43 +919,102 @@ function parseWorkbook(
         group.length;
 
       warnings.push(
-        `Código "${firstRow.code}": no existe en el catálogo una INSTALACION "${firstRow.installation}" con ACTUACION "${firstRow.action}". Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
+        `Código base "${baseCode || "sin código"}": no existe en el catálogo una INSTALACION "${firstRow.installation}" con ACTUACION "${firstRow.action}". Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
       );
 
       continue;
     }
 
     /*
-     * Hay más unidades en Excel que elementos equivalentes
-     * en el catálogo.
+     * Posición que ya hemos consumido para este D + E.
      *
-     * En este caso no debemos asociar una unidad al elemento
-     * equivocado. Las unidades que no tengan correspondencia
-     * quedan fuera.
+     * Si anteriormente ya se importó otro grupo con el mismo
+     * D + E, no volvemos a utilizar el primer elemento del
+     * catálogo.
+     */
+    const catalogKey =
+      duplicateGroupKey(
+        firstRow.installation,
+        firstRow.action
+      );
+
+    const alreadyUsed =
+      catalogUsage.get(
+        catalogKey
+      ) ?? 0;
+
+    const remainingCatalogMatches =
+      catalogMatches.slice(
+        alreadyUsed
+      );
+
+    /*
+     * No quedan elementos disponibles del catálogo.
      */
     if (
-      group.length >
-      catalogMatches.length
+      remainingCatalogMatches.length === 0
     ) {
       unmatched +=
-        group.length -
-        catalogMatches.length;
+        group.length;
 
       warnings.push(
-        `Código "${firstRow.code}": se han encontrado ${group.length} unidades en el Excel para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente existen ${catalogMatches.length} elementos equivalentes en el catálogo. Se importarán las ${Math.min(group.length, catalogMatches.length)} primeras y se omitirán ${group.length - catalogMatches.length}.`
+        `Código base "${baseCode || "sin código"}": las unidades del grupo INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}" ya no tienen elementos disponibles equivalentes en el catálogo. Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
       );
+
+      continue;
     }
 
     /*
-     * Si hay más elementos de catálogo que filas Excel,
-     * solamente se importan las unidades que existen en Excel.
+     * Si hay más unidades Excel que elementos disponibles
+     * en catálogo, las unidades restantes no se asignan
+     * arbitrariamente a otro elemento.
      */
+    if (
+      group.length >
+      remainingCatalogMatches.length
+    ) {
+      const omitted =
+        group.length -
+        remainingCatalogMatches.length;
+
+      unmatched +=
+        omitted;
+
+      warnings.push(
+        `Código base "${baseCode || "sin código"}": se han encontrado ${group.length} unidades para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente quedan ${remainingCatalogMatches.length} elementos equivalentes disponibles en el catálogo. Se importarán ${remainingCatalogMatches.length} y se omitirán ${omitted}.`
+      );
+    }
+
     const unitsToImport =
       Math.min(
         group.length,
-        catalogMatches.length
+        remainingCatalogMatches.length
       );
 
+    /*
+     * Marcar como consumidos los elementos del catálogo
+     * realmente utilizados.
+     */
+    catalogUsage.set(
+      catalogKey,
+      alreadyUsed +
+        unitsToImport
+    );
+
+    /*
+     * ========================================================
+     * GENERAR LAS UNIDADES.
+     *
+     * El código base procede de firstRow.code.
+     *
+     * Para tres filas:
+     *
+     *   1.1.1
+     *   1.1.2
+     *   1.1.3
+     *
+     * Pero G, H, O y R proceden de cada fila individual.
+     */
     for (
       let unitIndex = 0;
       unitIndex <
@@ -881,7 +1025,7 @@ function parseWorkbook(
         group[unitIndex];
 
       const catalogItem =
-        catalogMatches[
+        remainingCatalogMatches[
           unitIndex
         ];
 
@@ -892,20 +1036,44 @@ function parseWorkbook(
         continue;
       }
 
+      const catalogItemId =
+        getCatalogItemId(
+          catalogItem
+        );
+
+      /*
+       * Un elemento sin ID real de catálogo no se puede
+       * guardar correctamente en ReviewState.
+       */
+      if (!catalogItemId) {
+        unmatched += 1;
+
+        warnings.push(
+          `Fila ${excelData.excelRow}: la coincidencia mediante D + E existe, pero el elemento del catálogo no tiene un ID válido. La fila no se ha importado.`
+        );
+
+        continue;
+      }
+
       /*
        * Código final:
        *
        * Una sola unidad:
        *   1.1
        *
-       * Varias:
+       * Varias unidades:
        *   1.1.1
        *   1.1.2
        *   1.1.3
+       *
+       * IMPORTANTE:
+       *
+       * Se utiliza baseCode, que procede de la PRIMERA
+       * fila válida del grupo, no excelData.code.
        */
       const finalCode =
         buildUnitCode(
-          excelData.code,
+          baseCode,
           group.length,
           unitIndex + 1
         );
@@ -922,10 +1090,7 @@ function parseWorkbook(
             catalogItem
           ),
 
-        catalogItemId:
-          String(
-            catalogItem.id
-          ),
+        catalogItemId,
 
         category:
           getCatalogCategory(
@@ -1236,14 +1401,29 @@ export default function ImportPage() {
         status:
           row.status,
 
+        /*
+         * No existe una fecha específica importada desde
+         * las columnas definidas del Excel.
+         *
+         * Si ya había fecha en el registro, se conserva.
+         */
         date:
-          row.inspectionDate,
+          row.inspectionDate ||
+          current.date,
 
+        /*
+         * G = ID.
+         */
         equipmentId:
-          row.equipmentId,
+          row.equipmentId ||
+          current.equipmentId,
 
+        /*
+         * H = Empresa.
+         */
         company:
-          row.company,
+          row.company ||
+          current.company,
 
         apto:
           row.status ===
@@ -1279,9 +1459,13 @@ export default function ImportPage() {
         parsed.period,
 
       itemIds:
-        parsed.rows.map(
-          (row) =>
-            row.catalogItemId
+        Array.from(
+          new Set(
+            parsed.rows.map(
+              (row) =>
+                row.catalogItemId
+            )
+          )
         ),
 
       confirmed:
@@ -1364,14 +1548,16 @@ export default function ImportPage() {
           </p>
 
           <p className="mt-2 font-semibold">
-            Si existen varias unidades con el mismo código C,
-            INSTALACION D y ACTUACION E, se generan códigos
-            1.1.1, 1.1.2, 1.1.3, etc., manteniendo los datos
-            de cada fila.
+            Cuando varias filas válidas tienen la misma
+            INSTALACION D y ACTUACION E, todas se consideran
+            unidades del mismo elemento. El código base se toma
+            de la primera fila válida del grupo y se generan
+            1.1.1, 1.1.2, 1.1.3, etc.
           </p>
 
           <p className="mt-2 font-semibold">
-            G (ID) se importa como dato. La columna N no se utiliza.
+            G (ID) se importa como dato de cada fila.
+            La columna N no se utiliza.
           </p>
         </div>
 
@@ -1557,7 +1743,7 @@ export default function ImportPage() {
 
                 <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
                   <div className="text-xs font-medium text-purple-700">
-                    Coincidencias múltiples
+                    Grupos múltiples
                   </div>
 
                   <div className="mt-1 text-2xl font-bold text-purple-800">
@@ -1576,10 +1762,10 @@ export default function ImportPage() {
                 columna O sea reconocido. Las filas con O vacía
                 se ignoran completamente. El elemento del catálogo
                 se identifica mediante INSTALACION D + ACTUACION E.
-                El código C se conserva como referencia y, cuando
-                existen varias unidades iguales, se amplía con
-                .1, .2, .3, etc. G solamente aporta el ID de esa
-                fila y N se ignora.
+                Cuando existen varias filas con el mismo D + E,
+                el código base se toma de la primera fila válida
+                del grupo y se generan códigos .1, .2, .3, etc.
+                G solamente aporta el ID de cada fila y N se ignora.
               </div>
             </div>
 
