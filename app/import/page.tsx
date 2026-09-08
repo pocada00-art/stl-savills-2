@@ -46,6 +46,7 @@ type ParsedImport = {
   centerId: string;
   country: "España" | "Portugal";
   year: number;
+  reviewText: string;
   period: Period;
   reviewDate: string;
   rows: ImportRow[];
@@ -162,7 +163,7 @@ function detectCenter(rows: any[][]) {
       }
 
       const raw = text(row[c]);
-      const match = raw.match(/(?:^|\\D)(20\\d{2})(?:$|\\D)/);
+      const match = raw.match(/(?:^|\D)(20\d{2})(?:$|\D)/);
       if (match && !year) {
         year = Number(match[1]);
       }
@@ -190,6 +191,7 @@ function detectCenter(rows: any[][]) {
     code,
     center: center as any,
     year,
+    reviewText,
   };
 }
 
@@ -218,7 +220,7 @@ function parseWorkbook(
     );
   }
 
-  const normalizedReviewText = normalize(reviewText);
+  const normalizedReviewText = normalize(detected.reviewText);
   let period: Period;
 
   if (normalizedReviewText.includes("s1")) {
