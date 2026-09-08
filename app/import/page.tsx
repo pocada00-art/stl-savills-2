@@ -133,12 +133,47 @@ function detectCenter(rows: any[][]) {
     }
   }
 
-  const yearRow = rows[6] || [];
-  const possibleYear = Number(yearRow[7]);
-  const year =
-    Number.isInteger(possibleYear) && possibleYear >= 2000
-      ? possibleYear
-      : 2026;
+  /*
+   * El año y el periodo deben salir SIEMPRE del documento importado.
+   * En la FICHA corporativa habitual:
+   *   - "Tipo" -> "Revision S1" / "Revision S2"
+   *   - junto a esa información aparece el año (p.ej. 2025)
+   *
+   * No se utiliza ningún año por defecto de la aplicación para una
+   * revisión histórica. Si el documento no contiene un año válido,
+   * se detiene la importación para evitar archivarla en una revisión
+   * incorrecta.
+   */
+  let reviewText = "";
+  let year = 0;
+
+  for (const row of rows.slice(0, 10)) {
+    for (let c = 0; c < row.length; c += 1) {
+      const label = normalize(row[c]);
+
+      if (label === "tipo") {
+        for (let j = c + 1; j < Math.min(row.length, c + 4); j += 1) {
+          const value = text(row[j]);
+          if (normalize(value).includes("revision")) {
+            reviewText = value;
+            break;
+          }
+        }
+      }
+
+      const raw = text(row[c]);
+      const match = raw.match(/(?:^|\\D)(20\\d{2})(?:$|\\D)/);
+      if (match && !year) {
+        year = Number(match[1]);
+      }
+    }
+  }
+
+  if (!year) {
+    throw new Error(
+      "No se ha podido identificar el año de la revisión en el documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
+    );
+  }
 
   const center = demo.centers.find(
     (c: any) =>
@@ -183,13 +218,18 @@ function parseWorkbook(
     );
   }
 
-  const period =
-    rows[6] && normalize(rows[6][6]).includes("revision")
-      ? "S1"
-      : (() => {
-          const reviewText = rows[6]?.[5];
-          return normalize(reviewText).includes("s1") ? "S1" : "S2";
-        })();
+  const normalizedReviewText = normalize(reviewText);
+  let period: Period;
+
+  if (normalizedReviewText.includes("s1")) {
+    period = "S1";
+  } else if (normalizedReviewText.includes("s2")) {
+    period = "S2";
+  } else {
+    throw new Error(
+      "No se ha podido identificar si la revisión del documento es S1 o S2. La importación se ha detenido para evitar archivarla en un periodo incorrecto."
+    );
+  }
 
   const country =
     (detected.center as any).country === "Portugal"
