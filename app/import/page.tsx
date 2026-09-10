@@ -153,8 +153,8 @@ type ExcelColumnMap = {
 const HEADER_SCAN_ROWS = 80;
 const MAX_DATA_ROWS = 1000;
 
-function text(value: unknown): string { 
-  return String(value ?? "").trim(); 
+function text(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
 function normalize(value: unknown): string {
@@ -235,7 +235,11 @@ function findHeaderColumn(
   aliases: string[],
   exact = false
 ): number {
-  for (let column = 0; column < row.length; column += 1) {
+  for (
+    let column = 0;
+    column < row.length;
+    column += 1
+  ) {
     const current = normalizedHeader(row[column]);
 
     if (!current) {
@@ -243,7 +247,8 @@ function findHeaderColumn(
     }
 
     const matches = aliases.some((alias) => {
-      const normalizedAlias = normalizedHeader(alias);
+      const normalizedAlias =
+        normalizedHeader(alias);
 
       return exact
         ? current === normalizedAlias
@@ -271,51 +276,86 @@ function detectExcelColumns(
     rows.length
   );
 
-  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+  for (
+    let rowIndex = 0;
+    rowIndex < scanLimit;
+    rowIndex += 1
+  ) {
     const row = rows[rowIndex] || [];
 
-    const installation = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.INSTALLATION]
-    );
-    const action = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.ACTION]
-    );
-    const equipmentId = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.EQUIPMENT_ID],
-      true
-    );
-    const company = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.COMPANY]
-    );
-    const status = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.STATUS]
-    );
-    const comment = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.COMMENT]
-    );
-    const explicitCode = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.CODE]
-    );
+    const installation =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.INSTALLATION]
+      );
+
+    const action =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.ACTION]
+      );
+
+    const equipmentId =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.EQUIPMENT_ID],
+        true
+      );
+
+    const company =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.COMPANY]
+      );
+
+    const status =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.STATUS]
+      );
+
+    const comment =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.COMMENT]
+      );
+
+    const explicitCode =
+      findHeaderColumn(
+        row,
+        [...HEADER_ALIASES.CODE]
+      );
 
     let score = 0;
 
-    if (installation >= 0) score += 4;
-    if (action >= 0) score += 4;
-    if (equipmentId >= 0) score += 3;
-    if (company >= 0) score += 2;
-    if (status >= 0) score += 4;
-    if (comment >= 0) score += 2;
+    if (installation >= 0) {
+      score += 4;
+    }
+
+    if (action >= 0) {
+      score += 4;
+    }
+
+    if (equipmentId >= 0) {
+      score += 3;
+    }
+
+    if (company >= 0) {
+      score += 2;
+    }
+
+    if (status >= 0) {
+      score += 4;
+    }
+
+    if (comment >= 0) {
+      score += 2;
+    }
 
     if (score > bestScore) {
       bestScore = score;
       bestRow = rowIndex;
+
       bestColumns = {
         headerRow: rowIndex,
         installation,
@@ -329,16 +369,26 @@ function detectExcelColumns(
     }
   }
 
-  if (bestRow < 0 || bestScore < 10) {
+  if (
+    bestRow < 0 ||
+    bestScore < 10
+  ) {
     throw new Error(
       "No se ha podido identificar la estructura de la tabla STL en el archivo Excel. No se han encontrado suficientes encabezados reconocibles (INSTALACION, ID, EMPRESA, ESTADO, etc.)."
     );
   }
 
-  const equipmentId = bestColumns.equipmentId ?? -1;
-  const company = bestColumns.company ?? -1;
-  const status = bestColumns.status ?? -1;
-  const comment = bestColumns.comment ?? -1;
+  const equipmentId =
+    bestColumns.equipmentId ?? -1;
+
+  const company =
+    bestColumns.company ?? -1;
+
+  const status =
+    bestColumns.status ?? -1;
+
+  const comment =
+    bestColumns.comment ?? -1;
 
   if (equipmentId < 0) {
     throw new Error(
@@ -377,27 +427,51 @@ function detectExcelColumns(
    * Por ello, cuando no existe un encabezado específico fiable,
    * usamos el ID como ancla estructural.
    */
-  let installation = bestColumns.installation ?? -1;
-  let action = bestColumns.action ?? -1;
-  let code = bestColumns.code ?? -1;
 
-  const structuralInstallation = equipmentId - 3;
-  const structuralAction = equipmentId - 2;
-  const structuralCode = equipmentId - 4;
+  let installation =
+    bestColumns.installation ?? -1;
 
-  if (structuralInstallation >= 0) {
-    installation = structuralInstallation;
+  let action =
+    bestColumns.action ?? -1;
+
+  let code =
+    bestColumns.code ?? -1;
+
+  const structuralInstallation =
+    equipmentId - 3;
+
+  const structuralAction =
+    equipmentId - 2;
+
+  const structuralCode =
+    equipmentId - 4;
+
+  if (
+    structuralInstallation >= 0
+  ) {
+    installation =
+      structuralInstallation;
   }
 
-  if (structuralAction >= 0) {
-    action = structuralAction;
+  if (
+    structuralAction >= 0
+  ) {
+    action =
+      structuralAction;
   }
 
-  if (structuralCode >= 0) {
-    code = structuralCode;
+  if (
+    structuralCode >= 0
+  ) {
+    code =
+      structuralCode;
   }
 
-  if (installation < 0 || action < 0 || code < 0) {
+  if (
+    installation < 0 ||
+    action < 0 ||
+    code < 0
+  ) {
     throw new Error(
       `No se ha podido reconstruir la estructura Código + Instalación + Actuación a partir de la columna ID detectada en la fila ${bestRow + 1}.`
     );
@@ -419,18 +493,37 @@ function findCellByLabel(
   rows: any[][],
   aliases: string[],
   maxRows = 20
-): { row: number; column: number } | null {
+): {
+  row: number;
+  column: number;
+} | null {
   const limit = Math.min(
     maxRows,
     rows.length
   );
 
-  for (let row = 0; row < limit; row += 1) {
+  for (
+    let row = 0;
+    row < limit;
+    row += 1
+  ) {
     const current = rows[row] || [];
 
-    for (let column = 0; column < current.length; column += 1) {
-      if (headerMatches(current[column], aliases)) {
-        return { row, column };
+    for (
+      let column = 0;
+      column < current.length;
+      column += 1
+    ) {
+      if (
+        headerMatches(
+          current[column],
+          aliases
+        )
+      ) {
+        return {
+          row,
+          column,
+        };
       }
     }
   }
@@ -438,10 +531,14 @@ function findCellByLabel(
   return null;
 }
 
-function valueToYear(value: unknown): number {
+function valueToYear(
+  value: unknown
+): number {
   if (
     value instanceof Date &&
-    !Number.isNaN(value.getTime())
+    !Number.isNaN(
+      value.getTime()
+    )
   ) {
     return value.getFullYear();
   }
@@ -450,17 +547,28 @@ function valueToYear(value: unknown): number {
     typeof value === "number" &&
     Number.isFinite(value)
   ) {
-    const number = Math.trunc(value);
+    const number =
+      Math.trunc(value);
 
-    if (number >= 2000 && number <= 2100) {
+    if (
+      number >= 2000 &&
+      number <= 2100
+    ) {
       return number;
     }
   }
 
-  const valueText = text(value);
-  const match = valueText.match(/20\d{2}/);
+  const valueText =
+    text(value);
 
-  return match ? Number(match[0]) : 0;
+  const match =
+    valueText.match(
+      /20\d{2}/
+    );
+
+  return match
+    ? Number(match[0])
+    : 0;
 }
 
 function findYearInTopSection(
@@ -471,9 +579,16 @@ function findYearInTopSection(
     rows.length
   );
 
-  for (let row = 0; row < limit; row += 1) {
-    for (const value of rows[row] || []) {
-      const year = valueToYear(value);
+  for (
+    let row = 0;
+    row < limit;
+    row += 1
+  ) {
+    for (
+      const value of rows[row] || []
+    ) {
+      const year =
+        valueToYear(value);
 
       if (year) {
         return year;
@@ -488,10 +603,14 @@ function detectCenter(
   rows: any[][],
   fileName: string
 ) {
-  const centerLabel = findCellByLabel(
-    rows,
-    ["centro", "centro comercial"]
-  );
+  const centerLabel =
+    findCellByLabel(
+      rows,
+      [
+        "centro",
+        "centro comercial",
+      ]
+    );
 
   if (!centerLabel) {
     throw new Error(
@@ -502,19 +621,27 @@ function detectCenter(
   let centerName = "";
 
   for (
-    let column = centerLabel.column + 1;
-    column < Math.min(
-      centerLabel.column + 5,
-      rows[centerLabel.row]?.length ?? 0
-    );
+    let column =
+      centerLabel.column + 1;
+    column <
+      Math.min(
+        centerLabel.column + 5,
+        rows[
+          centerLabel.row
+        ]?.length ?? 0
+      );
     column += 1
   ) {
-    const candidate = text(
-      rows[centerLabel.row]?.[column]
-    );
+    const candidate =
+      text(
+        rows[
+          centerLabel.row
+        ]?.[column]
+      );
 
     if (candidate) {
-      centerName = candidate;
+      centerName =
+        candidate;
       break;
     }
   }
@@ -525,45 +652,69 @@ function detectCenter(
     );
   }
 
-  const reviewLabel = findCellByLabel(
-    rows,
-    ["tipo", "revision", "revisión", "tipo de revision", "tipo de revisión"]
-  );
+  const reviewLabel =
+    findCellByLabel(
+      rows,
+      [
+        "tipo",
+        "revision",
+        "revisión",
+        "tipo de revision",
+        "tipo de revisión",
+      ]
+    );
 
   let reviewText = "";
 
   if (reviewLabel) {
     for (
-      let column = reviewLabel.column + 1;
-      column < Math.min(
-        reviewLabel.column + 5,
-        rows[reviewLabel.row]?.length ?? 0
-      );
+      let column =
+        reviewLabel.column + 1;
+      column <
+        Math.min(
+          reviewLabel.column + 5,
+          rows[
+            reviewLabel.row
+          ]?.length ?? 0
+        );
       column += 1
     ) {
-      const candidate = text(
-        rows[reviewLabel.row]?.[column]
-      );
+      const candidate =
+        text(
+          rows[
+            reviewLabel.row
+          ]?.[column]
+        );
 
       if (candidate) {
-        reviewText = candidate;
+        reviewText =
+          candidate;
         break;
       }
     }
   }
 
-  let year = findYearInTopSection(rows);
+  let year =
+    findYearInTopSection(rows);
 
-  const fileNameNormalized = normalize(fileName);
+  const fileNameNormalized =
+    normalize(fileName);
 
   if (!year) {
-    const fileYear = fileNameNormalized.match(/(?:^|[^0-9])((?:20)?\d{2})(?:[^0-9]|$)/);
+    const fileYear =
+      fileNameNormalized.match(
+        /(?:^|[^0-9])((?:20)?\d{2})(?:[^0-9]|$)/
+      );
 
     if (fileYear) {
-      const candidate = fileYear[1];
-      year = candidate.length === 2
-        ? 2000 + Number(candidate)
-        : Number(candidate);
+      const candidate =
+        fileYear[1];
+
+      year =
+        candidate.length === 2
+          ? 2000 +
+            Number(candidate)
+          : Number(candidate);
     }
   }
 
@@ -573,12 +724,16 @@ function detectCenter(
     );
   }
 
-  const center = demo.centers.find(
-    (c: any) =>
-      normalize(c.name) === normalize(centerName) ||
-      normalize(c.shortCode) === normalize(centerName) ||
-      normalize(c.code) === normalize(centerName)
-  );
+  const center =
+    demo.centers.find(
+      (c: any) =>
+        normalize(c.name) ===
+          normalize(centerName) ||
+        normalize(c.shortCode) ===
+          normalize(centerName) ||
+        normalize(c.code) ===
+          normalize(centerName)
+    );
 
   if (!center) {
     throw new Error(
@@ -588,11 +743,15 @@ function detectCenter(
 
   return {
     name: centerName,
-    code: text((center as any).code),
-    center: center as any,
+    code: text(
+      (center as any).code
+    ),
+    center:
+      center as any,
     year,
     reviewText,
-    fileName: fileNameNormalized,
+    fileName:
+      fileNameNormalized,
   };
 }
 
@@ -606,34 +765,52 @@ function detectPeriod(
     fileName,
   ];
 
-  const topText = rows
-    .slice(0, 20)
-    .flat()
-    .map(text)
-    .filter(Boolean)
-    .join(" ");
+  const topText =
+    rows
+      .slice(0, 20)
+      .flat()
+      .map(text)
+      .filter(Boolean)
+      .join(" ");
 
   sources.push(topText);
 
-  const normalizedSources = sources.map(normalize);
+  const normalizedSources =
+    sources.map(normalize);
 
-  for (const source of normalizedSources) {
+  for (
+    const source of normalizedSources
+  ) {
     if (
       /\bs1\b/.test(source) ||
-      source.includes("semestre 1") ||
-      source.includes("1 semestre") ||
-      source.includes("primer semestre")
+      source.includes(
+        "semestre 1"
+      ) ||
+      source.includes(
+        "1 semestre"
+      ) ||
+      source.includes(
+        "primer semestre"
+      )
     ) {
       return "S1";
     }
   }
 
-  for (const source of normalizedSources) {
+  for (
+    const source of normalizedSources
+  ) {
     if (
       /\bs2\b/.test(source) ||
-      source.includes("semestre 2") ||
-      source.includes("2 semestre") ||
-      source.includes("segundo semestre")
+      source.includes(
+        "semestre 2"
+      ) ||
+      source.includes(
+        "2 semestre"
+      ) ||
+      source.includes(
+        "segundo semestre"
+      )
     ) {
       return "S2";
     }
@@ -652,19 +829,84 @@ function catalogText(
     return "";
   }
 
-  for (const key of keys) {
-    const value = source?.[key];
+  for (
+    const key of keys
+  ) {
+    const value =
+      source?.[key];
 
     if (
       value !== undefined &&
       value !== null
     ) {
-      const result = text(value);
+      const result =
+        text(value);
 
       if (result) {
         return result;
       }
     }
+  }
+
+  return "";
+}
+
+/**
+ * Convierte los distintos valores utilizados por las plantillas
+ * Excel al conjunto de estados reconocido por la aplicación.
+ *
+ * Si el valor no se reconoce, devuelve "" para que la fila
+ * pueda quedar excluida sin generar un estado incorrecto.
+ */
+function statusFromExcel(
+  value: unknown
+): V1Status | "" {
+  const normalized =
+    normalize(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    normalized === "apto" ||
+    normalized === "favorable"
+  ) {
+    return "APTO";
+  }
+
+  if (
+    normalized ===
+      "apto condicionado" ||
+    normalized ===
+      "condicionado"
+  ) {
+    return "APTO CONDICIONADO";
+  }
+
+  if (
+    normalized ===
+      "no apto" ||
+    normalized ===
+      "desfavorable"
+  ) {
+    return "NO APTO";
+  }
+
+  if (
+    normalized ===
+      "pendiente" ||
+    normalized === "pte"
+  ) {
+    return "PENDIENTE";
+  }
+
+  if (
+    normalized ===
+      "sin informacion" ||
+    normalized === "error"
+  ) {
+    return "SIN INFORMACIÓN";
   }
 
   return "";
@@ -707,52 +949,14 @@ function findCatalogItems(
         ]);
 
       return (
-        normalize(catalogInstallation) === normalizedInstallation &&
-        normalize(catalogAction) === normalizedAction
-      );
-    }
-  );
-}
-
-function findCatalogItems(
-  catalogItems: any[],
-  installation: string,
-  action: string
-): any[] {
-  const normalizedInstallation =
-    normalize(installation);
-
-  const normalizedAction =
-    normalize(action);
-
-  if (
-    !normalizedInstallation ||
-    !normalizedAction
-  ) {
-    return [];
-  }
-
-  return catalogItems.filter(
-    (item) => {
-      const catalogInstallation =
-        catalogText(item, [
-          "installation",
-          "instalacion",
-          "INSTALACION",
-          "install",
-        ]);
-
-      const catalogAction =
-        catalogText(item, [
-          "action",
-          "actuacion",
-          "ACTUACION",
-          "actuation",
-        ]);
-
-      return (
-        normalize(catalogInstallation) === normalizedInstallation &&
-        normalize(catalogAction) === normalizedAction
+        normalize(
+          catalogInstallation
+        ) ===
+          normalizedInstallation &&
+        normalize(
+          catalogAction
+        ) ===
+          normalizedAction
       );
     }
   );
@@ -767,8 +971,11 @@ function getCatalogOrdinal(
     catalogItem?.numero,
   ];
 
-  for (const value of possibleValues) {
-    const number = Number(value);
+  for (
+    const value of possibleValues
+  ) {
+    const number =
+      Number(value);
 
     if (
       Number.isFinite(number) &&
@@ -784,21 +991,27 @@ function getCatalogOrdinal(
 function getCatalogActionCode(
   catalogItem: any
 ): string {
-  return catalogText(catalogItem, [
-    "actionCode",
-    "baseCode",
-    "code",
-  ]);
+  return catalogText(
+    catalogItem,
+    [
+      "actionCode",
+      "baseCode",
+      "code",
+    ]
+  );
 }
 
 function getCatalogCategory(
   catalogItem: any
 ): string {
-  return catalogText(catalogItem, [
-    "category",
-    "categoria",
-    "CATEGORY",
-  ]);
+  return catalogText(
+    catalogItem,
+    [
+      "category",
+      "categoria",
+      "CATEGORY",
+    ]
+  );
 }
 
 /**
@@ -817,10 +1030,18 @@ function forwardFill(
     return currentValue;
   }
 
-  for (let previous = rowIndex - 1; previous >= 0; previous -= 1) {
-    const value = text(
-      rows[previous]?.[column]
-    );
+  for (
+    let previous =
+      rowIndex - 1;
+    previous >= 0;
+    previous -= 1
+  ) {
+    const value =
+      text(
+        rows[previous]?.[
+          column
+        ]
+      );
 
     if (value) {
       return value;
@@ -845,7 +1066,8 @@ function buildUnitCode(
   totalUnits: number,
   unitIndex: number
 ): string {
-  const cleanCode = text(baseCode);
+  const cleanCode =
+    text(baseCode);
 
   if (totalUnits <= 1) {
     return cleanCode;
@@ -871,7 +1093,9 @@ function parseWorkbook(
   fileName = ""
 ): ParsedImport {
   const sheetName =
-    wb.SheetNames.includes("FICHA")
+    wb.SheetNames.includes(
+      "FICHA"
+    )
       ? "FICHA"
       : wb.SheetNames[0];
 
@@ -881,7 +1105,8 @@ function parseWorkbook(
     );
   }
 
-  const ws = wb.Sheets[sheetName];
+  const ws =
+    wb.Sheets[sheetName];
 
   const rows =
     XLSX.utils.sheet_to_json(
@@ -893,16 +1118,26 @@ function parseWorkbook(
       }
     ) as any[][];
 
-  const columns = detectExcelColumns(rows);
-  const detected = detectCenter(rows, fileName);
-  const period = detectPeriod(
-    detected.reviewText,
-    fileName,
-    rows
-  );
+  const columns =
+    detectExcelColumns(rows);
+
+  const detected =
+    detectCenter(
+      rows,
+      fileName
+    );
+
+  const period =
+    detectPeriod(
+      detected.reviewText,
+      fileName,
+      rows
+    );
 
   const country =
-    (detected.center as any).country === "Portugal"
+    (detected.center as any)
+      .country ===
+    "Portugal"
       ? "Portugal"
       : "España";
 
@@ -916,29 +1151,38 @@ function parseWorkbook(
       catalog as any[]
     ) as any[];
 
-  const parsedRows: ImportRow[] = [];
-  const warnings: string[] = [];
+  const parsedRows:
+    ImportRow[] = [];
+
+  const warnings:
+    string[] = [];
 
   let excluded = 0;
   let unmatched = 0;
 
-  const validRows: ValidExcelRow[] = [];
+  const validRows:
+    ValidExcelRow[] = [];
 
-  const lastRow = Math.min(
-    rows.length,
-    columns.headerRow + MAX_DATA_ROWS
-  );
+  const lastRow =
+    Math.min(
+      rows.length,
+      columns.headerRow +
+        MAX_DATA_ROWS
+    );
 
   for (
-    let rowIndex = columns.headerRow + 1;
+    let rowIndex =
+      columns.headerRow + 1;
     rowIndex < lastRow;
     rowIndex += 1
   ) {
-    const row = rows[rowIndex] || [];
+    const row =
+      rows[rowIndex] || [];
 
-    const rawStatus = text(
-      row[columns.status]
-    );
+    const rawStatus =
+      text(
+        row[columns.status]
+      );
 
     /*
      * REGLA PRINCIPAL:
@@ -949,7 +1193,10 @@ function parseWorkbook(
       continue;
     }
 
-    const status = statusFromExcel(rawStatus);
+    const status =
+      statusFromExcel(
+        rawStatus
+      );
 
     if (!status) {
       excluded += 1;
@@ -965,26 +1212,39 @@ function parseWorkbook(
      * Las celdas C/D equivalentes pueden estar combinadas.
      * Recuperamos el valor visible de la primera fila del bloque.
      */
-    const code = forwardFill(
-      rows,
-      rowIndex,
-      columns.code,
-      text(row[columns.code])
-    );
+    const code =
+      forwardFill(
+        rows,
+        rowIndex,
+        columns.code,
+        text(
+          row[columns.code]
+        )
+      );
 
-    const installation = forwardFill(
-      rows,
-      rowIndex,
-      columns.installation,
-      text(row[columns.installation])
-    );
+    const installation =
+      forwardFill(
+        rows,
+        rowIndex,
+        columns.installation,
+        text(
+          row[
+            columns.installation
+          ]
+        )
+      );
 
-    const action = forwardFill(
-      rows,
-      rowIndex,
-      columns.action,
-      text(row[columns.action])
-    );
+    const action =
+      forwardFill(
+        rows,
+        rowIndex,
+        columns.action,
+        text(
+          row[
+            columns.action
+          ]
+        )
+      );
 
     if (!installation) {
       unmatched += 1;
@@ -1011,20 +1271,30 @@ function parseWorkbook(
      * celda combinada. No rechazamos la fila: el código base se
      * resolverá al agrupar por INSTALACION + ACTUACION.
      */
-    const equipmentId = text(
-      row[columns.equipmentId]
-    );
+    const equipmentId =
+      text(
+        row[
+          columns.equipmentId
+        ]
+      );
 
-    const company = text(
-      row[columns.company]
-    );
+    const company =
+      text(
+        row[
+          columns.company
+        ]
+      );
 
-    const comment = text(
-      row[columns.comment]
-    );
+    const comment =
+      text(
+        row[
+          columns.comment
+        ]
+      );
 
     validRows.push({
-      excelRow: rowIndex + 1,
+      excelRow:
+        rowIndex + 1,
       code,
       installation,
       action,
@@ -1045,27 +1315,41 @@ function parseWorkbook(
    * puede estar en una celda combinada y aparecer solamente en la
    * primera fila del grupo.
    */
-  const groups = new Map<string, ValidExcelRow[]>();
+  const groups =
+    new Map<
+      string,
+      ValidExcelRow[]
+    >();
 
-  for (const row of validRows) {
-    const key = duplicateGroupKey(
-      row.installation,
-      row.action
-    );
+  for (
+    const row of validRows
+  ) {
+    const key =
+      duplicateGroupKey(
+        row.installation,
+        row.action
+      );
 
-    const group = groups.get(key);
+    const group =
+      groups.get(key);
 
     if (group) {
       group.push(row);
     } else {
-      groups.set(key, [row]);
+      groups.set(
+        key,
+        [row]
+      );
     }
   }
 
   let multiple = 0;
 
-  for (const group of groups.values()) {
-    const firstRow = group[0];
+  for (
+    const group of groups.values()
+  ) {
+    const firstRow =
+      group[0];
 
     if (!firstRow) {
       continue;
@@ -1076,26 +1360,42 @@ function parseWorkbook(
     }
 
     const baseCode =
-      group.find((row) => text(row.code))?.code || "";
+      group.find(
+        (row) =>
+          text(row.code)
+      )?.code || "";
 
     if (!baseCode) {
-      unmatched += group.length;
+      unmatched +=
+        group.length;
 
       warnings.push(
-        `Filas ${group.map((row) => row.excelRow).join(", ")}: se han encontrado ${group.length} unidad${group.length === 1 ? "" : "es"} con INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero no se ha encontrado ningún código base en la columna correspondiente. Se han omitido para evitar generar códigos incorrectos.`
+        `Filas ${group
+          .map(
+            (row) =>
+              row.excelRow
+          )
+          .join(
+            ", "
+          )}: se han encontrado ${group.length} unidad${group.length === 1 ? "" : "es"} con INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero no se ha encontrado ningún código base en la columna correspondiente. Se han omitido para evitar generar códigos incorrectos.`
       );
 
       continue;
     }
 
-    const catalogMatches = findCatalogItems(
-      catalogItems,
-      firstRow.installation,
-      firstRow.action
-    );
+    const catalogMatches =
+      findCatalogItems(
+        catalogItems,
+        firstRow.installation,
+        firstRow.action
+      );
 
-    if (catalogMatches.length === 0) {
-      unmatched += group.length;
+    if (
+      catalogMatches.length ===
+      0
+    ) {
+      unmatched +=
+        group.length;
 
       warnings.push(
         `Código "${baseCode}": no existe en el catálogo una INSTALACION "${firstRow.installation}" con ACTUACION "${firstRow.action}". Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
@@ -1104,86 +1404,175 @@ function parseWorkbook(
       continue;
     }
 
-    if (group.length > catalogMatches.length) {
+    if (
+      group.length >
+      catalogMatches.length
+    ) {
       unmatched +=
-        group.length - catalogMatches.length;
+        group.length -
+        catalogMatches.length;
 
       warnings.push(
-        `Código "${baseCode}": se han encontrado ${group.length} unidades en el Excel para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente existen ${catalogMatches.length} elementos equivalentes en el catálogo. Se importarán las ${Math.min(group.length, catalogMatches.length)} primeras y se omitirán ${group.length - catalogMatches.length}.`
+        `Código "${baseCode}": se han encontrado ${group.length} unidades en el Excel para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente existen ${catalogMatches.length} elementos equivalentes en el catálogo. Se importarán las ${Math.min(
+          group.length,
+          catalogMatches.length
+        )} primeras y se omitirán ${
+          group.length -
+          catalogMatches.length
+        }.`
       );
     }
 
-    const unitsToImport = Math.min(
-      group.length,
-      catalogMatches.length
-    );
+    const unitsToImport =
+      Math.min(
+        group.length,
+        catalogMatches.length
+      );
 
     for (
       let unitIndex = 0;
-      unitIndex < unitsToImport;
+      unitIndex <
+        unitsToImport;
       unitIndex += 1
     ) {
-      const excelData = group[unitIndex];
-      const catalogItem = catalogMatches[unitIndex];
+      const excelData =
+        group[unitIndex];
 
-      if (!excelData || !catalogItem) {
+      const catalogItem =
+        catalogMatches[
+          unitIndex
+        ];
+
+      if (
+        !excelData ||
+        !catalogItem
+      ) {
         continue;
       }
 
-      const finalCode = buildUnitCode(
-        baseCode,
-        group.length,
-        unitIndex + 1
-      );
+      const finalCode =
+        buildUnitCode(
+          baseCode,
+          group.length,
+          unitIndex + 1
+        );
 
       parsedRows.push({
-        excelRow: excelData.excelRow,
-        code: finalCode,
-        ordinal: getCatalogOrdinal(catalogItem),
-        catalogItemId: String(catalogItem.id),
-        category: getCatalogCategory(catalogItem),
-        installation: excelData.installation,
-        action: excelData.action,
-        actionCode: getCatalogActionCode(catalogItem),
-        equipmentId: excelData.equipmentId,
-        company: excelData.company,
-        inspectionDate: "",
-        status: excelData.status,
-        selected: [excelData.status],
-        multiple: group.length > 1,
-        comment: excelData.comment,
+        excelRow:
+          excelData.excelRow,
+
+        code:
+          finalCode,
+
+        ordinal:
+          getCatalogOrdinal(
+            catalogItem
+          ),
+
+        catalogItemId:
+          String(
+            catalogItem.id
+          ),
+
+        category:
+          getCatalogCategory(
+            catalogItem
+          ),
+
+        installation:
+          excelData.installation,
+
+        action:
+          excelData.action,
+
+        actionCode:
+          getCatalogActionCode(
+            catalogItem
+          ),
+
+        equipmentId:
+          excelData.equipmentId,
+
+        company:
+          excelData.company,
+
+        inspectionDate:
+          "",
+
+        status:
+          excelData.status,
+
+        selected: [
+          excelData.status,
+        ],
+
+        multiple:
+          group.length > 1,
+
+        comment:
+          excelData.comment,
       });
     }
   }
 
   parsedRows.sort(
-    (a, b) => a.excelRow - b.excelRow
+    (a, b) =>
+      a.excelRow -
+      b.excelRow
   );
 
   return {
-    centerName: text((detected.center as any).name),
-    centerCode: text((detected.center as any).code),
-    centerId: String((detected.center as any).id),
+    centerName:
+      text(
+        (detected.center as any)
+          .name
+      ),
+
+    centerCode:
+      text(
+        (detected.center as any)
+          .code
+      ),
+
+    centerId:
+      String(
+        (detected.center as any)
+          .id
+      ),
+
     country,
-    year: detected.year,
+
+    year:
+      detected.year,
+
     reviewText:
       detected.reviewText ||
       `${period} ${detected.year}`,
+
     period,
-    reviewDate: "",
-    rows: parsedRows,
+
+    reviewDate:
+      "",
+
+    rows:
+      parsedRows,
+
     excluded,
+
     multiple,
+
     unmatched,
+
     warnings,
   };
 }
 
 function statusClasses(
   status: V1Status
-) {
+): string {
   if (
-    status === "APTO"
+    status ===
+    "APTO"
   ) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
@@ -1206,7 +1595,7 @@ function statusClasses(
     status ===
     "PENDIENTE"
   ) {
-    return "border-slate-200 bg-slate-50 text-slate-700";
+    return "border-orange-200 bg-orange-50 text-orange-700";
   }
 
   return "border-slate-200 bg-slate-50 text-slate-700";
@@ -1214,7 +1603,9 @@ function statusClasses(
 
 export default function ImportPage() {
   const [file, setFile] =
-    useState<File | null>(null);
+    useState<File | null>(
+      null
+    );
 
   const [parsed, setParsed] =
     useState<ParsedImport | null>(
@@ -1230,72 +1621,79 @@ export default function ImportPage() {
   const [busy, setBusy] =
     useState(false);
 
-  const summary = useMemo(() => {
-    if (!parsed) {
-      return null;
-    }
+  const summary =
+    useMemo(() => {
+      if (!parsed) {
+        return null;
+      }
 
-    const counts = {
-      APTO:
-        parsed.rows.filter(
-          (r) =>
-            r.status ===
-            "APTO"
-        ).length,
+      const counts = {
+        APTO:
+          parsed.rows.filter(
+            (r) =>
+              r.status ===
+              "APTO"
+          ).length,
 
-      "APTO CONDICIONADO":
-        parsed.rows.filter(
-          (r) =>
-            r.status ===
-            "APTO CONDICIONADO"
-        ).length,
+        "APTO CONDICIONADO":
+          parsed.rows.filter(
+            (r) =>
+              r.status ===
+              "APTO CONDICIONADO"
+          ).length,
 
-      "NO APTO":
-        parsed.rows.filter(
-          (r) =>
-            r.status ===
-            "NO APTO"
-        ).length,
+        "NO APTO":
+          parsed.rows.filter(
+            (r) =>
+              r.status ===
+              "NO APTO"
+          ).length,
 
-      PENDIENTE:
-        parsed.rows.filter(
-          (r) =>
-            r.status ===
-            "PENDIENTE"
-        ).length,
-    };
+        PENDIENTE:
+          parsed.rows.filter(
+            (r) =>
+              r.status ===
+              "PENDIENTE"
+          ).length,
+      };
 
-    const points =
-      counts.APTO * 3 +
-      counts[
-        "APTO CONDICIONADO"
-      ] *
-        2 +
-      counts[
-        "NO APTO"
-      ];
+      const points =
+        counts.APTO * 3 +
+        counts[
+          "APTO CONDICIONADO"
+        ] *
+          2 +
+        counts[
+          "NO APTO"
+        ];
 
-    const max =
-      parsed.rows.length * 3;
+      const max =
+        parsed.rows.length *
+        3;
 
-    const score = max
-      ? Math.round(
-          (points / max) * 100
-        )
-      : 0;
+      const score = max
+        ? Math.round(
+            (points /
+              max) *
+              100
+          )
+        : 0;
 
-    return {
-      counts,
-      points,
-      max,
-      score,
-    };
-  }, [parsed]);
+      return {
+        counts,
+        points,
+        max,
+        score,
+      };
+    }, [parsed]);
 
   async function handleFile(
     nextFile: File
   ) {
-    setFile(nextFile);
+    setFile(
+      nextFile
+    );
+
     setParsed(null);
     setMessage("");
     setError("");
@@ -1315,9 +1713,14 @@ export default function ImportPage() {
         );
 
       const result =
-        parseWorkbook(wb, nextFile.name);
+        parseWorkbook(
+          wb,
+          nextFile.name
+        );
 
-      setParsed(result);
+      setParsed(
+        result
+      );
     } catch (e) {
       setError(
         e instanceof Error
@@ -1358,7 +1761,9 @@ export default function ImportPage() {
       ItemReview
     > = {};
 
-    for (const row of parsed.rows) {
+    for (
+      const row of parsed.rows
+    ) {
       const current =
         existing?.items?.[
           row.catalogItemId
@@ -1463,7 +1868,8 @@ export default function ImportPage() {
       reviews: {
         ...state.reviews,
 
-        [key]: review,
+        [key]:
+          review,
       },
     };
 
@@ -1551,11 +1957,16 @@ export default function ImportPage() {
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
-            onChange={(event) => {
+            onChange={(
+              event
+            ) => {
               const selectedFile =
-                event.target.files?.[0];
+                event.target
+                  .files?.[0];
 
-              if (selectedFile) {
+              if (
+                selectedFile
+              ) {
                 void handleFile(
                   selectedFile
                 );
@@ -1641,7 +2052,9 @@ export default function ImportPage() {
                   </div>
 
                   <div className="mt-1 text-2xl font-bold text-slate-900">
-                    {parsed.rows.length}
+                    {
+                      parsed.rows.length
+                    }
                   </div>
                 </div>
 
@@ -1665,7 +2078,8 @@ export default function ImportPage() {
 
                   <div className="mt-1 text-2xl font-bold text-amber-800">
                     {
-                      summary.counts[
+                      summary
+                        .counts[
                         "APTO CONDICIONADO"
                       ]
                     }
@@ -1679,21 +2093,23 @@ export default function ImportPage() {
 
                   <div className="mt-1 text-2xl font-bold text-red-800">
                     {
-                      summary.counts[
+                      summary
+                        .counts[
                         "NO APTO"
                       ]
                     }
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-xs font-medium text-slate-600">
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                  <div className="text-xs font-medium text-orange-700">
                     PENDIENTE
                   </div>
 
-                  <div className="mt-1 text-2xl font-bold text-slate-800">
+                  <div className="mt-1 text-2xl font-bold text-orange-800">
                     {
-                      summary.counts[
+                      summary
+                        .counts[
                         "PENDIENTE"
                       ]
                     }
