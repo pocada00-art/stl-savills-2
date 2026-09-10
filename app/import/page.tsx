@@ -153,6 +153,10 @@ type ExcelColumnMap = {
 const HEADER_SCAN_ROWS = 80;
 const MAX_DATA_ROWS = 1000;
 
+function text(value: unknown): string { 
+  return String(value ?? "").trim(); 
+}
+
 function normalize(value: unknown): string {
   return String(value ?? "")
     .trim()
