@@ -644,6 +644,76 @@ function detectPeriod(
   );
 }
 
+function catalogText(
+  source: any,
+  keys: string[]
+): string {
+  if (!source) {
+    return "";
+  }
+
+  for (const key of keys) {
+    const value = source?.[key];
+
+    if (
+      value !== undefined &&
+      value !== null
+    ) {
+      const result = text(value);
+
+      if (result) {
+        return result;
+      }
+    }
+  }
+
+  return "";
+}
+
+function findCatalogItems(
+  catalogItems: any[],
+  installation: string,
+  action: string
+): any[] {
+  const normalizedInstallation =
+    normalize(installation);
+
+  const normalizedAction =
+    normalize(action);
+
+  if (
+    !normalizedInstallation ||
+    !normalizedAction
+  ) {
+    return [];
+  }
+
+  return catalogItems.filter(
+    (item) => {
+      const catalogInstallation =
+        catalogText(item, [
+          "installation",
+          "instalacion",
+          "INSTALACION",
+          "install",
+        ]);
+
+      const catalogAction =
+        catalogText(item, [
+          "action",
+          "actuacion",
+          "ACTUACION",
+          "actuation",
+        ]);
+
+      return (
+        normalize(catalogInstallation) === normalizedInstallation &&
+        normalize(catalogAction) === normalizedAction
+      );
+    }
+  );
+}
+
 function findCatalogItems(
   catalogItems: any[],
   installation: string,
