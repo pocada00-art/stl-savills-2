@@ -153,6 +153,16 @@ type ExcelColumnMap = {
 const HEADER_SCAN_ROWS = 80;
 const MAX_DATA_ROWS = 1000;
 
+function normalize(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function normalizedHeader(value: unknown): string {
   return normalize(value)
     .replace(/[ªº.]/g, "")
