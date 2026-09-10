@@ -131,182 +131,431 @@ type ParsedImport = {
  * Las filas con O vacía se ignoran completamente.
  */
 
-const EXCEL_COLUMNS = {
-  CODE: 2, // C
-  INSTALLATION: 3, // D
-  ACTION: 4, // E
-  EQUIPMENT_ID: 6, // G
-  COMPANY: 7, // H
-  STATUS: 14, // O
-  COMMENT: 17, // R
-} as const;
-
-const FIRST_DATA_ROW = 12;
-const LAST_DATA_ROW = 200;
-
-/*
- * Celdas exactas de la cabecera.
- *
- * E = índice 4
- * G = índice 6
- */
-const HEADER_CELLS = {
-  CENTER_NAME: {
-    row: 2,
-    column: 4,
-  },
-  REVIEW: {
-    row: 7,
-    column: 4,
-  },
-  YEAR: {
-    row: 7,
-    column: 6,
-  },
-} as const;
-
-function text(value: unknown): string {
-  return String(value ?? "").trim();
-}
+type ExcelColumnMap = {
+  headerRow: number;
+  code: number;
+  installation: number;
+  action: number;
+  equipmentId: number;
+  company: number;
+  status: number;
+  comment: number;
+};
 
 /**
- * Normalización utilizada únicamente para comparar textos.
+ * El formato visual de las plantillas STL ha cambiado entre años.
+ * Por ello NO se utilizan posiciones fijas de columnas.
  *
- * Los valores originales del Excel NO se modifican.
+ * El importador localiza primero la fila de encabezados mediante
+ * sus textos y después determina las columnas de datos a partir
+ * de esos encabezados y de la estructura inmediatamente adyacente.
  */
-function normalize(value: unknown): string {
-  return text(value)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+const HEADER_SCAN_ROWS = 80;
+const MAX_DATA_ROWS = 1000;
+
+function normalizedHeader(value: unknown): string {
+  return normalize(value)
+    .replace(/[ªº.]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-/**
- * Obtiene un valor textual de un elemento del catálogo
- * probando diferentes nombres de propiedad.
- */
-function catalogText(
-  item: any,
-  properties: string[]
-): string {
-  for (const property of properties) {
-    const value = text(item?.[property]);
+function headerMatches(
+  value: unknown,
+  aliases: string[]
+): boolean {
+  const current = normalizedHeader(value);
 
-    if (value) {
-      return value;
+  if (!current) {
+    return false;
+  }
+
+  return aliases.some(
+    (alias) =>
+      current === normalizedHeader(alias) ||
+      current.includes(normalizedHeader(alias))
+  );
+}
+
+const HEADER_ALIASES = {
+  INSTALLATION: [
+    "instalacion",
+    "instalación",
+  ],
+  ACTION: [
+    "actuacion",
+    "actuación",
+    "accion",
+    "acción",
+  ],
+  EQUIPMENT_ID: [
+    "id",
+    "id equipo",
+    "identificador",
+  ],
+  COMPANY: [
+    "empresa",
+    "mantenedora",
+  ],
+  STATUS: [
+    "estado",
+    "status",
+  ],
+  COMMENT: [
+    "comentario",
+    "comentarios",
+    "observaciones",
+    "observacion",
+    "observación",
+  ],
+  CODE: [
+    "codigo",
+    "código",
+    "codigo elemento",
+    "código elemento",
+  ],
+} as const;
+
+function findHeaderColumn(
+  row: any[],
+  aliases: string[],
+  exact = false
+): number {
+  for (let column = 0; column < row.length; column += 1) {
+    const current = normalizedHeader(row[column]);
+
+    if (!current) {
+      continue;
+    }
+
+    const matches = aliases.some((alias) => {
+      const normalizedAlias = normalizedHeader(alias);
+
+      return exact
+        ? current === normalizedAlias
+        : current === normalizedAlias ||
+            current.includes(normalizedAlias);
+    });
+
+    if (matches) {
+      return column;
     }
   }
 
-  return "";
+  return -1;
 }
 
-/**
- * Convierte el valor de la columna O (ESTADO)
- * al estado utilizado por la aplicación.
- *
- * La columna N NO participa.
- */
-function statusFromExcel(
-  value: unknown
-): V1Status | null {
-  const status = normalize(value);
+function detectExcelColumns(
+  rows: any[][]
+): ExcelColumnMap {
+  let bestRow = -1;
+  let bestScore = -1;
+  let bestColumns: Partial<ExcelColumnMap> = {};
 
-  if (!status) {
-    return null;
+  const scanLimit = Math.min(
+    HEADER_SCAN_ROWS,
+    rows.length
+  );
+
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const row = rows[rowIndex] || [];
+
+    const installation = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.INSTALLATION]
+    );
+    const action = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.ACTION]
+    );
+    const equipmentId = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.EQUIPMENT_ID],
+      true
+    );
+    const company = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.COMPANY]
+    );
+    const status = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.STATUS]
+    );
+    const comment = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.COMMENT]
+    );
+    const explicitCode = findHeaderColumn(
+      row,
+      [...HEADER_ALIASES.CODE]
+    );
+
+    let score = 0;
+
+    if (installation >= 0) score += 4;
+    if (action >= 0) score += 4;
+    if (equipmentId >= 0) score += 3;
+    if (company >= 0) score += 2;
+    if (status >= 0) score += 4;
+    if (comment >= 0) score += 2;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = rowIndex;
+      bestColumns = {
+        headerRow: rowIndex,
+        installation,
+        action,
+        equipmentId,
+        company,
+        status,
+        comment,
+        code: explicitCode,
+      };
+    }
   }
 
-  if (
-    status === "favorable" ||
-    status === "apto"
-  ) {
-    return "APTO";
+  if (bestRow < 0 || bestScore < 10) {
+    throw new Error(
+      "No se ha podido identificar la estructura de la tabla STL en el archivo Excel. No se han encontrado suficientes encabezados reconocibles (INSTALACION, ID, EMPRESA, ESTADO, etc.)."
+    );
   }
 
-  if (
-    status === "desfavorable" ||
-    status === "no apto" ||
-    status === "noapto"
-  ) {
-    return "NO APTO";
+  const equipmentId = bestColumns.equipmentId ?? -1;
+  const company = bestColumns.company ?? -1;
+  const status = bestColumns.status ?? -1;
+  const comment = bestColumns.comment ?? -1;
+
+  if (equipmentId < 0) {
+    throw new Error(
+      `No se ha podido localizar la columna ID en la fila de encabezados ${bestRow + 1}.`
+    );
   }
 
-  if (
-    status === "condicionado" ||
-    status === "apto condicionado" ||
-    status === "apto condicionado."
-  ) {
-    return "APTO CONDICIONADO";
+  if (company < 0) {
+    throw new Error(
+      `No se ha podido localizar la columna EMPRESA en la fila de encabezados ${bestRow + 1}.`
+    );
   }
 
-  if (
-    status === "pte." ||
-    status === "pte" ||
-    status === "pendiente"
-  ) {
-    return "PENDIENTE";
+  if (status < 0) {
+    throw new Error(
+      `No se ha podido localizar la columna ESTADO en la fila de encabezados ${bestRow + 1}.`
+    );
+  }
+
+  if (comment < 0) {
+    throw new Error(
+      `No se ha podido localizar la columna COMENTARIO en la fila de encabezados ${bestRow + 1}.`
+    );
+  }
+
+  /*
+   * En las versiones observadas la cabecera INSTALACION puede estar
+   * fusionada sobre varias columnas y no quedar justo encima de la
+   * celda que contiene el dato.
+   *
+   * La zona inmediatamente anterior al ID mantiene una estructura
+   * estable:
+   *
+   *   ... | CODIGO | INSTALACION | ACTUACION | PERIODICIDAD | ID
+   *
+   * Por ello, cuando no existe un encabezado específico fiable,
+   * usamos el ID como ancla estructural.
+   */
+  let installation = bestColumns.installation ?? -1;
+  let action = bestColumns.action ?? -1;
+  let code = bestColumns.code ?? -1;
+
+  const structuralInstallation = equipmentId - 3;
+  const structuralAction = equipmentId - 2;
+  const structuralCode = equipmentId - 4;
+
+  if (structuralInstallation >= 0) {
+    installation = structuralInstallation;
+  }
+
+  if (structuralAction >= 0) {
+    action = structuralAction;
+  }
+
+  if (structuralCode >= 0) {
+    code = structuralCode;
+  }
+
+  if (installation < 0 || action < 0 || code < 0) {
+    throw new Error(
+      `No se ha podido reconstruir la estructura Código + Instalación + Actuación a partir de la columna ID detectada en la fila ${bestRow + 1}.`
+    );
+  }
+
+  return {
+    headerRow: bestRow,
+    code,
+    installation,
+    action,
+    equipmentId,
+    company,
+    status,
+    comment,
+  };
+}
+
+function findCellByLabel(
+  rows: any[][],
+  aliases: string[],
+  maxRows = 20
+): { row: number; column: number } | null {
+  const limit = Math.min(
+    maxRows,
+    rows.length
+  );
+
+  for (let row = 0; row < limit; row += 1) {
+    const current = rows[row] || [];
+
+    for (let column = 0; column < current.length; column += 1) {
+      if (headerMatches(current[column], aliases)) {
+        return { row, column };
+      }
+    }
   }
 
   return null;
 }
 
-/**
- * Lee la cabecera utilizando las celdas FIJAS:
- *
- * E2 = Nombre del centro
- * E7 = Revisión
- * G7 = Año
- */
-function detectCenter(rows: any[][]) {
-  const centerName = text(
-    rows[HEADER_CELLS.CENTER_NAME.row - 1]?.[
-      HEADER_CELLS.CENTER_NAME.column
-    ]
-  );
-
-  const reviewText = text(
-    rows[HEADER_CELLS.REVIEW.row - 1]?.[
-      HEADER_CELLS.REVIEW.column
-    ]
-  );
-
-  const rawYear =
-    rows[HEADER_CELLS.YEAR.row - 1]?.[
-      HEADER_CELLS.YEAR.column
-    ];
-
-  let year = 0;
+function valueToYear(value: unknown): number {
+  if (
+    value instanceof Date &&
+    !Number.isNaN(value.getTime())
+  ) {
+    return value.getFullYear();
+  }
 
   if (
-    typeof rawYear === "number" &&
-    Number.isFinite(rawYear)
+    typeof value === "number" &&
+    Number.isFinite(value)
   ) {
-    year = Math.trunc(rawYear);
-  } else {
-    const yearText = text(rawYear);
-    const match = yearText.match(/20\d{2}/);
+    const number = Math.trunc(value);
 
-    if (match) {
-      year = Number(match[0]);
+    if (number >= 2000 && number <= 2100) {
+      return number;
+    }
+  }
+
+  const valueText = text(value);
+  const match = valueText.match(/20\d{2}/);
+
+  return match ? Number(match[0]) : 0;
+}
+
+function findYearInTopSection(
+  rows: any[][]
+): number {
+  const limit = Math.min(
+    20,
+    rows.length
+  );
+
+  for (let row = 0; row < limit; row += 1) {
+    for (const value of rows[row] || []) {
+      const year = valueToYear(value);
+
+      if (year) {
+        return year;
+      }
+    }
+  }
+
+  return 0;
+}
+
+function detectCenter(
+  rows: any[][],
+  fileName: string
+) {
+  const centerLabel = findCellByLabel(
+    rows,
+    ["centro", "centro comercial"]
+  );
+
+  if (!centerLabel) {
+    throw new Error(
+      "No se ha encontrado la etiqueta CENTRO en la cabecera del documento Excel."
+    );
+  }
+
+  let centerName = "";
+
+  for (
+    let column = centerLabel.column + 1;
+    column < Math.min(
+      centerLabel.column + 5,
+      rows[centerLabel.row]?.length ?? 0
+    );
+    column += 1
+  ) {
+    const candidate = text(
+      rows[centerLabel.row]?.[column]
+    );
+
+    if (candidate) {
+      centerName = candidate;
+      break;
     }
   }
 
   if (!centerName) {
     throw new Error(
-      "No se ha encontrado el nombre del centro en la celda E2 del documento Excel."
+      `Se ha encontrado la etiqueta CENTRO en ${centerLabel.row + 1}, pero no se ha podido obtener el nombre del centro.`
     );
   }
 
-  if (!reviewText) {
-    throw new Error(
-      "No se ha encontrado la revisión en la celda E7 del documento Excel."
-    );
+  const reviewLabel = findCellByLabel(
+    rows,
+    ["tipo", "revision", "revisión", "tipo de revision", "tipo de revisión"]
+  );
+
+  let reviewText = "";
+
+  if (reviewLabel) {
+    for (
+      let column = reviewLabel.column + 1;
+      column < Math.min(
+        reviewLabel.column + 5,
+        rows[reviewLabel.row]?.length ?? 0
+      );
+      column += 1
+    ) {
+      const candidate = text(
+        rows[reviewLabel.row]?.[column]
+      );
+
+      if (candidate) {
+        reviewText = candidate;
+        break;
+      }
+    }
+  }
+
+  let year = findYearInTopSection(rows);
+
+  const fileNameNormalized = normalize(fileName);
+
+  if (!year) {
+    const fileYear = fileNameNormalized.match(/(?:^|[^0-9])((?:20)?\d{2})(?:[^0-9]|$)/);
+
+    if (fileYear) {
+      const candidate = fileYear[1];
+      year = candidate.length === 2
+        ? 2000 + Number(candidate)
+        : Number(candidate);
+    }
   }
 
   if (!year) {
     throw new Error(
-      "No se ha podido identificar el año de la revisión en la celda G7 del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
+      "No se ha podido identificar el año de la revisión en la cabecera del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
     );
   }
 
@@ -329,24 +578,58 @@ function detectCenter(rows: any[][]) {
     center: center as any,
     year,
     reviewText,
+    fileName: fileNameNormalized,
   };
 }
 
-/**
- * Busca todos los elementos del catálogo que coinciden con:
- *
- *   Excel D -> catálogo INSTALACION
- *   Excel E -> catálogo ACTUACION
- *
- * IMPORTANTE:
- *
- * No se utiliza C para localizar el catálogo.
- * No se utiliza G (ID).
- * No se utiliza N.
- *
- * El resultado conserva el orden del catálogo para poder
- * asignar las unidades repetidas una a una.
- */
+function detectPeriod(
+  reviewText: string,
+  fileName: string,
+  rows: any[][]
+): Period {
+  const sources = [
+    reviewText,
+    fileName,
+  ];
+
+  const topText = rows
+    .slice(0, 20)
+    .flat()
+    .map(text)
+    .filter(Boolean)
+    .join(" ");
+
+  sources.push(topText);
+
+  const normalizedSources = sources.map(normalize);
+
+  for (const source of normalizedSources) {
+    if (
+      /\bs1\b/.test(source) ||
+      source.includes("semestre 1") ||
+      source.includes("1 semestre") ||
+      source.includes("primer semestre")
+    ) {
+      return "S1";
+    }
+  }
+
+  for (const source of normalizedSources) {
+    if (
+      /\bs2\b/.test(source) ||
+      source.includes("semestre 2") ||
+      source.includes("2 semestre") ||
+      source.includes("segundo semestre")
+    ) {
+      return "S2";
+    }
+  }
+
+  throw new Error(
+    `No se ha podido identificar si la revisión "${reviewText || fileName}" corresponde a S1 o S2. La importación se ha detenido para evitar archivarla en un periodo incorrecto.`
+  );
+}
+
 function findCatalogItems(
   catalogItems: any[],
   installation: string,
@@ -384,22 +667,13 @@ function findCatalogItems(
         ]);
 
       return (
-        normalize(
-          catalogInstallation
-        ) === normalizedInstallation &&
-        normalize(
-          catalogAction
-        ) === normalizedAction
+        normalize(catalogInstallation) === normalizedInstallation &&
+        normalize(catalogAction) === normalizedAction
       );
     }
   );
 }
 
-/**
- * Devuelve el ordinal interno del catálogo si existe.
- *
- * Nunca procede de la columna N del Excel.
- */
 function getCatalogOrdinal(
   catalogItem: any
 ): number {
@@ -423,9 +697,6 @@ function getCatalogOrdinal(
   return 0;
 }
 
-/**
- * Obtiene el código de actuación del catálogo.
- */
 function getCatalogActionCode(
   catalogItem: any
 ): string {
@@ -436,9 +707,6 @@ function getCatalogActionCode(
   ]);
 }
 
-/**
- * Obtiene la categoría del catálogo.
- */
 function getCatalogCategory(
   catalogItem: any
 ): string {
@@ -450,35 +718,34 @@ function getCatalogCategory(
 }
 
 /**
- * Obtiene el ID real del elemento del catálogo.
+ * Las distintas versiones utilizan celdas combinadas.
+ * Cuando XLSX lee una celda combinada solamente queda valor
+ * en la primera fila del bloque. Esta función permite recuperar
+ * el último valor no vacío de las columnas jerárquicas.
  */
-function getCatalogItemId(
-  catalogItem: any
+function forwardFill(
+  rows: any[][],
+  rowIndex: number,
+  column: number,
+  currentValue: string
 ): string {
-  return text(
-    catalogItem?.id ??
-      catalogItem?.elementId ??
-      catalogItem?.itemId
-  );
+  if (currentValue) {
+    return currentValue;
+  }
+
+  for (let previous = rowIndex - 1; previous >= 0; previous -= 1) {
+    const value = text(
+      rows[previous]?.[column]
+    );
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
-/**
- * Crea la clave para detectar elementos repetidos.
- *
- * IMPORTANTE:
- *
- * El código C NO forma parte de esta clave.
- *
- * Dos filas se consideran unidades repetidas cuando
- * coinciden en:
- *
- *   D = INSTALACION
- *   E = ACTUACION
- *
- * Esto permite manejar correctamente el caso en el que
- * Excel presenta un código combinado o solamente muestra
- * el código C en la primera fila del grupo.
- */
 function duplicateGroupKey(
   installation: string,
   action: string
@@ -489,45 +756,35 @@ function duplicateGroupKey(
   ].join("|");
 }
 
-/**
- * Genera el código final de una unidad.
- *
- * Una sola unidad:
- *
- *   1.1
- *
- * Varias unidades:
- *
- *   1.1.1
- *   1.1.2
- *   1.1.3
- *
- * El código base procede SIEMPRE de la primera fila válida
- * del grupo D + E.
- */
 function buildUnitCode(
   baseCode: string,
   totalUnits: number,
   unitIndex: number
 ): string {
-  const cleanCode =
-    text(baseCode).replace(/\.+$/, "");
+  const cleanCode = text(baseCode);
 
-  if (
-    totalUnits <= 1
-  ) {
+  if (totalUnits <= 1) {
     return cleanCode;
-  }
-
-  if (!cleanCode) {
-    return "";
   }
 
   return `${cleanCode}.${unitIndex}`;
 }
 
+type ValidExcelRow = {
+  excelRow: number;
+  code: string;
+  installation: string;
+  action: string;
+  equipmentId: string;
+  company: string;
+  rawStatus: string;
+  status: V1Status;
+  comment: string;
+};
+
 function parseWorkbook(
-  wb: XLSX.WorkBook
+  wb: XLSX.WorkBook,
+  fileName = ""
 ): ParsedImport {
   const sheetName =
     wb.SheetNames.includes("FICHA")
@@ -552,49 +809,16 @@ function parseWorkbook(
       }
     ) as any[][];
 
-  const detected =
-    detectCenter(rows);
-
-  const normalizedReviewText =
-    normalize(
-      detected.reviewText
-    );
-
-  let period: Period;
-
-  if (
-    /\bs1\b/.test(
-      normalizedReviewText
-    ) ||
-    normalizedReviewText.includes(
-      "semestre 1"
-    ) ||
-    normalizedReviewText.includes(
-      "1 semestre"
-    )
-  ) {
-    period = "S1";
-  } else if (
-    /\bs2\b/.test(
-      normalizedReviewText
-    ) ||
-    normalizedReviewText.includes(
-      "semestre 2"
-    ) ||
-    normalizedReviewText.includes(
-      "2 semestre"
-    )
-  ) {
-    period = "S2";
-  } else {
-    throw new Error(
-      `No se ha podido identificar si la revisión "${detected.reviewText}" corresponde a S1 o S2. La importación se ha detenido para evitar archivarla en un periodo incorrecto.`
-    );
-  }
+  const columns = detectExcelColumns(rows);
+  const detected = detectCenter(rows, fileName);
+  const period = detectPeriod(
+    detected.reviewText,
+    fileName,
+    rows
+  );
 
   const country =
-    (detected.center as any).country ===
-    "Portugal"
+    (detected.center as any).country === "Portugal"
       ? "Portugal"
       : "España";
 
@@ -608,127 +832,81 @@ function parseWorkbook(
       catalog as any[]
     ) as any[];
 
-  const parsedRows: ImportRow[] =
-    [];
-
-  const warnings: string[] =
-    [];
+  const parsedRows: ImportRow[] = [];
+  const warnings: string[] = [];
 
   let excluded = 0;
   let unmatched = 0;
-  let multiple = 0;
 
-  /*
-   * ==========================================================
-   * PRIMER PASO:
-   *
-   * Leer únicamente las filas cuyo O (ESTADO) tenga contenido
-   * y cuyo estado sea reconocido.
-   *
-   * Las filas con O vacía se ignoran completamente.
-   */
-  type ValidExcelRow = {
-    excelRow: number;
-    code: string;
-    installation: string;
-    action: string;
-    equipmentId: string;
-    company: string;
-    rawStatus: string;
-    status: V1Status;
-    comment: string;
-  };
+  const validRows: ValidExcelRow[] = [];
 
-  const validRows: ValidExcelRow[] =
-    [];
+  const lastRow = Math.min(
+    rows.length,
+    columns.headerRow + MAX_DATA_ROWS
+  );
 
   for (
-    let excelRow =
-      FIRST_DATA_ROW;
-    excelRow <=
-    LAST_DATA_ROW;
-    excelRow += 1
+    let rowIndex = columns.headerRow + 1;
+    rowIndex < lastRow;
+    rowIndex += 1
   ) {
-    const row =
-      rows[excelRow - 1] ||
-      [];
+    const row = rows[rowIndex] || [];
+
+    const rawStatus = text(
+      row[columns.status]
+    );
 
     /*
-     * O = ESTADO.
+     * REGLA PRINCIPAL:
      *
-     * Si está vacío, la fila se ignora completamente.
+     * Si ESTADO está vacío, la fila se ignora completamente.
      */
-    const rawStatus =
-      text(
-        row[
-          EXCEL_COLUMNS.STATUS
-        ]
-      );
-
     if (!rawStatus) {
       continue;
     }
 
-    /*
-     * Estado no reconocido.
-     */
-    const status =
-      statusFromExcel(
-        rawStatus
-      );
+    const status = statusFromExcel(rawStatus);
 
     if (!status) {
       excluded += 1;
 
       warnings.push(
-        `Fila ${excelRow}: el valor de ESTADO de la columna O "${rawStatus}" no es un estado reconocido. La fila no se ha importado.`
+        `Fila ${rowIndex + 1}: el valor de ESTADO "${rawStatus}" no es un estado reconocido. La fila no se ha importado.`
       );
 
       continue;
     }
 
     /*
-     * C = código.
-     *
-     * IMPORTANTE:
-     *
-     * Este código solamente se utiliza para obtener el
-     * código base de la PRIMERA FILA VÁLIDA de cada grupo D + E.
-     *
-     * No se utiliza para decidir si dos filas son repetidas.
+     * Las celdas C/D equivalentes pueden estar combinadas.
+     * Recuperamos el valor visible de la primera fila del bloque.
      */
-    const code =
-      text(
-        row[
-          EXCEL_COLUMNS.CODE
-        ]
-      );
+    const code = forwardFill(
+      rows,
+      rowIndex,
+      columns.code,
+      text(row[columns.code])
+    );
 
-    /*
-     * D = instalación.
-     */
-    const installation =
-      text(
-        row[
-          EXCEL_COLUMNS.INSTALLATION
-        ]
-      );
+    const installation = forwardFill(
+      rows,
+      rowIndex,
+      columns.installation,
+      text(row[columns.installation])
+    );
 
-    /*
-     * E = actuación.
-     */
-    const action =
-      text(
-        row[
-          EXCEL_COLUMNS.ACTION
-        ]
-      );
+    const action = forwardFill(
+      rows,
+      rowIndex,
+      columns.action,
+      text(row[columns.action])
+    );
 
     if (!installation) {
       unmatched += 1;
 
       warnings.push(
-        `Fila ${excelRow}: tiene un estado válido "${rawStatus}", pero la columna D (INSTALACION) está vacía. No se ha podido identificar el elemento del catálogo.`
+        `Fila ${rowIndex + 1}: tiene un estado válido "${rawStatus}", pero no se ha podido obtener INSTALACION.`
       );
 
       continue;
@@ -738,47 +916,31 @@ function parseWorkbook(
       unmatched += 1;
 
       warnings.push(
-        `Fila ${excelRow}: la INSTALACION "${installation}" es válida, pero la columna E (ACTUACION) está vacía. No se ha podido identificar el elemento del catálogo.`
+        `Fila ${rowIndex + 1}: la INSTALACION "${installation}" es válida, pero no se ha podido obtener ACTUACION.`
       );
 
       continue;
     }
 
     /*
-     * G = ID.
-     *
-     * Se importa como dato.
-     * NO se utiliza para localizar el catálogo.
+     * El código puede estar vacío en filas posteriores de una
+     * celda combinada. No rechazamos la fila: el código base se
+     * resolverá al agrupar por INSTALACION + ACTUACION.
      */
-    const equipmentId =
-      text(
-        row[
-          EXCEL_COLUMNS.EQUIPMENT_ID
-        ]
-      );
+    const equipmentId = text(
+      row[columns.equipmentId]
+    );
 
-    /*
-     * H = Empresa.
-     */
-    const company =
-      text(
-        row[
-          EXCEL_COLUMNS.COMPANY
-        ]
-      );
+    const company = text(
+      row[columns.company]
+    );
 
-    /*
-     * R = Comentario.
-     */
-    const comment =
-      text(
-        row[
-          EXCEL_COLUMNS.COMMENT
-        ]
-      );
+    const comment = text(
+      row[columns.comment]
+    );
 
     validRows.push({
-      excelRow,
+      excelRow: rowIndex + 1,
       code,
       installation,
       action,
@@ -791,53 +953,23 @@ function parseWorkbook(
   }
 
   /*
-   * ==========================================================
-   * SEGUNDO PASO:
+   * Las unidades repetidas se agrupan exclusivamente por:
    *
-   * Agrupar las filas VÁLIDAS exclusivamente por:
+   *   INSTALACION + ACTUACION
    *
-   *   D + E
-   *
-   * NO por C + D + E.
-   *
-   * Esto es fundamental porque en Excel el código de C puede
-   * estar combinado y aparecer únicamente en la primera fila
-   * de varias unidades.
-   *
-   * Ejemplo:
-   *
-   * Fila 12:
-   *   C=1.1
-   *   D=Ascens. y montac.
-   *   E=OCA..
-   *
-   * Fila 13:
-   *   C=
-   *   D=Ascens. y montac.
-   *   E=OCA..
-   *
-   * Fila 14:
-   *   C=
-   *   D=Ascens. y montac.
-   *   E=OCA..
-   *
-   * Todas forman UN ÚNICO GRUPO.
+   * El código NO forma parte de la clave porque en las plantillas
+   * puede estar en una celda combinada y aparecer solamente en la
+   * primera fila del grupo.
    */
-  const groups =
-    new Map<
-      string,
-      ValidExcelRow[]
-    >();
+  const groups = new Map<string, ValidExcelRow[]>();
 
   for (const row of validRows) {
-    const key =
-      duplicateGroupKey(
-        row.installation,
-        row.action
-      );
+    const key = duplicateGroupKey(
+      row.installation,
+      row.action
+    );
 
-    const group =
-      groups.get(key);
+    const group = groups.get(key);
 
     if (group) {
       group.push(row);
@@ -846,363 +978,119 @@ function parseWorkbook(
     }
   }
 
-  /*
-   * ==========================================================
-   * TERCER PASO:
-   *
-   * Reservar los elementos de catálogo en orden.
-   *
-   * Esto evita reutilizar el mismo elemento del catálogo
-   * cuando existen varias filas Excel correspondientes a
-   * diferentes elementos catalogados con el mismo D + E.
-   */
-  const catalogUsage =
-    new Map<string, number>();
+  let multiple = 0;
 
-  /*
-   * ==========================================================
-   * CUARTO PASO:
-   *
-   * Procesar cada grupo D + E.
-   */
   for (const group of groups.values()) {
-    const firstRow =
-      group[0];
+    const firstRow = group[0];
 
     if (!firstRow) {
       continue;
     }
 
-    /*
-     * ========================================================
-     * EL CÓDIGO BASE SE TOMA SIEMPRE DE LA PRIMERA FILA
-     * VÁLIDA DEL GRUPO.
-     *
-     * Las filas siguientes pueden tener C vacío porque
-     * el Excel tiene la celda combinada.
-     */
-    const baseCode =
-      text(firstRow.code);
-
-    if (!baseCode) {
-      warnings.push(
-        `Filas ${group[0]?.excelRow ?? ""}${group.length > 1 ? `-${group[group.length - 1]?.excelRow ?? ""}` : ""}: el grupo INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}" tiene estado válido, pero la primera fila no contiene código en C. Se importarán las unidades si existe correspondencia en el catálogo, pero no se podrá generar un código numérico.`
-      );
-    }
-
-    /*
-     * Si hay varias filas D + E, son unidades múltiples.
-     *
-     * Aquí contamos GRUPOS, no filas.
-     */
     if (group.length > 1) {
       multiple += 1;
     }
 
-    /*
-     * Buscar el catálogo utilizando exclusivamente D + E.
-     */
-    const catalogMatches =
-      findCatalogItems(
-        catalogItems,
-        firstRow.installation,
-        firstRow.action
-      );
+    const baseCode =
+      group.find((row) => text(row.code))?.code || "";
 
-    /*
-     * No existe ningún elemento del catálogo con D + E.
-     */
-    if (
-      catalogMatches.length === 0
-    ) {
-      unmatched +=
-        group.length;
+    if (!baseCode) {
+      unmatched += group.length;
 
       warnings.push(
-        `Código base "${baseCode || "sin código"}": no existe en el catálogo una INSTALACION "${firstRow.installation}" con ACTUACION "${firstRow.action}". Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
+        `Filas ${group.map((row) => row.excelRow).join(", ")}: se han encontrado ${group.length} unidad${group.length === 1 ? "" : "es"} con INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero no se ha encontrado ningún código base en la columna correspondiente. Se han omitido para evitar generar códigos incorrectos.`
       );
 
       continue;
     }
 
-    /*
-     * Posición que ya hemos consumido para este D + E.
-     *
-     * Si anteriormente ya se importó otro grupo con el mismo
-     * D + E, no volvemos a utilizar el primer elemento del
-     * catálogo.
-     */
-    const catalogKey =
-      duplicateGroupKey(
-        firstRow.installation,
-        firstRow.action
-      );
-
-    const alreadyUsed =
-      catalogUsage.get(
-        catalogKey
-      ) ?? 0;
-
-    const remainingCatalogMatches =
-      catalogMatches.slice(
-        alreadyUsed
-      );
-
-    /*
-     * No quedan elementos disponibles del catálogo.
-     */
-    if (
-      remainingCatalogMatches.length === 0
-    ) {
-      unmatched +=
-        group.length;
-
-      warnings.push(
-        `Código base "${baseCode || "sin código"}": las unidades del grupo INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}" ya no tienen elementos disponibles equivalentes en el catálogo. Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
-      );
-
-      continue;
-    }
-
-    /*
-     * Si hay más unidades Excel que elementos disponibles
-     * en catálogo, las unidades restantes no se asignan
-     * arbitrariamente a otro elemento.
-     */
-    if (
-      group.length >
-      remainingCatalogMatches.length
-    ) {
-      const omitted =
-        group.length -
-        remainingCatalogMatches.length;
-
-      unmatched +=
-        omitted;
-
-      warnings.push(
-        `Código base "${baseCode || "sin código"}": se han encontrado ${group.length} unidades para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente quedan ${remainingCatalogMatches.length} elementos equivalentes disponibles en el catálogo. Se importarán ${remainingCatalogMatches.length} y se omitirán ${omitted}.`
-      );
-    }
-
-    const unitsToImport =
-      Math.min(
-        group.length,
-        remainingCatalogMatches.length
-      );
-
-    /*
-     * Marcar como consumidos los elementos del catálogo
-     * realmente utilizados.
-     */
-    catalogUsage.set(
-      catalogKey,
-      alreadyUsed +
-        unitsToImport
+    const catalogMatches = findCatalogItems(
+      catalogItems,
+      firstRow.installation,
+      firstRow.action
     );
 
-    /*
-     * ========================================================
-     * GENERAR LAS UNIDADES.
-     *
-     * El código base procede de firstRow.code.
-     *
-     * Para tres filas:
-     *
-     *   1.1.1
-     *   1.1.2
-     *   1.1.3
-     *
-     * Pero G, H, O y R proceden de cada fila individual.
-     */
+    if (catalogMatches.length === 0) {
+      unmatched += group.length;
+
+      warnings.push(
+        `Código "${baseCode}": no existe en el catálogo una INSTALACION "${firstRow.installation}" con ACTUACION "${firstRow.action}". Se han omitido ${group.length} unidad${group.length === 1 ? "" : "es"}.`
+      );
+
+      continue;
+    }
+
+    if (group.length > catalogMatches.length) {
+      unmatched +=
+        group.length - catalogMatches.length;
+
+      warnings.push(
+        `Código "${baseCode}": se han encontrado ${group.length} unidades en el Excel para INSTALACION "${firstRow.installation}" + ACTUACION "${firstRow.action}", pero solamente existen ${catalogMatches.length} elementos equivalentes en el catálogo. Se importarán las ${Math.min(group.length, catalogMatches.length)} primeras y se omitirán ${group.length - catalogMatches.length}.`
+      );
+    }
+
+    const unitsToImport = Math.min(
+      group.length,
+      catalogMatches.length
+    );
+
     for (
       let unitIndex = 0;
-      unitIndex <
-      unitsToImport;
+      unitIndex < unitsToImport;
       unitIndex += 1
     ) {
-      const excelData =
-        group[unitIndex];
+      const excelData = group[unitIndex];
+      const catalogItem = catalogMatches[unitIndex];
 
-      const catalogItem =
-        remainingCatalogMatches[
-          unitIndex
-        ];
-
-      if (
-        !excelData ||
-        !catalogItem
-      ) {
+      if (!excelData || !catalogItem) {
         continue;
       }
 
-      const catalogItemId =
-        getCatalogItemId(
-          catalogItem
-        );
-
-      /*
-       * Un elemento sin ID real de catálogo no se puede
-       * guardar correctamente en ReviewState.
-       */
-      if (!catalogItemId) {
-        unmatched += 1;
-
-        warnings.push(
-          `Fila ${excelData.excelRow}: la coincidencia mediante D + E existe, pero el elemento del catálogo no tiene un ID válido. La fila no se ha importado.`
-        );
-
-        continue;
-      }
-
-      /*
-       * Código final:
-       *
-       * Una sola unidad:
-       *   1.1
-       *
-       * Varias unidades:
-       *   1.1.1
-       *   1.1.2
-       *   1.1.3
-       *
-       * IMPORTANTE:
-       *
-       * Se utiliza baseCode, que procede de la PRIMERA
-       * fila válida del grupo, no excelData.code.
-       */
-      const finalCode =
-        buildUnitCode(
-          baseCode,
-          group.length,
-          unitIndex + 1
-        );
+      const finalCode = buildUnitCode(
+        baseCode,
+        group.length,
+        unitIndex + 1
+      );
 
       parsedRows.push({
-        excelRow:
-          excelData.excelRow,
-
-        code:
-          finalCode,
-
-        ordinal:
-          getCatalogOrdinal(
-            catalogItem
-          ),
-
-        catalogItemId,
-
-        category:
-          getCatalogCategory(
-            catalogItem
-          ),
-
-        /*
-         * D = Instalacion.
-         */
-        installation:
-          excelData.installation,
-
-        /*
-         * E = Actuacion.
-         */
-        action:
-          excelData.action,
-
-        actionCode:
-          getCatalogActionCode(
-            catalogItem
-          ),
-
-        /*
-         * G = ID.
-         *
-         * Solamente se importa como dato.
-         */
-        equipmentId:
-          excelData.equipmentId,
-
-        /*
-         * H = Empresa.
-         */
-        company:
-          excelData.company,
-
-        /*
-         * No se toma ninguna fecha de otras columnas.
-         */
-        inspectionDate:
-          "",
-
-        /*
-         * O = Estado.
-         */
-        status:
-          excelData.status,
-
-        selected: [
-          excelData.status,
-        ],
-
-        multiple:
-          group.length > 1,
-
-        /*
-         * R = Comentario.
-         */
-        comment:
-          excelData.comment,
+        excelRow: excelData.excelRow,
+        code: finalCode,
+        ordinal: getCatalogOrdinal(catalogItem),
+        catalogItemId: String(catalogItem.id),
+        category: getCatalogCategory(catalogItem),
+        installation: excelData.installation,
+        action: excelData.action,
+        actionCode: getCatalogActionCode(catalogItem),
+        equipmentId: excelData.equipmentId,
+        company: excelData.company,
+        inspectionDate: "",
+        status: excelData.status,
+        selected: [excelData.status],
+        multiple: group.length > 1,
+        comment: excelData.comment,
       });
     }
   }
 
-  /*
-   * Ordenar las filas importadas según el orden del Excel.
-   */
   parsedRows.sort(
-    (a, b) =>
-      a.excelRow -
-      b.excelRow
+    (a, b) => a.excelRow - b.excelRow
   );
 
   return {
-    centerName: text(
-      (detected.center as any)
-        .name
-    ),
-
-    centerCode: text(
-      (detected.center as any)
-        .code
-    ),
-
-    centerId: String(
-      (detected.center as any)
-        .id
-    ),
-
+    centerName: text((detected.center as any).name),
+    centerCode: text((detected.center as any).code),
+    centerId: String((detected.center as any).id),
     country,
-
-    year:
-      detected.year,
-
+    year: detected.year,
     reviewText:
-      detected.reviewText,
-
+      detected.reviewText ||
+      `${period} ${detected.year}`,
     period,
-
-    reviewDate:
-      "",
-
-    rows:
-      parsedRows,
-
+    reviewDate: "",
+    rows: parsedRows,
     excluded,
-
     multiple,
-
     unmatched,
-
     warnings,
   };
 }
@@ -1343,7 +1231,7 @@ export default function ImportPage() {
         );
 
       const result =
-        parseWorkbook(wb);
+        parseWorkbook(wb, nextFile.name);
 
       setParsed(result);
     } catch (e) {
@@ -1529,35 +1417,34 @@ export default function ImportPage() {
           </p>
 
           <p className="mt-1">
-            Cabecera: E2 = Nombre del centro, E7 = Revisión y G7 = Año de revisión.
+            La cabecera y las columnas se detectan automáticamente a partir de los encabezados de la plantilla, por lo que no depende de una posición fija.
           </p>
 
           <p className="mt-2">
-            Tabla: C = Código, D = Instalación, E = Actuación,
-            G = ID, H = Empresa, O = Estado y R = Comentario.
+            Tabla: se localizan automáticamente Código, Instalación, Actuación, ID, Empresa, Estado y Comentario, aunque cambien de columna entre versiones.
           </p>
 
           <p className="mt-2 font-semibold">
-            La columna O (ESTADO) determina si una fila se importa.
-            Si O está vacía, la fila se ignora completamente.
+            La columna identificada como ESTADO determina si una fila se importa.
+            Si ESTADO está vacío, la fila se ignora completamente.
           </p>
 
           <p className="mt-2 font-semibold">
             La identificación del elemento se realiza comparando
-            D (INSTALACION) y E (ACTUACION) con el catálogo.
+            INSTALACION y ACTUACION con el catálogo, independientemente
+            de la columna que ocupen en cada versión del Excel.
           </p>
 
           <p className="mt-2 font-semibold">
-            Cuando varias filas válidas tienen la misma
-            INSTALACION D y ACTUACION E, todas se consideran
-            unidades del mismo elemento. El código base se toma
-            de la primera fila válida del grupo y se generan
-            1.1.1, 1.1.2, 1.1.3, etc.
+            Cuando varias filas válidas tienen la misma INSTALACION
+            y ACTUACION, todas se consideran unidades del mismo
+            elemento. El código base se toma del primer código
+            disponible del grupo y se generan 1.1.1, 1.1.2, 1.1.3, etc.
           </p>
 
           <p className="mt-2 font-semibold">
-            G (ID) se importa como dato de cada fila.
-            La columna N no se utiliza.
+            El ID se importa únicamente como dato de su propia fila.
+            No se utiliza ninguna columna auxiliar por posición fija.
           </p>
         </div>
 
@@ -1758,14 +1645,12 @@ export default function ImportPage() {
                 <strong>
                   Regla de importación:
                 </strong>{" "}
-                únicamente se procesan filas cuyo estado de la
-                columna O sea reconocido. Las filas con O vacía
-                se ignoran completamente. El elemento del catálogo
-                se identifica mediante INSTALACION D + ACTUACION E.
-                Cuando existen varias filas con el mismo D + E,
-                el código base se toma de la primera fila válida
-                del grupo y se generan códigos .1, .2, .3, etc.
-                G solamente aporta el ID de cada fila y N se ignora.
+                únicamente se procesan filas cuyo ESTADO detectado sea reconocido.
+                Las filas con ESTADO vacío se ignoran completamente.
+                El elemento del catálogo se identifica mediante INSTALACION + ACTUACION.
+                Cuando existen varias filas con el mismo par, el código base se toma
+                del primer código disponible del grupo y se generan códigos .1, .2, .3, etc.
+                El ID solamente aporta el identificador de cada fila.
               </div>
             </div>
 
