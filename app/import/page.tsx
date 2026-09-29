@@ -112,6 +112,12 @@ function compactNormalize(value: unknown): string {
     .trim();
 }
 
+function normalizeCode(value: unknown): string {
+  return text(value)
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
 const HEADER_ALIASES = {
   INSTALLATION: [
     "instalacion",
@@ -195,8 +201,8 @@ function findHeaderColumn(
       continue;
     }
 
-    const matches =
-      aliases.some((alias) => {
+    const matches = aliases.some(
+      (alias) => {
         const normalizedAlias =
           normalizedHeader(alias);
 
@@ -206,7 +212,8 @@ function findHeaderColumn(
               current.includes(
                 normalizedAlias
               );
-      });
+      }
+    );
 
     if (matches) {
       return column;
@@ -216,6 +223,13 @@ function findHeaderColumn(
   return -1;
 }
 
+/**
+ * Detecta los encabezados REALES de la plantilla.
+ *
+ * Importante:
+ * NO se utilizan posiciones relativas al ID.
+ * Cada versión histórica puede tener columnas diferentes.
+ */
 function detectExcelColumns(
   rows: any[][]
 ): ExcelColumnMap {
@@ -310,10 +324,6 @@ function detectExcelColumns(
       score += 2;
     }
 
-    /*
-     * Una fila que contiene varios de los encabezados
-     * reconocibles tiene prioridad sobre cualquier otra.
-     */
     if (score > bestScore) {
       bestScore = score;
       bestRow = rowIndex;
@@ -340,6 +350,12 @@ function detectExcelColumns(
     );
   }
 
+  const installation =
+    bestColumns.installation ?? -1;
+
+  const action =
+    bestColumns.action ?? -1;
+
   const equipmentId =
     bestColumns.equipmentId ?? -1;
 
@@ -352,12 +368,6 @@ function detectExcelColumns(
   const comment =
     bestColumns.comment ?? -1;
 
-  const installation =
-    bestColumns.installation ?? -1;
-
-  const action =
-    bestColumns.action ?? -1;
-
   const code =
     bestColumns.code ?? -1;
 
@@ -369,12 +379,8 @@ function detectExcelColumns(
 
   if (action < 0) {
     /*
-     * Algunas versiones históricas pueden tener la actuación
-     * sin contenido, pero normalmente el encabezado existe.
-     *
-     * Si no existe, utilizamos la columna siguiente a
-     * INSTALACIÓN como respaldo, siempre que no coincida
-     * con ninguna de las columnas ya detectadas.
+     * Respaldo únicamente cuando el encabezado ACTUACIÓN
+     * realmente no existe.
      */
     const candidate =
       installation + 1;
@@ -425,32 +431,6 @@ function detectExcelColumns(
     );
   }
 
-  /*
-   * NO utilizamos ya la fórmula:
-   *
-   *   ID - 3
-   *   ID - 2
-   *   ID - 4
-   *
-   * porque no es válida para todas las plantillas.
-   *
-   * Ejemplo real 2026:
-   *
-   * C = Instalación
-   * D = Código
-   * E = Actuación
-   * H = ID
-   *
-   * Ejemplo real 2024:
-   *
-   * B = Instalación
-   * C = Código
-   * D = Actuación
-   * G = ID
-   *
-   * Por tanto se utilizan los encabezados detectados.
-   */
-
   return {
     headerRow: bestRow,
     code,
@@ -480,6 +460,26 @@ function getCell(
   );
 }
 
+function isLabelValue(
+  value: unknown
+): boolean {
+  const normalized =
+    normalize(value);
+
+  return (
+    normalized === "centro" ||
+    normalized === "centro comercial" ||
+    normalized === "nombre centro" ||
+    normalized === "nombre del centro" ||
+    normalized === "revision" ||
+    normalized === "tipo" ||
+    normalized === "tipo de revision" ||
+    normalized === "tipo de revisión" ||
+    normalized === "ano" ||
+    normalized === "año"
+  );
+}
+
 function findNonLabelValue(
   rows: any[][],
   row: number,
@@ -500,16 +500,9 @@ function findNonLabelValue(
     const candidate =
       text(current[column]);
 
-    const normalized =
-      normalize(candidate);
-
     if (
       candidate &&
-      normalized !== "centro" &&
-      normalized !== "centro comercial" &&
-      normalized !== "revision" &&
-      normalized !== "revisión" &&
-      normalized !== "tipo"
+      !isLabelValue(candidate)
     ) {
       return candidate;
     }
@@ -570,7 +563,15 @@ function valueToYear(
       value.getTime()
     )
   ) {
-    return value.getFullYear();
+    const year =
+      value.getFullYear();
+
+    if (
+      year >= 2000 &&
+      year <= 2100
+    ) {
+      return year;
+    }
   }
 
   if (
@@ -586,12 +587,6 @@ function valueToYear(
     ) {
       return number;
     }
-
-    /*
-     * Excel puede representar fechas como
-     * números seriales. No intentamos convertirlos
-     * aquí si no están dentro del rango esperado.
-     */
   }
 
   const valueText =
@@ -607,23 +602,22 @@ function valueToYear(
     : 0;
 }
 
-function findYearInPositions(
+function findYearInKnownPositions(
   rows: any[][]
 ): number {
   /*
-   * Posiciones reales conocidas:
+   * Posiciones históricas conocidas:
    *
    * 2026 -> H7
+   * 2025 -> G7 / variantes
    * 2024 -> E6
-   *
-   * También se contemplan G7 y otras posiciones
-   * utilizadas por versiones intermedias.
    */
   const positions = [
     [6, 7],
-    [6, 4],
     [6, 6],
+    [6, 5],
     [5, 4],
+    [5, 5],
     [2, 4],
     [1, 5],
     [1, 4],
@@ -672,24 +666,71 @@ function findYearInTopSection(
   return 0;
 }
 
-function findCenterFromKnownPositions(
-  rows: any[][]
-): string {
+function findYearInFileName(
+  fileName: string
+): number {
+  const match =
+    text(fileName).match(
+      /\b(20\d{2})\b/
+    );
+
+  if (match) {
+    return Number(match[1]);
+  }
+
   /*
-   * Posiciones reales observadas:
-   *
-   * 2026 -> F2
-   * 2025 -> F2 / E2 según versión
-   * 2024 -> E3
+   * Compatibilidad con nombres históricos
+   * como "..._24 S2_...".
    */
+  const shortYear =
+    text(fileName).match(
+      /(?:^|[_\-\s])(\d{2})(?:[_\-\s]|$)/
+    );
+
+  if (shortYear) {
+    const year =
+      Number(shortYear[1]);
+
+    if (
+      year >= 20 &&
+      year <= 99
+    ) {
+      return 2000 + year;
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Devuelve una lista de valores candidatos para el centro.
+ * Las posiciones conocidas tienen prioridad.
+ */
+function getKnownCenterCandidates(
+  rows: any[][]
+): string[] {
   const positions = [
+    // 2026
     [1, 5],
+
+    // Versiones E2/F2
     [1, 4],
+    [1, 6],
+
+    // 2024
     [2, 4],
     [2, 5],
-    [1, 6],
     [2, 6],
+
+    // variantes
+    [0, 4],
+    [0, 5],
+    [0, 6],
+    [2, 3],
+    [2, 7],
   ];
+
+  const candidates: string[] = [];
 
   for (
     const [row, column] of positions
@@ -701,31 +742,250 @@ function findCenterFromKnownPositions(
         column
       );
 
-    const normalized =
-      normalize(candidate);
-
     if (
       candidate &&
-      normalized !== "centro" &&
-      normalized !== "centro comercial"
+      !isLabelValue(candidate)
     ) {
-      return candidate;
+      candidates.push(candidate);
     }
   }
 
-  return "";
+  return candidates;
+}
+
+function findCenterMatchingDemo(
+  rows: any[][]
+): any | null {
+  const centers =
+    (demo.centers as any[]) || [];
+
+  /*
+   * Primero se buscan coincidencias EXACTAS en la
+   * cabecera, antes de aceptar coincidencias parciales.
+   */
+  const topValues =
+    rows
+      .slice(0, 15)
+      .flat()
+      .map(text)
+      .filter(
+        (value) =>
+          value &&
+          !isLabelValue(value)
+      );
+
+  const normalizedValues =
+    topValues.map(
+      normalize
+    );
+
+  for (
+    const center of centers
+  ) {
+    const identifiers = [
+      text(center?.name),
+      text(center?.shortCode),
+      text(center?.code),
+    ].filter(Boolean);
+
+    for (
+      const identifier of identifiers
+    ) {
+      const normalizedIdentifier =
+        normalize(identifier);
+
+      if (
+        !normalizedIdentifier
+      ) {
+        continue;
+      }
+
+      if (
+        normalizedValues.includes(
+          normalizedIdentifier
+        )
+      ) {
+        return center;
+      }
+    }
+  }
+
+  /*
+   * Segundo intento: candidatos de posiciones conocidas.
+   */
+  const knownCandidates =
+    getKnownCenterCandidates(
+      rows
+    );
+
+  for (
+    const candidate of
+      knownCandidates
+  ) {
+    const normalizedCandidate =
+      normalize(candidate);
+
+    for (
+      const center of centers
+    ) {
+      const identifiers = [
+        text(center?.name),
+        text(center?.shortCode),
+        text(center?.code),
+      ].filter(Boolean);
+
+      const exact =
+        identifiers.some(
+          (identifier) =>
+            normalize(
+              identifier
+            ) ===
+            normalizedCandidate
+        );
+
+      if (exact) {
+        return center;
+      }
+    }
+  }
+
+  /*
+   * Tercer intento: coincidencia parcial controlada.
+   * Solo se acepta si existe un único centro compatible.
+   */
+  const partialMatches =
+    new Set<any>();
+
+  for (
+    const value of topValues
+  ) {
+    const normalizedValue =
+      normalize(value);
+
+    if (
+      !normalizedValue ||
+      isLabelValue(value)
+    ) {
+      continue;
+    }
+
+    for (
+      const center of centers
+    ) {
+      const identifiers = [
+        text(center?.name),
+        text(center?.shortCode),
+        text(center?.code),
+      ].filter(Boolean);
+
+      const matches =
+        identifiers.some(
+          (identifier) => {
+            const normalizedIdentifier =
+              normalize(identifier);
+
+            if (
+              !normalizedIdentifier
+            ) {
+              return false;
+            }
+
+            /*
+             * Para códigos cortos evitamos
+             * coincidencias parciales demasiado
+             * agresivas.
+             */
+            if (
+              normalizedIdentifier.length <=
+              3
+            ) {
+              return (
+                normalizedValue ===
+                normalizedIdentifier
+              );
+            }
+
+            return (
+              normalizedValue.includes(
+                normalizedIdentifier
+              ) ||
+              normalizedIdentifier.includes(
+                normalizedValue
+              )
+            );
+          }
+        );
+
+      if (matches) {
+        partialMatches.add(
+          center
+        );
+      }
+    }
+  }
+
+  if (
+    partialMatches.size === 1
+  ) {
+    return Array.from(
+      partialMatches
+    )[0];
+  }
+
+  return null;
+}
+
+function findCenterFromKnownPositions(
+  rows: any[][]
+): string {
+  const candidates =
+    getKnownCenterCandidates(
+      rows
+    );
+
+  return (
+    candidates[0] || ""
+  );
 }
 
 function findCenterFromLabel(
   rows: any[][]
 ): string {
-  const centerLabel =
+  /*
+   * Primero se buscan etiquetas muy específicas.
+   */
+  const specificLabel =
     findCellByLabel(
       rows,
       [
         "centro comercial",
-        "centro",
+        "nombre del centro",
+        "nombre centro",
       ]
+    );
+
+  if (specificLabel) {
+    const direct =
+      findNonLabelValue(
+        rows,
+        specificLabel.row,
+        specificLabel.column,
+        10
+      );
+
+    if (direct) {
+      return direct;
+    }
+  }
+
+  /*
+   * Después se permite "CENTRO", pero nunca se
+   * devuelve la propia etiqueta.
+   */
+  const centerLabel =
+    findCellByLabel(
+      rows,
+      ["centro"]
     );
 
   if (!centerLabel) {
@@ -745,8 +1005,7 @@ function findCenterFromLabel(
   }
 
   /*
-   * Algunas plantillas colocan la etiqueta y el valor
-   * en filas diferentes por celdas combinadas.
+   * Algunas plantillas usan celdas combinadas.
    */
   for (
     let rowOffset = 1;
@@ -775,13 +1034,9 @@ function findCenterFromLabel(
       const candidate =
         text(row[column]);
 
-      const normalized =
-        normalize(candidate);
-
       if (
         candidate &&
-        normalized !== "centro" &&
-        normalized !== "centro comercial"
+        !isLabelValue(candidate)
       ) {
         return candidate;
       }
@@ -791,179 +1046,29 @@ function findCenterFromLabel(
   return "";
 }
 
-function findCenterMatchingDemo(
+function detectReviewText(
   rows: any[][]
-): any | null {
-  const centers =
-    (demo.centers as any[]) || [];
-
-  const topValues =
-    rows
-      .slice(0, 15)
-      .flat()
-      .map(text)
-      .filter(Boolean);
-
-  for (
-    const center of centers
-  ) {
-    const names = [
-      text(center?.name),
-      text(center?.shortCode),
-      text(center?.code),
-    ].filter(Boolean);
-
-    for (
-      const name of names
-    ) {
-      const normalizedName =
-        normalize(name);
-
-      if (!normalizedName) {
-        continue;
-      }
-
-      const found =
-        topValues.some(
-          (value) => {
-            const normalizedValue =
-              normalize(value);
-
-            return (
-              normalizedValue ===
-                normalizedName ||
-              normalizedValue.includes(
-                normalizedName
-              ) ||
-              normalizedName.includes(
-                normalizedValue
-              )
-            );
-          }
-        );
-
-      if (found) {
-        return center;
-      }
-    }
-  }
-
-  return null;
-}
-
-function detectCenter(
-  rows: any[][],
-  fileName: string
-) {
-  let centerName =
-    findCenterFromKnownPositions(
-      rows
-    );
-
-  if (!centerName) {
-    centerName =
-      findCenterFromLabel(
-        rows
-      );
-  }
-
-  const demoCenter =
-    findCenterMatchingDemo(
-      rows
-    );
-
+): string {
   /*
-   * Si encontramos directamente un centro de demo,
-   * utilizamos su nombre real. Esto evita que una celda
-   * "CENTRO" sea confundida con el nombre.
+   * Posiciones conocidas de las plantillas:
+   *
+   * 2026 -> F7
+   * 2025 -> E7/F7 según versión
+   * 2024 -> E6
    */
-  if (
-    demoCenter &&
-    text(demoCenter?.name)
-  ) {
-    const normalizedDetected =
-      normalize(centerName);
-
-    const normalizedDemo =
-      normalize(
-        text(demoCenter.name)
-      );
-
-    if (
-      !normalizedDetected ||
-      normalizedDetected ===
-        "centro" ||
-      normalizedDetected ===
-        "centro comercial" ||
-      normalizedDetected ===
-        "nombre del centro"
-    ) {
-      centerName =
-        text(demoCenter.name);
-    } else if (
-      normalizedDetected !==
-      normalizedDemo
-    ) {
-      /*
-       * Si el valor detectado es un código,
-       * nombre corto o variante, preferimos
-       * el nombre oficial del centro.
-       */
-      const possibleIdentifiers = [
-        normalize(
-          demoCenter?.shortCode
-        ),
-        normalize(
-          demoCenter?.code
-        ),
-      ].filter(Boolean);
-
-      if (
-        possibleIdentifiers.includes(
-          normalizedDetected
-        )
-      ) {
-        centerName =
-          text(demoCenter.name);
-      }
-    }
-  }
-
-  if (!centerName) {
-    throw new Error(
-      "No se ha podido localizar el nombre del centro en la cabecera del documento Excel."
-    );
-  }
-
-  const normalizedCenterName =
-    normalize(centerName);
-
-  if (
-    normalizedCenterName ===
-      "centro" ||
-    normalizedCenterName ===
-      "centro comercial"
-  ) {
-    throw new Error(
-      "Se ha localizado la etiqueta CENTRO, pero no el nombre real del centro en la cabecera del Excel."
-    );
-  }
-
-  const reviewPositions = [
-    [6, 4],
+  const positions = [
     [6, 5],
+    [6, 4],
     [6, 6],
     [5, 4],
     [5, 5],
+    [5, 6],
     [1, 5],
     [1, 4],
   ];
 
-  let reviewText = "";
-
   for (
-    const [row, column] of
-      reviewPositions
+    const [row, column] of positions
   ) {
     const candidate =
       getCell(
@@ -972,86 +1077,158 @@ function detectCenter(
         column
       );
 
-    if (!candidate) {
-      continue;
-    }
-
-    const normalized =
-      normalize(candidate);
-
     if (
-      normalized === "revision" ||
-      normalized === "revisión" ||
-      normalized === "tipo"
+      candidate &&
+      !isLabelValue(candidate)
     ) {
-      continue;
-    }
+      /*
+       * Solo aceptamos como texto de revisión
+       * valores que realmente contengan alguna
+       * indicación de revisión/semestre.
+       */
+      if (
+        detectPeriodInText(
+          candidate
+        )
+      ) {
+        return candidate;
+      }
 
-    reviewText =
-      candidate;
-    break;
+      const normalized =
+        normalize(candidate);
+
+      if (
+        normalized.includes(
+          "revision"
+        ) ||
+        normalized.includes(
+          "semestre"
+        )
+      ) {
+        return candidate;
+      }
+    }
   }
 
-  if (!reviewText) {
-    const reviewLabel =
-      findCellByLabel(
+  /*
+   * Búsqueda mediante etiquetas.
+   */
+  const reviewLabel =
+    findCellByLabel(
+      rows,
+      [
+        "tipo de revision",
+        "tipo de revisión",
+      ]
+    );
+
+  if (reviewLabel) {
+    const value =
+      findNonLabelValue(
         rows,
-        [
-          "tipo de revision",
-          "tipo de revisión",
-          "revision",
-          "revisión",
-          "tipo",
-        ]
+        reviewLabel.row,
+        reviewLabel.column,
+        8
       );
 
-    if (reviewLabel) {
-      reviewText =
-        findNonLabelValue(
-          rows,
-          reviewLabel.row,
-          reviewLabel.column,
-          8
-        );
+    if (value) {
+      return value;
     }
   }
 
-  let year =
-    findYearInPositions(
+  /*
+   * Último intento con "REVISION".
+   */
+  const genericReviewLabel =
+    findCellByLabel(
+      rows,
+      ["revision"]
+    );
+
+  if (genericReviewLabel) {
+    const value =
+      findNonLabelValue(
+        rows,
+        genericReviewLabel.row,
+        genericReviewLabel.column,
+        8
+      );
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function detectCenter(
+  rows: any[][],
+  fileName: string
+) {
+  /*
+   * PRIORIDAD 1:
+   * buscar directamente el centro en demo.centers.
+   *
+   * Esto es importante porque evita interpretar
+   * "CENTRO" como nombre.
+   */
+  const demoCenter =
+    findCenterMatchingDemo(
       rows
     );
 
-  if (!year) {
-    year =
-      findYearInTopSection(
+  let centerName =
+    demoCenter
+      ? text(demoCenter.name)
+      : "";
+
+  /*
+   * PRIORIDAD 2:
+   * posiciones conocidas.
+   */
+  if (!centerName) {
+    centerName =
+      findCenterFromKnownPositions(
         rows
       );
   }
 
-  const fileNameNormalized =
-    normalize(fileName);
-
-  if (!year) {
-    const fileYear =
-      fileNameNormalized.match(
-        /\b(20\d{2})\b/
+  /*
+   * PRIORIDAD 3:
+   * etiqueta CENTRO / CENTRO COMERCIAL.
+   */
+  if (
+    !centerName ||
+    isLabelValue(centerName)
+  ) {
+    centerName =
+      findCenterFromLabel(
+        rows
       );
-
-    if (fileYear) {
-      year =
-        Number(fileYear[1]);
-    }
   }
 
-  if (!year) {
+  if (
+    !centerName ||
+    isLabelValue(centerName)
+  ) {
     throw new Error(
-      "No se ha podido identificar el año de la revisión en la cabecera del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
+      "No se ha podido localizar el nombre real del centro en la cabecera del documento Excel. Se ha evitado utilizar la etiqueta «CENTRO» como nombre."
     );
   }
 
+  const normalizedCenterName =
+    normalize(centerName);
+
+  /*
+   * Si ya encontramos el centro por demo, perfecto.
+   */
   let center =
     demoCenter;
 
+  /*
+   * Coincidencia exacta.
+   */
   if (!center) {
     center =
       (demo.centers as any[]).find(
@@ -1069,12 +1246,13 @@ function detectCenter(
       );
   }
 
+  /*
+   * Coincidencia parcial únicamente si no existe
+   * una coincidencia exacta.
+   */
   if (!center) {
-    /*
-     * Último intento: búsqueda parcial controlada.
-     */
-    center =
-      (demo.centers as any[]).find(
+    const matches =
+      (demo.centers as any[]).filter(
         (c: any) => {
           const name =
             normalize(c?.name);
@@ -1085,29 +1263,88 @@ function detectCenter(
           const code =
             normalize(c?.code);
 
-          return (
-            (name &&
-              (normalizedCenterName.includes(
+          if (
+            name &&
+            normalizedCenterName.length >= 4 &&
+            (
+              normalizedCenterName.includes(
                 name
               ) ||
-                name.includes(
-                  normalizedCenterName
-                ))) ||
-            (shortCode &&
-              normalizedCenterName.includes(
-                shortCode
-              )) ||
-            (code &&
-              normalizedCenterName ===
-                code)
-          );
+              name.includes(
+                normalizedCenterName
+              )
+            )
+          ) {
+            return true;
+          }
+
+          if (
+            shortCode &&
+            normalizedCenterName ===
+              shortCode
+          ) {
+            return true;
+          }
+
+          if (
+            code &&
+            normalizedCenterName ===
+              code
+          ) {
+            return true;
+          }
+
+          return false;
         }
       );
+
+    if (
+      matches.length === 1
+    ) {
+      center =
+        matches[0];
+    }
   }
 
   if (!center) {
     throw new Error(
       `No se ha podido identificar el centro "${centerName}" en la base de centros.`
+    );
+  }
+
+  const reviewText =
+    detectReviewText(
+      rows
+    );
+
+  let year =
+    findYearInKnownPositions(
+      rows
+    );
+
+  if (!year) {
+    year =
+      findYearInTopSection(
+        rows
+      );
+  }
+
+  /*
+   * El nombre de archivo se utiliza como último recurso.
+   *
+   * Esto es fundamental para archivos como:
+   * 01_STL_SAV_24 S2_OAS.xlsx
+   */
+  if (!year) {
+    year =
+      findYearInFileName(
+        fileName
+      );
+  }
+
+  if (!year) {
+    throw new Error(
+      "No se ha podido identificar el año de la revisión en la cabecera del documento Excel ni en el nombre del archivo. La importación se ha detenido para evitar archivarla en un año incorrecto."
     );
   }
 
@@ -1125,7 +1362,7 @@ function detectCenter(
     reviewText,
 
     fileName:
-      fileNameNormalized,
+      normalize(fileName),
   };
 }
 
@@ -1140,16 +1377,17 @@ function detectPeriodInText(
   }
 
   /*
-   * Formatos directos:
+   * Normalizamos también los formatos con guiones,
+   * puntos y espacios.
    *
+   * Ejemplos:
    * S1
-   * S2
-   * S-1
-   * S.2
    * S 1
+   * S-1
+   * S.1
    */
   if (
-    /(?:^|\s)s[\s._-]*1(?:\s|$)/.test(
+    /(?:^|\s)s\s*1(?:\s|$)/.test(
       source
     )
   ) {
@@ -1157,7 +1395,7 @@ function detectPeriodInText(
   }
 
   if (
-    /(?:^|\s)s[\s._-]*2(?:\s|$)/.test(
+    /(?:^|\s)s\s*2(?:\s|$)/.test(
       source
     )
   ) {
@@ -1165,7 +1403,7 @@ function detectPeriodInText(
   }
 
   /*
-   * Semestres.
+   * Semestre 1 / 2.
    */
   if (
     source.includes(
@@ -1178,7 +1416,7 @@ function detectPeriodInText(
       "primer semestre"
     ) ||
     source.includes(
-      "primer semestre"
+      "primera semestre"
     )
   ) {
     return "S1";
@@ -1193,6 +1431,9 @@ function detectPeriodInText(
     ) ||
     source.includes(
       "segundo semestre"
+    ) ||
+    source.includes(
+      "segunda semestre"
     )
   ) {
     return "S2";
@@ -1202,7 +1443,7 @@ function detectPeriodInText(
    * Revisión 1 / Revisión 2.
    */
   if (
-    /(?:revision|revisión|rev)\s*(?:n[ºo.]?\s*)?1\b/.test(
+    /\b(?:revision|rev)\s*(?:n\s*)?1\b/.test(
       source
     )
   ) {
@@ -1210,7 +1451,7 @@ function detectPeriodInText(
   }
 
   if (
-    /(?:revision|revisión|rev)\s*(?:n[ºo.]?\s*)?2\b/.test(
+    /\b(?:revision|rev)\s*(?:n\s*)?2\b/.test(
       source
     )
   ) {
@@ -1218,12 +1459,39 @@ function detectPeriodInText(
   }
 
   /*
-   * 1ª revisión / 2ª revisión
-   * 1º revisión / 2º revisión
-   * 1a revisión / 2a revisión
+   * 1ª revisión
+   * 1º revisión
+   * 1a revisión
+   * primera revisión
    */
   if (
-    /\b1\s*(?:ª|º|a|o)?\s*(?:revision|revisión)\b/.test(
+    /\b1\s*(?:a|o)?\s*revision\b/.test(
+      source
+    ) ||
+    source.includes(
+      "primera revision"
+    )
+  ) {
+    return "S1";
+  }
+
+  if (
+    /\b2\s*(?:a|o)?\s*revision\b/.test(
+      source
+    ) ||
+    source.includes(
+      "segunda revision"
+    )
+  ) {
+    return "S2";
+  }
+
+  /*
+   * Casos compactos que pueden aparecer
+   * en nombres de archivo.
+   */
+  if (
+    /\brev\s*1\b/.test(
       source
     )
   ) {
@@ -1231,7 +1499,7 @@ function detectPeriodInText(
   }
 
   if (
-    /\b2\s*(?:ª|º|a|o)?\s*(?:revision|revisión)\b/.test(
+    /\brev\s*2\b/.test(
       source
     )
   ) {
@@ -1239,16 +1507,21 @@ function detectPeriodInText(
   }
 
   /*
-   * Formato "REV 1" / "REV 2".
+   * Formatos explícitos S1/S2 incrustados en nombres
+   * de archivo, por ejemplo "_S2_".
    */
   if (
-    /\brev\s*1\b/.test(source)
+    /(?:^|[\s_\-])s1(?:$|[\s_\-])/.test(
+      source
+    )
   ) {
     return "S1";
   }
 
   if (
-    /\brev\s*2\b/.test(source)
+    /(?:^|[\s_\-])s2(?:$|[\s_\-])/.test(
+      source
+    )
   ) {
     return "S2";
   }
@@ -1262,20 +1535,19 @@ function detectPeriod(
   rows: any[][]
 ): Period {
   /*
-   * Es importante revisar cada fuente por separado.
-   * No buscamos primero todos los S1 y después todos los S2,
-   * porque un documento puede contener referencias históricas
-   * a ambos periodos.
+   * Cada fuente se analiza por separado.
    *
-   * Prioridad:
-   *
+   * PRIORIDAD:
    * 1. texto de revisión de la cabecera
    * 2. nombre del archivo
-   * 3. resto de la cabecera
+   * 3. resto de cabecera
+   *
+   * Así evitamos que una mención histórica a S1 dentro
+   * de la hoja haga que un archivo S2 sea archivado como S1.
    */
   const sources = [
-    reviewText,
-    fileName,
+    text(reviewText),
+    text(fileName),
     rows
       .slice(0, 20)
       .flat()
@@ -1298,7 +1570,7 @@ function detectPeriod(
   }
 
   throw new Error(
-    `No se ha podido identificar si la revisión "${reviewText || fileName}" corresponde a S1 o S2. Se han probado S1/S2, semestre, revisión 1/2 y formatos 1ª/2ª revisión.`
+    `No se ha podido identificar si la revisión "${reviewText || fileName}" corresponde a S1 o S2. Se han probado S1/S2, semestre 1/2, revisión 1/2, REV 1/2 y formatos 1ª/2ª revisión.`
   );
 }
 
@@ -1435,6 +1707,7 @@ function getCatalogCode(
       "code",
       "codigo",
       "codigoElemento",
+      "elementCode",
     ]
   );
 }
@@ -1452,16 +1725,18 @@ function findCatalogItems(
     normalize(action);
 
   const normalizedCode =
-    normalize(baseCode);
+    normalizeCode(baseCode);
 
-  if (!normalizedInstallation) {
+  if (
+    !normalizedInstallation
+  ) {
     return [];
   }
 
   /*
-   * Regla principal:
+   * 1. Correspondencia normal:
    *
-   * INSTALACION + ACTUACION
+   * INSTALACIÓN + ACTUACIÓN
    */
   if (normalizedAction) {
     const exactMatches =
@@ -1498,13 +1773,11 @@ function findCatalogItems(
   }
 
   /*
-   * Compatibilidad con la plantilla histórica 2024:
+   * 2. Compatibilidad con la plantilla 2024:
    *
-   * en determinadas filas la ACTUACION está vacía.
+   * ACTUACIÓN vacía.
    *
-   * En ese caso NO inventamos una actuación.
-   * Utilizamos el código real del Excel como referencia
-   * secundaria para localizar el elemento del catálogo.
+   * Se utiliza el código como referencia.
    */
   if (
     !normalizedAction &&
@@ -1528,7 +1801,7 @@ function findCatalogItems(
               catalogInstallation
             ) ===
               normalizedInstallation &&
-            normalize(
+            normalizeCode(
               catalogCode
             ) ===
               normalizedCode
@@ -1543,13 +1816,12 @@ function findCatalogItems(
     }
 
     /*
-     * Segundo intento por código sin depender
-     * del formato textual de la instalación.
+     * Último intento por código sin instalación.
      */
     const codeOnlyMatches =
       catalogItems.filter(
         (item) =>
-          normalize(
+          normalizeCode(
             getCatalogCode(item)
           ) === normalizedCode
       );
@@ -1600,6 +1872,8 @@ function getCatalogActionCode(
       "baseCode",
       "code",
       "codigo",
+      "codigoElemento",
+      "elementCode",
     ]
   );
 }
@@ -1627,6 +1901,10 @@ function forwardFill(
     return currentValue;
   }
 
+  if (column < 0) {
+    return "";
+  }
+
   for (
     let previous =
       rowIndex - 1;
@@ -1638,35 +1916,33 @@ function forwardFill(
         rows[previous]?.[column]
       );
 
-    if (value) {
-      /*
-       * No queremos recuperar el nombre de una cabecera
-       * como valor de una fila de datos.
-       */
-      const normalized =
-        normalize(value);
-
-      if (
-        normalized ===
-          "instalacion" ||
-        normalized ===
-          "actuacion" ||
-        normalized ===
-          "codigo" ||
-        normalized ===
-          "id" ||
-        normalized ===
-          "empresa" ||
-        normalized ===
-          "estado" ||
-        normalized ===
-          "comentario"
-      ) {
-        continue;
-      }
-
-      return value;
+    if (!value) {
+      continue;
     }
+
+    const normalized =
+      normalize(value);
+
+    if (
+      normalized ===
+        "instalacion" ||
+      normalized ===
+        "actuacion" ||
+      normalized ===
+        "codigo" ||
+      normalized ===
+        "id" ||
+      normalized ===
+        "empresa" ||
+      normalized ===
+        "estado" ||
+      normalized ===
+        "comentario"
+    ) {
+      continue;
+    }
+
+    return value;
   }
 
   return "";
@@ -1684,23 +1960,19 @@ function duplicateGroupKey(
     normalize(action);
 
   /*
-   * Para las plantillas normales:
+   * Plantillas normales:
    *
-   *   Instalación + Actuación
+   * Instalación + Actuación
    *
-   * Para la plantilla histórica 2024 cuando Actuación
-   * está vacía:
+   * 2024:
    *
-   *   Instalación + Código
-   *
-   * Esto evita juntar elementos diferentes de una misma
-   * instalación.
+   * Instalación + Código
    */
   if (!normalizedAction) {
     return [
       normalizedInstallation,
       "__SIN_ACTUACION__",
-      normalize(code),
+      normalizeCode(code),
     ].join("|");
   }
 
@@ -1763,9 +2035,7 @@ function parseWorkbook(
       }
     ) as any[][];
 
-  if (
-    !rows.length
-  ) {
+  if (!rows.length) {
     throw new Error(
       "La hoja Excel está vacía."
     );
@@ -1791,7 +2061,7 @@ function parseWorkbook(
 
   const country =
     (detected.center as any)
-      .country ===
+      ?.country ===
       "Portugal"
       ? "Portugal"
       : "España";
@@ -1906,14 +2176,6 @@ function parseWorkbook(
       continue;
     }
 
-    /*
-     * ACTUACIÓN puede estar vacía en la plantilla 2024.
-     *
-     * No rechazamos automáticamente la fila.
-     * findCatalogItems utilizará el código como
-     * referencia secundaria en ese caso.
-     */
-
     const equipmentId =
       text(
         row[
@@ -1997,8 +2259,7 @@ function parseWorkbook(
     }
 
     /*
-     * El código base se toma del primer código disponible
-     * del grupo, tal como exige la regla de importación.
+     * Primer código disponible del grupo.
      */
     const baseCode =
       group.find(
@@ -2018,7 +2279,7 @@ function parseWorkbook(
           )
           .join(
             ", "
-          )}: no se ha encontrado ningún código base en la columna C/D correspondiente. Se han omitido para evitar generar códigos incorrectos.`
+          )}: no se ha encontrado ningún código base en la columna correspondiente. Se han omitido para evitar generar códigos incorrectos.`
       );
 
       continue;
