@@ -140,7 +140,6 @@ type ExcelColumnMap = {
   company: number;
   status: number;
   comment: number;
-  executionDate: number;
 };
 
 /**
@@ -153,6 +152,41 @@ type ExcelColumnMap = {
  */
 const HEADER_SCAN_ROWS = 80;
 const MAX_DATA_ROWS = 1000;
+
+function text(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  return String(value).replace(/\u00a0/g, " ").trim();
+}
+
+function normalize(value: unknown): string {
+  return text(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function catalogText(item: any, keys: string[]): string {
+  for (const key of keys) {
+    const value = item?.[key];
+    const result = text(value);
+    if (result) {
+      return result;
+    }
+  }
+
+  return "";
+}
 
 function normalizedHeader(value: unknown): string {
   return normalize(value)
@@ -208,13 +242,6 @@ const HEADER_ALIASES = {
     "observaciones",
     "observacion",
     "observación",
-  ],
-  EXECUTION_DATE: [
-    "fecha",
-    "fecha ejecucion",
-    "fecha ejecución",
-    "fecha auditoria",
-    "fecha auditoría",
   ],
   CODE: [
     "codigo",
@@ -297,10 +324,6 @@ function detectExcelColumns(
       row,
       [...HEADER_ALIASES.CODE]
     );
-    const executionDate = findHeaderColumn(
-      row,
-      [...HEADER_ALIASES.EXECUTION_DATE]
-    );
 
     let score = 0;
 
@@ -322,7 +345,6 @@ function detectExcelColumns(
         company,
         status,
         comment,
-        executionDate,
         code: explicitCode,
       };
     }
@@ -338,7 +360,6 @@ function detectExcelColumns(
   const company = bestColumns.company ?? -1;
   const status = bestColumns.status ?? -1;
   const comment = bestColumns.comment ?? -1;
-  const executionDate = bestColumns.executionDate ?? -1;
 
   if (equipmentId < 0) {
     throw new Error(
@@ -412,7 +433,6 @@ function detectExcelColumns(
     company,
     status,
     comment,
-    executionDate,
   };
 }
 
@@ -597,141 +617,92 @@ function detectCenter(
   };
 }
 
-function parseExcelDate(value: unknown): Date | null {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value;
+function findSemesterInText(value: unknown): Period | null {
+  const source = normalize(value);
+  if (!source) return null;
+
+  if (/(^|\s)s1(\s|$)/.test(source) || source.includes("semestre 1") || source.includes("1 semestre") || source.includes("primer semestre")) {
+    return "S1";
   }
 
-  if (typeof value === "number" && Number.isFinite(value)) {
-    // Excel serial date (1900 date system).
-    const excelEpoch = Date.UTC(1899, 11, 30);
-    const date = new Date(
-      excelEpoch + Math.trunc(value) * 24 * 60 * 60 * 1000
-    );
-
-    return Number.isNaN(date.getTime()) ? null : date;
+  if (/(^|\s)s2(\s|$)/.test(source) || source.includes("semestre 2") || source.includes("2 semestre") || source.includes("segundo semestre")) {
+    return "S2";
   }
 
-  const valueText = text(value);
+  return null;
+}
 
-  if (!valueText) {
-    return null;
+function findExecutionDate(rows: any[][]): Date | null {
+  const dateLabel = findCellByLabel(rows, [
+    "fecha",
+    "fecha de ejecucion",
+    "fecha de ejecución",
+    "fecha auditoria",
+    "fecha de auditoria",
+    "fecha de auditoría",
+  ], 30);
+
+  if (!dateLabel) return null;
+
+  const candidates: unknown[] = [];
+  for (let column = dateLabel.column + 1; column < Math.min(dateLabel.column + 6, rows[dateLabel.row]?.length ?? 0); column += 1) {
+    candidates.push(rows[dateLabel.row]?.[column]);
+  }
+  for (let row = dateLabel.row + 1; row < Math.min(dateLabel.row + 3, rows.length); row += 1) {
+    candidates.push(rows[row]?.[dateLabel.column]);
   }
 
-  const dmy = valueText.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})/);
-
-  if (dmy) {
-    const day = Number(dmy[1]);
-    const month = Number(dmy[2]);
-    const year = Number(dmy[3]);
-
-    const date = new Date(year, month - 1, day);
-
-    if (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    ) {
-      return date;
+  for (const value of candidates) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (parsed?.y && parsed?.m && parsed?.d) return new Date(parsed.y, parsed.m - 1, parsed.d);
+    }
+    const raw = text(value);
+    const match = raw.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+    if (match) {
+      const day = Number(match[1]);
+      const month = Number(match[2]);
+      const year = Number(match[3]);
+      const parsed = new Date(year, month - 1, day);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
     }
   }
 
-  const ymd = valueText.match(/^(20\d{2})[\/-](\d{1,2})[\/-](\d{1,2})/);
-
-  if (ymd) {
-    const year = Number(ymd[1]);
-    const month = Number(ymd[2]);
-    const day = Number(ymd[3]);
-    const date = new Date(year, month - 1, day);
-
-    if (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    ) {
-      return date;
-    }
-  }
-
-  const parsed = new Date(valueText);
-
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return null;
 }
 
 function detectPeriod(
   reviewText: string,
   fileName: string,
-  rows: any[][],
-  executionDateColumn = -1,
-  headerRow = -1
+  rows: any[][]
 ): Period {
-  const review = normalize(reviewText);
-  const file = normalize(fileName);
+  const isActualizacion = normalize(reviewText).includes("actualizacion");
 
-  /*
-   * REGLA DEFINITIVA PARA ACTUALIZACION:
-   *
-   * 1. Si el tipo de revisión ya dice S1/S2, se respeta.
-   * 2. Si dice ACTUALIZACION, se mira primero el nombre del archivo.
-   * 3. Si el nombre no permite decidir, se mira FECHA.
-   * 4. Si tampoco se puede decidir, se detiene la importación.
-   */
-  const hasS1 = (value: string) =>
-    /(^|[^a-z0-9])s1([^a-z0-9]|$)/.test(value) ||
-    value.includes("semestre 1") ||
-    value.includes("primer semestre");
-
-  const hasS2 = (value: string) =>
-    /(^|[^a-z0-9])s2([^a-z0-9]|$)/.test(value) ||
-    value.includes("semestre 2") ||
-    value.includes("segundo semestre");
-
-  if (hasS1(review)) return "S1";
-  if (hasS2(review)) return "S2";
-
-  const isActualizacion =
-    review.includes("actualizacion") ||
-    review.includes("actualización");
-
+  // Para ACTUALIZACIÓN, el orden exigido es: nombre de archivo -> FECHA.
   if (isActualizacion) {
-    if (hasS1(file)) return "S1";
-    if (hasS2(file)) return "S2";
+    const filePeriod = findSemesterInText(fileName);
+    if (filePeriod) return filePeriod;
 
-    if (executionDateColumn >= 0) {
-      const start = headerRow >= 0 ? headerRow + 1 : 0;
-      const limit = Math.min(rows.length, start + MAX_DATA_ROWS);
-
-      for (let rowIndex = start; rowIndex < limit; rowIndex += 1) {
-        const value = rows[rowIndex]?.[executionDateColumn];
-        const date = parseExcelDate(value);
-
-        if (!date) continue;
-
-        const month = date.getMonth() + 1;
-
-        if (month >= 1 && month <= 6) return "S1";
-        if (month >= 7 && month <= 12) return "S2";
-      }
+    const executionDate = findExecutionDate(rows);
+    if (executionDate) {
+      const month = executionDate.getMonth() + 1;
+      return month <= 6 ? "S1" : "S2";
     }
 
     throw new Error(
-      `La revisión aparece como "ACTUALIZACION", pero no se ha podido determinar si corresponde a S1 o S2. El nombre del archivo no indica S1/S2 y la casilla FECHA no contiene una fecha válida que permita determinar el semestre. Corrija en el archivo a qué semestre pertenece la revisión y vuelva a importarlo.`
+      'El documento indica "ACTUALIZACIÓN", pero no se ha podido determinar si corresponde a S1 o S2. El nombre del archivo no contiene S1/S2 y no se ha encontrado una FECHA de ejecución válida. Corrige en el archivo a qué semestre pertenece la revisión y vuelve a importarlo.'
     );
   }
 
-  // Para tipos distintos de ACTUALIZACION mantenemos la detección habitual.
-  if (hasS1(file)) return "S1";
-  if (hasS2(file)) return "S2";
+  const sources = [reviewText, fileName];
+  const topText = rows.slice(0, 20).flat().map(text).filter(Boolean).join(" ");
+  sources.push(topText);
 
-  const topText = rows
-    .slice(0, 20)
-    .flat()
-    .map(text)
-    .filter(Boolean)
-    .join(" ");
-
-  if (hasS1(normalize(topText))) return "S1";
-  if (hasS2(normalize(topText))) return "S2";
+  for (const source of sources) {
+    const period = findSemesterInText(source);
+    if (period) return period;
+  }
 
   throw new Error(
     `No se ha podido identificar si la revisión "${reviewText || fileName}" corresponde a S1 o S2. La importación se ha detenido para evitar archivarla en un periodo incorrecto.`
@@ -878,6 +849,34 @@ function buildUnitCode(
   return `${cleanCode}.${unitIndex}`;
 }
 
+function statusFromExcel(value: unknown): V1Status | null {
+  const normalized = normalize(value);
+
+  if (!normalized) return null;
+
+  if (normalized === "apto" || normalized === "favorable") {
+    return "APTO";
+  }
+
+  if (normalized === "apto condicionado" || normalized === "condicionado") {
+    return "APTO CONDICIONADO";
+  }
+
+  if (normalized === "no apto" || normalized === "desfavorable") {
+    return "NO APTO";
+  }
+
+  if (normalized === "pendiente" || normalized === "pte" || normalized === "pte.") {
+    return "PENDIENTE";
+  }
+
+  if (normalized === "sin informacion" || normalized === "error") {
+    return "SIN INFORMACIÓN";
+  }
+
+  return null;
+}
+
 type ValidExcelRow = {
   excelRow: number;
   code: string;
@@ -922,9 +921,7 @@ function parseWorkbook(
   const period = detectPeriod(
     detected.reviewText,
     fileName,
-    rows,
-    columns.executionDate,
-    columns.headerRow
+    rows
   );
 
   const country =
