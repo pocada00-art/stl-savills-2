@@ -131,39 +131,64 @@ type ParsedImport = {
  * Las filas con O vacía se ignoran completamente.
  */
 
-const EXCEL_COLUMNS = {
-  CODE: 2, // C
-  INSTALLATION: 3, // D
-  ACTION: 4, // E
-  EQUIPMENT_ID: 6, // G
-  COMPANY: 7, // H
-  STATUS: 14, // O
-  COMMENT: 17, // R
-} as const;
+type ExcelLayout = {
+  name: "2025" | "2026";
+  columns: {
+    CODE: number;
+    INSTALLATION: number;
+    ACTION: number;
+    EQUIPMENT_ID: number;
+    COMPANY: number;
+    STATUS: number;
+    COMMENT: number;
+  };
+  header: {
+    CENTER_NAME: { row: number; column: number };
+    REVIEW: { row: number; column: number };
+    YEAR: { row: number; column: number };
+    REVIEW_DATE?: { row: number; column: number };
+  };
+};
+
+const EXCEL_LAYOUT_2025: ExcelLayout = {
+  name: "2025",
+  columns: {
+    CODE: 2, // C
+    INSTALLATION: 3, // D
+    ACTION: 4, // E
+    EQUIPMENT_ID: 6, // G
+    COMPANY: 7, // H
+    STATUS: 14, // O
+    COMMENT: 17, // R
+  },
+  header: {
+    CENTER_NAME: { row: 2, column: 4 }, // E2
+    REVIEW: { row: 7, column: 4 }, // E7
+    YEAR: { row: 7, column: 6 }, // G7
+  },
+};
+
+const EXCEL_LAYOUT_2026: ExcelLayout = {
+  name: "2026",
+  columns: {
+    CODE: 3, // D
+    INSTALLATION: 2, // C
+    ACTION: 4, // E
+    EQUIPMENT_ID: 7, // H
+    COMPANY: 8, // I
+    STATUS: 15, // P
+    COMMENT: 18, // S
+  },
+  header: {
+    CENTER_NAME: { row: 2, column: 5 }, // F2
+    REVIEW: { row: 7, column: 5 }, // F7
+    YEAR: { row: 7, column: 7 }, // H7
+    REVIEW_DATE: { row: 6, column: 5 }, // F6
+  },
+};
 
 const FIRST_DATA_ROW = 12;
 const LAST_DATA_ROW = 200;
-
-/*
- * Celdas exactas de la cabecera.
- *
- * E = índice 4
- * G = índice 6
- */
-const HEADER_CELLS = {
-  CENTER_NAME: {
-    row: 2,
-    column: 4,
-  },
-  REVIEW: {
-    row: 7,
-    column: 4,
-  },
-  YEAR: {
-    row: 7,
-    column: 6,
-  },
-} as const;
 
 function text(value: unknown): string {
   return String(value ?? "").trim();
@@ -264,22 +289,42 @@ function statusFromExcel(value: unknown): V1Status | null {
  * E7 = Revisión
  * G7 = Año
  */
-function detectCenter(rows: any[][]) {
+function detectExcelLayout(rows: any[][]): ExcelLayout {
+  const center2026 = text(rows[1]?.[EXCEL_LAYOUT_2026.header.CENTER_NAME.column]);
+  const review2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.REVIEW.column]);
+  const year2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.YEAR.column]);
+
+  /*
+   * La plantilla 2026 utiliza:
+   * F2 = centro, F7 = tipo de revisión, H7 = año.
+   *
+   * No dependemos únicamente de que H7 tenga valor: también exigimos
+   * que F2 y F7 estén informados para evitar interpretar por error
+   * una plantilla 2025 como 2026.
+   */
+  if (center2026 && review2026 && /20\d{2}/.test(year2026)) {
+    return EXCEL_LAYOUT_2026;
+  }
+
+  return EXCEL_LAYOUT_2025;
+}
+
+function detectCenter(rows: any[][], layout: ExcelLayout) {
   const centerName = text(
-    rows[HEADER_CELLS.CENTER_NAME.row - 1]?.[
-      HEADER_CELLS.CENTER_NAME.column
+    rows[layout.header.CENTER_NAME.row - 1]?.[
+      layout.header.CENTER_NAME.column
     ]
   );
 
   const reviewText = text(
-    rows[HEADER_CELLS.REVIEW.row - 1]?.[
-      HEADER_CELLS.REVIEW.column
+    rows[layout.header.REVIEW.row - 1]?.[
+      layout.header.REVIEW.column
     ]
   );
 
   const rawYear =
-    rows[HEADER_CELLS.YEAR.row - 1]?.[
-      HEADER_CELLS.YEAR.column
+    rows[layout.header.YEAR.row - 1]?.[
+      layout.header.YEAR.column
     ];
 
   let year = 0;
@@ -300,19 +345,25 @@ function detectCenter(rows: any[][]) {
 
   if (!centerName) {
     throw new Error(
-      "No se ha encontrado el nombre del centro en la celda E2 del documento Excel."
+      `No se ha encontrado el nombre del centro en la celda ${
+        layout.name === "2026" ? "F2" : "E2"
+      } del documento Excel.`
     );
   }
 
   if (!reviewText) {
     throw new Error(
-      "No se ha encontrado la revisión en la celda E7 del documento Excel."
+      `No se ha encontrado la revisión en la celda ${
+        layout.name === "2026" ? "F7" : "E7"
+      } del documento Excel.`
     );
   }
 
   if (!year) {
     throw new Error(
-      "No se ha podido identificar el año de la revisión en la celda G7 del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto."
+      `No se ha podido identificar el año de la revisión en la celda ${
+        layout.name === "2026" ? "H7" : "G7"
+      } del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto.`
     );
   }
 
@@ -329,12 +380,32 @@ function detectCenter(rows: any[][]) {
     );
   }
 
+  let reviewDate = "";
+
+  if (layout.header.REVIEW_DATE) {
+    const rawReviewDate =
+      rows[layout.header.REVIEW_DATE.row - 1]?.[
+        layout.header.REVIEW_DATE.column
+      ];
+
+    if (rawReviewDate instanceof Date && !Number.isNaN(rawReviewDate.getTime())) {
+      reviewDate = rawReviewDate.toISOString().slice(0, 10);
+    } else {
+      const dateText = text(rawReviewDate);
+      if (dateText) {
+        reviewDate = dateText;
+      }
+    }
+  }
+
   return {
     name: centerName,
     code: text((center as any).code),
     center: center as any,
     year,
     reviewText,
+    reviewDate,
+    layout,
   };
 }
 
@@ -618,8 +689,12 @@ function parseWorkbook(
       }
     ) as any[][];
 
+  const layout = detectExcelLayout(rows);
+
   const detected =
-    detectCenter(rows);
+    detectCenter(rows, layout);
+
+  const columns = detected.layout.columns;
 
   const normalizedReviewText =
     normalize(
@@ -706,6 +781,7 @@ function parseWorkbook(
   };
 
   const validRows: ValidExcelRow[] = [];
+  let mergedInstallation = "";
 
   for (
     let excelRow = FIRST_DATA_ROW;
@@ -714,7 +790,13 @@ function parseWorkbook(
   ) {
     const row = rows[excelRow - 1] || [];
 
-    const rawStatus = text(row[EXCEL_COLUMNS.STATUS]);
+    const rawStatus = text(row[columns.STATUS]);
+
+    const rawInstallation = text(row[columns.INSTALLATION]);
+
+    if (rawInstallation) {
+      mergedInstallation = rawInstallation;
+    }
 
     if (!rawStatus) {
       continue;
@@ -730,9 +812,9 @@ function parseWorkbook(
       continue;
     }
 
-    const code = text(row[EXCEL_COLUMNS.CODE]);
-    const installation = text(row[EXCEL_COLUMNS.INSTALLATION]);
-    const action = text(row[EXCEL_COLUMNS.ACTION]);
+    const code = text(row[columns.CODE]);
+    const installation = rawInstallation || mergedInstallation;
+    const action = text(row[columns.ACTION]);
 
     if (!installation) {
       unmatched += 1;
@@ -759,11 +841,11 @@ function parseWorkbook(
       code,
       installation,
       action,
-      equipmentId: text(row[EXCEL_COLUMNS.EQUIPMENT_ID]),
-      company: text(row[EXCEL_COLUMNS.COMPANY]),
+      equipmentId: text(row[columns.EQUIPMENT_ID]),
+      company: text(row[columns.COMPANY]),
       rawStatus,
       status,
-      comment: text(row[EXCEL_COLUMNS.COMMENT]),
+      comment: text(row[columns.COMMENT]),
     });
   }
 
@@ -915,7 +997,7 @@ function parseWorkbook(
         actionCode: getCatalogActionCode(catalogItem),
         equipmentId: excelData.equipmentId,
         company: excelData.company,
-        inspectionDate: "",
+        inspectionDate: detected.reviewDate,
         status: excelData.status,
         selected: [excelData.status],
         multiple: group.length > 1,
@@ -960,7 +1042,7 @@ function parseWorkbook(
     period,
 
     reviewDate:
-      "",
+      detected.reviewDate,
 
     rows:
       parsedRows,
@@ -1297,12 +1379,11 @@ export default function ImportPage() {
           </p>
 
           <p className="mt-1">
-            Cabecera: E2 = Nombre del centro, E7 = Revisión y G7 = Año de revisión.
+            2025: E2 = Nombre del centro, E7 = Revisión y G7 = Año. 2026: F2 = Centro, F7 = Tipo y H7 = Año.
           </p>
 
           <p className="mt-2">
-            Tabla: C = Código, D = Instalación, E = Actuación,
-            G = ID, H = Empresa, O = Estado y R = Comentario.
+            2025: C = Código, D = Instalación, E = Actuación, G = ID, H = Empresa, O = Estado y R = Comentario. 2026: D = Código, C = Instalación, E = Actuación, H = ID, I = Empresa, P = Estado y S = Comentario.
           </p>
 
           <p className="mt-2 font-semibold">
