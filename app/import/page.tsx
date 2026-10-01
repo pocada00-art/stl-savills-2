@@ -350,7 +350,7 @@ function detectExcelLayout(rows: any[][]): ExcelLayout {
   }
 
   const center2026 = text(rows[1]?.[EXCEL_LAYOUT_2026.header.CENTER_NAME.column]);
-  const review2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.REVIEW.column]);
+  const review2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.REVIEW!.column]);
   const year2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.YEAR.column]);
 
   /*
