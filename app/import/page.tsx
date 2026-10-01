@@ -132,7 +132,7 @@ type ParsedImport = {
  */
 
 type ExcelLayout = {
-  name: "2025" | "2026";
+  name: "2024" | "2025" | "2026";
   columns: {
     CODE: number;
     INSTALLATION: number;
@@ -144,7 +144,7 @@ type ExcelLayout = {
   };
   header: {
     CENTER_NAME: { row: number; column: number };
-    REVIEW: { row: number; column: number };
+    REVIEW?: { row: number; column: number };
     YEAR: { row: number; column: number };
     REVIEW_DATE?: { row: number; column: number };
   };
@@ -165,6 +165,24 @@ const EXCEL_LAYOUT_2025: ExcelLayout = {
     CENTER_NAME: { row: 2, column: 4 }, // E2
     REVIEW: { row: 7, column: 4 }, // E7
     YEAR: { row: 7, column: 6 }, // G7
+  },
+};
+
+const EXCEL_LAYOUT_2024: ExcelLayout = {
+  name: "2024",
+  columns: {
+    CODE: 2, // C
+    INSTALLATION: 1, // B
+    ACTION: 3, // D
+    EQUIPMENT_ID: 6, // G
+    COMPANY: 7, // H
+    STATUS: 18, // S
+    COMMENT: 20, // U
+  },
+  header: {
+    CENTER_NAME: { row: 3, column: 4 }, // E3
+    YEAR: { row: 6, column: 4 }, // E6 (Fecha)
+    REVIEW_DATE: { row: 6, column: 4 }, // E6
   },
 };
 
@@ -289,7 +307,48 @@ function statusFromExcel(value: unknown): V1Status | null {
  * E7 = Revisión
  * G7 = Año
  */
+function extractYearFromExcelDate(value: unknown): number {
+  if (
+    value instanceof Date &&
+    !Number.isNaN(value.getTime())
+  ) {
+    return value.getFullYear();
+  }
+
+  const valueText = text(value);
+  const match = valueText.match(/20\d{2}/);
+
+  return match ? Number(match[0]) : 0;
+}
+
 function detectExcelLayout(rows: any[][]): ExcelLayout {
+  /*
+   * 2024:
+   *   E3 = nombre del centro
+   *   E6 = fecha de la revisión
+   *   La revisión S1/S2 no está en una celda de la FICHA; se obtiene
+   *   del nombre del archivo (por ejemplo: "STL_SAV_24 S2_BRE.xlsx").
+   */
+  const center2024 = text(
+    rows[EXCEL_LAYOUT_2024.header.CENTER_NAME.row - 1]?.[
+      EXCEL_LAYOUT_2024.header.CENTER_NAME.column
+    ]
+  );
+
+  const date2024 =
+    rows[EXCEL_LAYOUT_2024.header.REVIEW_DATE!.row - 1]?.[
+      EXCEL_LAYOUT_2024.header.REVIEW_DATE!.column
+    ];
+
+  const year2024 = extractYearFromExcelDate(date2024);
+
+  if (
+    center2024 &&
+    year2024 === 2024
+  ) {
+    return EXCEL_LAYOUT_2024;
+  }
+
   const center2026 = text(rows[1]?.[EXCEL_LAYOUT_2026.header.CENTER_NAME.column]);
   const review2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.REVIEW.column]);
   const year2026 = text(rows[6]?.[EXCEL_LAYOUT_2026.header.YEAR.column]);
@@ -297,10 +356,6 @@ function detectExcelLayout(rows: any[][]): ExcelLayout {
   /*
    * La plantilla 2026 utiliza:
    * F2 = centro, F7 = tipo de revisión, H7 = año.
-   *
-   * No dependemos únicamente de que H7 tenga valor: también exigimos
-   * que F2 y F7 estén informados para evitar interpretar por error
-   * una plantilla 2025 como 2026.
    */
   if (center2026 && review2026 && /20\d{2}/.test(year2026)) {
     return EXCEL_LAYOUT_2026;
@@ -309,32 +364,38 @@ function detectExcelLayout(rows: any[][]): ExcelLayout {
   return EXCEL_LAYOUT_2025;
 }
 
-function detectCenter(rows: any[][], layout: ExcelLayout) {
+function detectCenter(rows: any[][], layout: ExcelLayout, fileName = "") {
   const centerName = text(
     rows[layout.header.CENTER_NAME.row - 1]?.[
       layout.header.CENTER_NAME.column
     ]
   );
 
-  const reviewText = text(
-    rows[layout.header.REVIEW.row - 1]?.[
-      layout.header.REVIEW.column
-    ]
-  );
+  let reviewText = "";
+  if (layout.name === "2024") {
+    const match = text(fileName).match(/\bS([12])\b/i);
+    if (match) {
+      reviewText = `S${match[1]}`;
+    }
+  } else if (layout.header.REVIEW) {
+    reviewText = text(
+      rows[layout.header.REVIEW.row - 1]?.[
+        layout.header.REVIEW.column
+      ]
+    );
+  }
 
   const rawYear =
     rows[layout.header.YEAR.row - 1]?.[
       layout.header.YEAR.column
     ];
 
-  let year = 0;
+  let year = extractYearFromExcelDate(rawYear);
 
   if (
-    typeof rawYear === "number" &&
-    Number.isFinite(rawYear)
+    layout.name !== "2024" &&
+    !year
   ) {
-    year = Math.trunc(rawYear);
-  } else {
     const yearText = text(rawYear);
     const match = yearText.match(/20\d{2}/);
 
@@ -344,14 +405,25 @@ function detectCenter(rows: any[][], layout: ExcelLayout) {
   }
 
   if (!centerName) {
+    const centerCell =
+      layout.name === "2024"
+        ? "E3"
+        : layout.name === "2026"
+          ? "F2"
+          : "E2";
+
     throw new Error(
-      `No se ha encontrado el nombre del centro en la celda ${
-        layout.name === "2026" ? "F2" : "E2"
-      } del documento Excel.`
+      `No se ha encontrado el nombre del centro en la celda ${centerCell} del documento Excel.`
     );
   }
 
   if (!reviewText) {
+    if (layout.name === "2024") {
+      throw new Error(
+        `No se ha podido identificar si la revisión 2024 corresponde a S1 o S2 a partir del nombre del archivo "${fileName}".`
+      );
+    }
+
     throw new Error(
       `No se ha encontrado la revisión en la celda ${
         layout.name === "2026" ? "F7" : "E7"
@@ -360,10 +432,15 @@ function detectCenter(rows: any[][], layout: ExcelLayout) {
   }
 
   if (!year) {
+    const yearCell =
+      layout.name === "2024"
+        ? "E6"
+        : layout.name === "2026"
+          ? "H7"
+          : "G7";
+
     throw new Error(
-      `No se ha podido identificar el año de la revisión en la celda ${
-        layout.name === "2026" ? "H7" : "G7"
-      } del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto.`
+      `No se ha podido identificar el año de la revisión en la celda ${yearCell} del documento Excel. La importación se ha detenido para evitar archivarla en un año incorrecto.`
     );
   }
 
@@ -664,7 +741,8 @@ function buildUnitCode(
 }
 
 function parseWorkbook(
-  wb: XLSX.WorkBook
+  wb: XLSX.WorkBook,
+  fileName = ""
 ): ParsedImport {
   const sheetName =
     wb.SheetNames.includes("FICHA")
@@ -692,7 +770,7 @@ function parseWorkbook(
   const layout = detectExcelLayout(rows);
 
   const detected =
-    detectCenter(rows, layout);
+    detectCenter(rows, layout, fileName);
 
   const columns = detected.layout.columns;
 
@@ -807,7 +885,7 @@ function parseWorkbook(
     if (!status) {
       excluded += 1;
       warnings.push(
-        `Fila ${excelRow}: el valor de ESTADO de la columna O "${rawStatus}" no es un estado reconocido. La fila no se ha importado.`
+        `Fila ${excelRow}: el valor de ESTADO de la columna ${columns.STATUS === 18 ? "S" : columns.STATUS === 15 ? "P" : "O"} "${rawStatus}" no es un estado reconocido. La fila no se ha importado.`
       );
       continue;
     }
@@ -819,7 +897,7 @@ function parseWorkbook(
     if (!installation) {
       unmatched += 1;
       warnings.push(
-        `Fila ${excelRow}: tiene un estado válido "${rawStatus}", pero la columna D (INSTALACION) está vacía. No se ha podido identificar el elemento del catálogo.`
+        `Fila ${excelRow}: tiene un estado válido "${rawStatus}", pero la columna ${columns.INSTALLATION === 1 ? "B" : columns.INSTALLATION === 2 ? "C" : "D"} (INSTALACION) está vacía. No se ha podido identificar el elemento del catálogo.`
       );
       continue;
     }
@@ -1193,7 +1271,7 @@ export default function ImportPage() {
         );
 
       const result =
-        parseWorkbook(wb);
+        parseWorkbook(wb, nextFile.name);
 
       setParsed(result);
     } catch (e) {
