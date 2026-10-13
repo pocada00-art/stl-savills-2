@@ -1736,22 +1736,49 @@ export default function CenterDetail() {
       participants: [],
     };
 
+  /*
+   * Una revisión histórica puede tener un universo de elementos
+   * distinto del inventario actual del centro.
+   *
+   * Si la revisión fue importada desde un STL histórico, itemIds
+   * contiene exclusivamente los elementos que existían en esa
+   * revisión. Si no existe itemIds, mantenemos el comportamiento
+   * anterior utilizando el inventario activo actual.
+   */
+  const reviewItemIds =
+    Array.isArray(review.itemIds) && review.itemIds.length > 0
+      ? review.itemIds
+      : centerItems.map((x: any) => x.id);
+
+  const reviewItemIdSet =
+    useMemo(
+      () => new Set(reviewItemIds),
+      [reviewItemIds]
+    );
+
+  const reviewVisibleItems =
+    useMemo(
+      () =>
+        centerItems.filter((item: any) =>
+          reviewItemIdSet.has(item.id)
+        ),
+      [centerItems, reviewItemIdSet]
+    );
+
   const summary =
     reviewSummary(
       review,
-      centerItems.map(
-        (x: any) => x.id
-      )
+      reviewItemIds
     );
 
-  const sinInformacionCount = centerItems.filter((item: any) => {
+  const sinInformacionCount = reviewVisibleItems.filter((item: any) => {
     const reviewItem = review.items[item.id] || blankItem();
     return reviewItem.status === "SIN INFORMACIÓN";
   }).length;
 
   const canValidateCenter =
     state.role === "ADMIN" &&
-    centerItems.length > 0 &&
+    reviewItemIds.length > 0 &&
     sinInformacionCount === 0 &&
     !review.confirmed;
 
@@ -1768,6 +1795,7 @@ export default function CenterDetail() {
 
   const visible = numberedItems.filter(
     (x: any) =>
+      reviewItemIdSet.has(x.id) &&
       (category === "Todas" || x.category === category) &&
       `${x.displayCode} ${x.installation} ${x.action} ${x.category}`
         .toLowerCase()
@@ -2277,7 +2305,7 @@ export default function CenterDetail() {
     if (
       state.role !== "ADMIN" ||
       review.confirmed ||
-      centerItems.length === 0 ||
+      reviewItemIds.length === 0 ||
       sinInformacionCount > 0
     ) return;
 
@@ -2737,12 +2765,14 @@ export default function CenterDetail() {
                             state.reviews[reviewKey(centerId, y, p)];
 
                           const historicalActiveIds =
-                            catalog
-                              .filter(
-                                (x: any) =>
-                                  activeMap[x.id] !== false
-                              )
-                              .map((x: any) => x.id);
+                            Array.isArray(r?.itemIds) && r.itemIds.length > 0
+                              ? r.itemIds
+                              : catalog
+                                  .filter(
+                                    (x: any) =>
+                                      activeMap[x.id] !== false
+                                  )
+                                  .map((x: any) => x.id);
 
                           const sum = reviewSummary(
                             r,
