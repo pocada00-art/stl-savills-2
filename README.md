@@ -85,4 +85,4 @@ El proyecto mantiene `postinstall: prisma generate`.
 
 La siguiente fase debe conectar esta V1 con PostgreSQL/Supabase, autenticación corporativa, Storage, Resend y un proceso programado para generar las alertas de 90/60/30 días, vencimiento y post-vencimiento.
 
-prueba conexion Github Vercel
+prueba conexion Github Vercel 1
